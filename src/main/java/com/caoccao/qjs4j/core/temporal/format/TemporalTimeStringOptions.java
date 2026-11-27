@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal.format;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.rounding.TemporalRoundingMode;
@@ -37,8 +38,7 @@ record TemporalTimeStringOptions(String roundingMode, String smallestUnit) {
             TemporalUnit largest, String invalidUnit) {
         TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
         if (mode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
+            return TemporalError.INVALID_ROUNDING_MODE.reject(context);
         }
         TemporalUnit unit = TemporalUnit.fromString(smallestUnit).orElse(null);
         if (smallestUnit != null && (unit == null || !unit.isSmallerOrEqual(largest))) {

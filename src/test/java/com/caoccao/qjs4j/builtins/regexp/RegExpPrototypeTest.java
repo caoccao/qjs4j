@@ -407,6 +407,16 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testNonGlobalMatchReturnsExecValidationError() {
+        JSObject receiver = context.createJSObject();
+        receiver.set(PropertyKey.fromString("flags"), new JSString(""));
+        receiver.set(PropertyKey.EXEC, new JSNativeFunction(context, "exec", 1, (ctx, self, args) -> JSBoolean.FALSE));
+        JSValue result = RegExpPrototype.symbolMatch(context, receiver, stringArgs("x"));
+        assertThat(result).isSameAs(context.getPendingException());
+        assertPendingTypeError(context, result, "RegExp exec method returned something other than an Object or null");
+    }
+
+    @Test
     public void testRegExpCharacterClassEscapesInClasses() {
         assertBooleanWithJavet("/^[\\D]+$/.test('abc')", "!/^[\\D]+$/.test('123')", "/^[\\W]+$/.test('!@#')",
                 "!/^[\\W]+$/.test('abc_123')", "/^[\\S]+$/.test('abc')", "!/^[\\S]+$/.test(' \\t\\n')");

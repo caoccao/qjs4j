@@ -141,6 +141,12 @@ final class ParserContext {
         throw new JSSyntaxErrorException(describeUnexpectedToken());
     }
 
+    String consumeValue() {
+        String value = currentToken.value();
+        advance();
+        return value;
+    }
+
     /**
      * Name the current token the way a diagnostic should, when it is the token that cannot follow.
      * <p>
@@ -238,12 +244,7 @@ final class ParserContext {
     }
 
     boolean isASIToken() {
-        return switch (currentToken.type()) {
-            case NUMBER, STRING, IDENTIFIER, INC, DEC, NULL, FALSE, TRUE, IF, RETURN, VAR, THIS, DELETE, TYPEOF, NEW,
-                    DO, WHILE, FOR, SWITCH, THROW, TRY, FUNCTION, CLASS, CONST, LET ->
-                true;
-            default -> false;
-        };
+        return isASIToken(currentToken.type());
     }
 
     boolean isAwaitExpressionAllowed() {
@@ -450,25 +451,9 @@ final class ParserContext {
             SourceLocation directiveLocation = getLocation();
 
             Token next = peek();
-            boolean hasSemi = false;
-
-            if (next.type() == TokenType.SEMICOLON) {
-                hasSemi = true;
-            } else if (next.type() == TokenType.RBRACE || next.type() == TokenType.EOF) {
-                hasSemi = true;
-            } else {
-                TokenType nextType = next.type();
-                boolean isASI = switch (nextType) {
-                    case NUMBER, STRING, IDENTIFIER, INC, DEC, NULL, FALSE, TRUE, IF, RETURN, VAR, THIS, DELETE, TYPEOF,
-                            NEW, DO, WHILE, FOR, SWITCH, THROW, TRY, FUNCTION, CLASS, CONST, LET ->
-                        true;
-                    default -> false;
-                };
-                if (isASI && next.line() > stringLine) {
-                    hasSemi = true;
-                }
-            }
-
+            TokenType nextType = next.type();
+            boolean hasSemi = nextType == TokenType.SEMICOLON || nextType == TokenType.RBRACE
+                    || nextType == TokenType.EOF || next.line() > stringLine && isASIToken(nextType);
             if (!hasSemi) {
                 break;
             }
@@ -583,6 +568,15 @@ final class ParserContext {
 
     static boolean isAlwaysReservedIdentifierName(String name) {
         return ALWAYS_RESERVED_IDENTIFIER_NAMES.contains(name);
+    }
+
+    private static boolean isASIToken(TokenType type) {
+        return switch (type) {
+            case NUMBER, STRING, IDENTIFIER, INC, DEC, NULL, FALSE, TRUE, IF, RETURN, VAR, THIS, DELETE, TYPEOF, NEW,
+                    DO, WHILE, FOR, SWITCH, THROW, TRY, FUNCTION, CLASS, CONST, LET ->
+                true;
+            default -> false;
+        };
     }
 
     /**

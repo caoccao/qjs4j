@@ -22,11 +22,11 @@ package com.caoccao.qjs4j.compilation.lexer;
 public enum TokenType {
     AND_ASSIGN,
     ARROW,
-    AS(true),
+    AS(true, true),
     ASSIGN,
-    ASYNC(true),
+    ASYNC(true, true),
     AT,
-    AWAIT(true),
+    AWAIT(true, true),
 
     BIGINT,
     BIT_AND,
@@ -63,7 +63,7 @@ public enum TokenType {
     FALSE(true),
     FINALLY(true),
     FOR(true),
-    FROM(true),
+    FROM(true, true),
     FUNCTION(true),
 
     GE,
@@ -71,7 +71,7 @@ public enum TokenType {
 
     HASH,
 
-    IDENTIFIER(true),
+    IDENTIFIER(true, true),
     IF(true),
     IMPORT(true),
     IN(true),
@@ -81,7 +81,7 @@ public enum TokenType {
     LBRACE,
     LBRACKET,
     LE,
-    LET(true),
+    LET(true, true),
     LOGICAL_AND,
     LOGICAL_AND_ASSIGN,
     LOGICAL_OR,
@@ -107,7 +107,7 @@ public enum TokenType {
     NULLISH_COALESCING,
     NUMBER,
 
-    OF(true),
+    OF(true, true),
     OPTIONAL_CHAINING,
     OR_ASSIGN,
 
@@ -150,8 +150,9 @@ public enum TokenType {
 
     XOR_ASSIGN,
 
-    YIELD(true);
+    YIELD(true, true);
 
+    private final boolean identifierCandidate;
     private final boolean identifierName;
 
     TokenType() {
@@ -159,7 +160,17 @@ public enum TokenType {
     }
 
     TokenType(boolean identifierName) {
+        this(identifierName, false);
+    }
+
+    TokenType(boolean identifierName, boolean identifierCandidate) {
+        this.identifierCandidate = identifierCandidate;
         this.identifierName = identifierName;
+    }
+
+    /** A token that can start a label or an async arrow parameter, subject to contextual restrictions. */
+    public boolean isIdentifierCandidate() {
+        return identifierCandidate;
     }
 
     public boolean isIdentifierName() {

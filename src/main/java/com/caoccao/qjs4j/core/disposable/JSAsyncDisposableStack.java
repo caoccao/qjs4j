@@ -17,65 +17,20 @@
 package com.caoccao.qjs4j.core.disposable;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.error.JSSuppressedError;
 import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Represents a JavaScript AsyncDisposableStack object. Tracks disposable callbacks and runs them in LIFO order.
  */
-public final class JSAsyncDisposableStack extends JSObject {
+public final class JSAsyncDisposableStack extends JSDisposableStackBase {
     public static final String NAME = "AsyncDisposableStack";
-    private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal";
-    private boolean disposed;
-    private final List<DisposeRecord> disposeRecords;
     private boolean movedFrom;
     private boolean needsAwait;
 
     public JSAsyncDisposableStack(JSContext context) {
         super(context);
-        this.disposeRecords = new ArrayList<>();
-        this.disposed = false;
-        this.movedFrom = false;
-        this.needsAwait = false;
-    }
-
-    public JSValue adopt(JSContext context, JSValue value, JSValue onDisposeAsync) {
-        if (disposed) {
-            if (movedFrom) {
-                return context.throwTypeError(
-                        "Cannot call AsyncDisposableStack.prototype.adopt on an already-disposed AsyncDisposableStack");
-            }
-            return context.throwReferenceError("Cannot add values to a disposed stack!");
-        }
-        if (!(onDisposeAsync instanceof JSFunction disposeCallback)) {
-            return context.throwTypeError("AsyncDisposableStack.adopt requires a function");
-        }
-        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, new JSValue[]{value}, true));
-        return value;
-    }
-
-    private JSValue composeSuppressedError(JSContext context, JSValue error, JSValue suppressed) {
-        return JSSuppressedError.create(context, error, suppressed, new JSString(SUPPRESSED_ERROR_MESSAGE));
-    }
-
-    public JSValue defer(JSContext context, JSValue onDisposeAsync) {
-        if (disposed) {
-            if (movedFrom) {
-                return context.throwTypeError(
-                        "Cannot call AsyncDisposableStack.prototype.defer on an already-disposed AsyncDisposableStack");
-            }
-            return context.throwReferenceError("Cannot add values to a disposed stack!");
-        }
-        if (!(onDisposeAsync instanceof JSFunction disposeCallback)) {
-            return context.throwTypeError("AsyncDisposableStack.defer requires a function");
-        }
-        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, JSValue.NO_ARGS, true));
-        return JSUndefined.INSTANCE;
     }
 
     public JSValue disposeAsync(JSContext context) {
@@ -85,10 +40,7 @@ public final class JSAsyncDisposableStack extends JSObject {
     public JSValue disposeAsync(JSContext context, JSValue completionError) {
         JSPromise promise = context.createJSPromise();
 
-        JSValue initialError = completionError;
-        if (initialError == null && context.hasPendingException()) {
-            initialError = context.takePendingException();
-        }
+        JSValue initialError = completionError == null ? context.takePendingException() : completionError;
 
         if (disposed) {
             if (initialError != null) {
@@ -103,6 +55,17 @@ public final class JSAsyncDisposableStack extends JSObject {
         return promise;
     }
 
+    @Override
+    JSValue disposedError(JSContext context, String operation) {
+        if (movedFrom) {
+            return context.throwTypeError("Cannot call AsyncDisposableStack.prototype." + operation
+                    + " on an already-disposed AsyncDisposableStack");
+        }
+        return context.throwReferenceError("move".equals(operation)
+                ? "Cannot move elements from a disposed stack!"
+                : "Cannot add values to a disposed stack!");
+    }
+
     private void disposeNextRecord(JSContext context, int index, JSValue accumulatedError, boolean hasAwaited,
             JSPromise completionPromise) {
         if (index < 0) {
@@ -111,32 +74,15 @@ public final class JSAsyncDisposableStack extends JSObject {
                 // Per spec: If needsAwait is true and hasAwaited is false, Perform ! Await(undefined).
                 JSPromise awaitPromise = context.createJSPromise();
                 awaitPromise.resolve(context, JSUndefined.INSTANCE);
-                JSNativeFunction onFulfilled = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
-                    if (accumulatedError != null) {
-                        completionPromise.reject(accumulatedError);
-                    } else {
-                        completionPromise.fulfill(JSUndefined.INSTANCE);
-                    }
+                JSNativeFunction finish = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
+                    settleCompletion(completionPromise, accumulatedError);
                     return JSUndefined.INSTANCE;
                 });
-                JSNativeFunction onRejected = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
-                    if (accumulatedError != null) {
-                        completionPromise.reject(accumulatedError);
-                    } else {
-                        completionPromise.fulfill(JSUndefined.INSTANCE);
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-                context.transferPrototype(onFulfilled, JSFunction.NAME);
-                context.transferPrototype(onRejected, JSFunction.NAME);
-                awaitPromise.observe(context, onFulfilled, onRejected);
+                context.transferPrototype(finish, JSFunction.NAME);
+                awaitPromise.observe(context, finish, finish);
                 return;
             }
-            if (accumulatedError != null) {
-                completionPromise.reject(accumulatedError);
-            } else {
-                completionPromise.fulfill(JSUndefined.INSTANCE);
-            }
+            settleCompletion(completionPromise, accumulatedError);
             return;
         }
         DisposeRecord record = disposeRecords.get(index);
@@ -196,45 +142,23 @@ public final class JSAsyncDisposableStack extends JSObject {
 
     }
 
-    public boolean isDisposed() {
-        return disposed;
-    }
-
-    private JSValue mergeDisposalError(JSContext context, JSValue currentError, JSValue accumulatedError) {
-        if (currentError == null) {
-            return accumulatedError;
-        }
-        if (accumulatedError == null) {
-            return currentError;
-        }
-        return composeSuppressedError(context, currentError, accumulatedError);
-    }
-
+    @Override
     public JSValue move(JSContext context) {
         if (disposed) {
-            if (movedFrom) {
-                return context.throwTypeError(
-                        "Cannot call AsyncDisposableStack.prototype.move on an already-disposed AsyncDisposableStack");
-            }
-            return context.throwReferenceError("Cannot move elements from a disposed stack!");
+            return disposedError(context, "move");
         }
         JSAsyncDisposableStack newStack = new JSAsyncDisposableStack(context);
         context.transferPrototype(newStack, NAME);
-        newStack.disposeRecords.addAll(disposeRecords);
+        transferRecords(newStack);
         newStack.needsAwait = needsAwait;
-        disposeRecords.clear();
-        disposed = true;
         movedFrom = true;
         return newStack;
     }
 
+    @Override
     public JSValue use(JSContext context, JSValue value) {
         if (disposed) {
-            if (movedFrom) {
-                return context.throwTypeError(
-                        "Cannot call AsyncDisposableStack.prototype.use on an already-disposed AsyncDisposableStack");
-            }
-            return context.throwReferenceError("Cannot add values to a disposed stack!");
+            return disposedError(context, "use");
         }
         if (value.isNullOrUndefined()) {
             needsAwait = true;
@@ -266,6 +190,11 @@ public final class JSAsyncDisposableStack extends JSObject {
         return stack;
     }
 
-    private record DisposeRecord(JSFunction function, JSValue thisArg, JSValue[] args, boolean awaitResult) {
+    private static void settleCompletion(JSPromise promise, JSValue error) {
+        if (error == null) {
+            promise.fulfill(JSUndefined.INSTANCE);
+        } else {
+            promise.reject(error);
+        }
     }
 }

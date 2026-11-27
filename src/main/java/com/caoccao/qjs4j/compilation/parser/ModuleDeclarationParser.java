@@ -286,8 +286,7 @@ final class ModuleDeclarationParser {
         // Any IdentifierName including reserved keywords is allowed as
         // import/export specifier names (ES2024 ModuleExportName).
         if (type.isIdentifierName()) {
-            String name = parserContext.currentToken.value();
-            parserContext.advance();
+            String name = parserContext.consumeValue();
             return name;
         }
         throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");

@@ -22,6 +22,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalCalendarDifference;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateAddition;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
@@ -141,8 +142,7 @@ public final class TemporalPlainDatePrototype {
 
         IsoDate isoDate = plainDate.getIsoDate();
         if (!isoDate.isWithinPlainDateTimeRange(time)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         return JSTemporalPlainDateTime.create(context, isoDate.atTime(time), plainDate.getCalendarId());
@@ -220,8 +220,7 @@ public final class TemporalPlainDatePrototype {
             }
             isoTime = plainTime.getIsoTime();
             if (!isoDate.isWithinPlainDateTimeRange(isoTime)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ISO_DATE.undefined(context);
             }
         }
 
@@ -237,8 +236,7 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalZonedDateTime.create(context, epochNanoseconds, timeZoneId, plainDate.getCalendarId());
     }

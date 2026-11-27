@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.calendar;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalOverflow;
 
 public record IsoCalendarMonth(int monthNumber, boolean leapMonth, String monthCode, int daysInMonth) {
@@ -28,15 +29,13 @@ public record IsoCalendarMonth(int monthNumber, boolean leapMonth, String monthC
         if (monthFromProperty != null) {
             int monthNumber = monthFromProperty;
             if (monthNumber < 1) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
             if (monthNumber > monthSlots.size()) {
                 if (!TemporalOverflow.REJECT.matches(overflow) && monthCodeFromProperty == null) {
                     monthNumber = monthSlots.size();
                 } else {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
+                    return TemporalError.INVALID_ISO_DATE.reject(context);
                 }
             }
             monthSlotFromNumber = monthSlots.getByMonthNumber(monthNumber);
@@ -46,8 +45,7 @@ public record IsoCalendarMonth(int monthNumber, boolean leapMonth, String monthC
         if (monthCodeFromProperty != null) {
             IsoMonth monthCodeData = IsoMonth.parseByMonthCode(monthCodeFromProperty);
             if (monthCodeData == null) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
             monthSlotFromCode = monthSlots.getByMonthCode(monthCodeFromProperty);
             if (monthSlotFromCode == null) {
@@ -58,15 +56,13 @@ public record IsoCalendarMonth(int monthNumber, boolean leapMonth, String monthC
                 }
             }
             if (monthSlotFromCode == null) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
         }
 
         if (monthSlotFromNumber != null && monthSlotFromCode != null) {
             if (!monthSlotFromNumber.monthCode().equals(monthSlotFromCode.monthCode())) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
             return monthSlotFromCode;
         }
@@ -76,7 +72,6 @@ public record IsoCalendarMonth(int monthNumber, boolean leapMonth, String monthC
         if (monthSlotFromCode != null) {
             return monthSlotFromCode;
         }
-        context.throwRangeError("Temporal error: Invalid ISO date.");
-        return null;
+        return TemporalError.INVALID_ISO_DATE.reject(context);
     }
 }

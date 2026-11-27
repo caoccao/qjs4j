@@ -27,20 +27,11 @@ public final class DisposableStackPrototype {
     }
 
     public static JSValue adopt(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSDisposableStack stack)) {
-            return context.throwTypeError("DisposableStack.prototype.adopt called on non-DisposableStack");
-        }
-        JSValue value = JSValue.argumentOrUndefined(args, 0);
-        JSValue onDispose = JSValue.argumentOrUndefined(args, 1);
-        return stack.adopt(context, value, onDispose);
+        return DisposableStackMethods.SYNC.adopt(context, thisArg, args);
     }
 
     public static JSValue defer(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSDisposableStack stack)) {
-            return context.throwTypeError("DisposableStack.prototype.defer called on non-DisposableStack");
-        }
-        JSValue onDispose = JSValue.argumentOrUndefined(args, 0);
-        return stack.defer(context, onDispose);
+        return DisposableStackMethods.SYNC.defer(context, thisArg, args);
     }
 
     public static JSValue dispose(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -52,24 +43,14 @@ public final class DisposableStackPrototype {
     }
 
     public static JSValue getDisposed(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSDisposableStack stack)) {
-            return context.throwTypeError("get DisposableStack.prototype.disposed called on non-DisposableStack");
-        }
-        return JSBoolean.valueOf(stack.isDisposed());
+        return DisposableStackMethods.SYNC.getDisposed(context, thisArg);
     }
 
     public static JSValue move(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSDisposableStack stack)) {
-            return context.throwTypeError("DisposableStack.prototype.move called on non-DisposableStack");
-        }
-        return stack.move(context);
+        return DisposableStackMethods.SYNC.move(context, thisArg);
     }
 
     public static JSValue use(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSDisposableStack stack)) {
-            return context.throwTypeError("DisposableStack.prototype.use called on non-DisposableStack");
-        }
-        JSValue value = JSValue.argumentOrUndefined(args, 0);
-        return stack.use(context, value);
+        return DisposableStackMethods.SYNC.use(context, thisArg, args);
     }
 }

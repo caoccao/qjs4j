@@ -30,6 +30,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class SetPrototypeTest extends BaseJavetTest {
 
+    private static final String INSERTION_ORDER_SCRIPT = """
+            var result = '';
+            var s = new Set(['a']);
+            s.forEach(function(v) {
+              result += v;
+              if(v === 'a') { s.add('b'); s.add('c'); }
+              if(v === 'b') { s.add('d'); }
+            });
+            result""";
+
     @Test
     void demonstrateBugFix() {
         // This is the exact test case from SetPrototypeTest.testForEachEdgeCases()
@@ -58,17 +68,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     void demonstrateInsertionOrderPreserved() {
-        // Verify that newly added elements are visited in insertion order
-        assertStringWithJavet("""
-                var result = '';
-                var s = new Set(['a']);
-                s.forEach(function(v) {
-                  result += v;
-                  if(v === 'a') { s.add('b'); s.add('c'); }
-                  if(v === 'b') { s.add('d'); }
-                });
-                result""");
-        // Result should be 'abcd' showing all elements were visited in order
+        assertStringValue(context.eval(INSERTION_ORDER_SCRIPT), "abcd");
     }
 
     @Test
@@ -605,15 +605,7 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testForEachNewElementsVisitedInOrder() {
         // Newly added elements should also be visited in insertion order
-        assertStringWithJavet("""
-                var result = '';
-                var s = new Set(['a']);
-                s.forEach(function(v) {
-                  result += v;
-                  if(v === 'a') { s.add('b'); s.add('c'); }
-                  if(v === 'b') { s.add('d'); }
-                });
-                result""");
+        assertStringWithJavet(INSERTION_ORDER_SCRIPT);
     }
 
     @Test

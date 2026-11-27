@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.builtins.temporal.plain.TemporalPartialDate;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoMonth;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
@@ -96,8 +97,7 @@ public final class TemporalPropertyBag {
     public Integer positiveDateField(String name) {
         Integer value = integer(name);
         if (value != null && value < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         return value;
     }

@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal.zoned;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
 import com.caoccao.qjs4j.core.temporal.rounding.TemporalRoundingMode;
@@ -37,9 +38,9 @@ record TemporalZonedDay(BigInteger start, BigInteger end) {
             if (TemporalUtils.isValidEpochNanoseconds(start) && TemporalUtils.isValidEpochNanoseconds(end)) {
                 return new TemporalZonedDay(start, end);
             }
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            TemporalError.NANOSECONDS_OUT_OF_RANGE.raise(context);
         } catch (DateTimeException e) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+            TemporalError.INVALID_ISO_DATE.raise(context);
         }
         return null;
     }

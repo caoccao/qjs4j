@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoMonth;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
@@ -67,8 +68,7 @@ public final class TemporalPlainDateTimeConstructor {
         }
 
         if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         if (!isoTime.isValid()) {
@@ -77,8 +77,7 @@ public final class TemporalPlainDateTimeConstructor {
         }
 
         if (!isoDate.isWithinPlainDateTimeRange(isoTime)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         IsoDateTime isoDateTime = isoDate.atTime(isoTime);
@@ -116,14 +115,13 @@ public final class TemporalPlainDateTimeConstructor {
         }
 
         year = TemporalUtils.resolveEraYear(context, fields, calendarId, year,
-                "Temporal error: DateTime argument must be object or string.");
+                TemporalError.INVALID_DATE_TIME_ARGUMENT.message());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
         if (year == null || dayOfMonth == null || (month == null && parsedMonthCode == null)) {
-            context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_DATE_TIME_ARGUMENT.undefined(context);
         }
 
         String overflow = TemporalUtils.getOverflowOption(context, options);
@@ -145,8 +143,7 @@ public final class TemporalPlainDateTimeConstructor {
         }
 
         if (!resultDate.isWithinPlainDateTimeRange(resultTime)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
         return JSTemporalPlainDateTime.create(context, resultDate.atTime(resultTime), calendarId);
     }
@@ -157,8 +154,7 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
         if (!parsed.date().isWithinPlainDateTimeRange(parsed.time())) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
         return JSTemporalPlainDateTime.create(context, parsed.date().atTime(parsed.time()), parsed.calendar());
     }
@@ -215,8 +211,7 @@ public final class TemporalPlainDateTimeConstructor {
         }
         if (item instanceof JSObject itemObj) {
             if (isTemporalPlainDateTimePrototype(context, itemObj)) {
-                context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_DATE_TIME_ARGUMENT.undefined(context);
             }
             return dateTimeFromFields(context, itemObj, options);
         }
@@ -231,8 +226,7 @@ public final class TemporalPlainDateTimeConstructor {
             }
             return parsed;
         }
-        context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-        return JSUndefined.INSTANCE;
+        return TemporalError.INVALID_DATE_TIME_ARGUMENT.undefined(context);
     }
 
     public static JSTemporalPlainDateTime toTemporalDateTimeObject(JSContext context, JSValue item) {

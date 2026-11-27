@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalOverflow;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
@@ -45,8 +46,7 @@ public record TemporalZonedDateTimeOptions(String disambiguation, String offset,
             return createCanonical("compatible", defaultOffset, "constrain");
         }
         if (!(optionsValue instanceof JSObject optionsObject)) {
-            context.throwTypeError("Temporal error: Option must be object: options.");
-            return null;
+            return TemporalError.INVALID_OPTIONS.reject(context);
         }
 
         String disambiguation = TemporalUtils.getStringOption(context, optionsObject, "disambiguation", "compatible");

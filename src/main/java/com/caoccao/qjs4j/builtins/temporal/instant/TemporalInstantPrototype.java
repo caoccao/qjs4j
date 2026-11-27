@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationConstructor;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
@@ -58,8 +59,7 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
         if (durationRecord.hasAnyDateUnits()) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
 
         BigInteger totalNs = durationRecord.timeNanoseconds();
@@ -69,8 +69,7 @@ public final class TemporalInstantPrototype {
 
         BigInteger result = instant.getEpochNanoseconds().add(totalNs);
         if (!TemporalUtils.isValidEpochNanoseconds(result)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalInstant.create(context, result);
     }
@@ -159,8 +158,7 @@ public final class TemporalInstantPrototype {
                 .subtract(rightInstant.getEpochNanoseconds());
         TemporalDuration normalizedDuration = differenceOptions.roundTimeDifference(differenceNanoseconds);
         if (!TemporalDuration.isDurationRecordTimeRangeValid(normalizedDuration)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalDuration.create(context, normalizedDuration);
     }
@@ -181,7 +179,7 @@ public final class TemporalInstantPrototype {
             smallestUnitText = unitStr.value();
         } else if (args[0] instanceof JSObject optionsObj) {
             roundingIncrement = TemporalUtils.readRoundingIncrement(context, optionsObj,
-                    "Temporal error: Invalid rounding increment.");
+                    TemporalError.INVALID_ROUNDING_INCREMENT.message());
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -191,8 +189,7 @@ public final class TemporalInstantPrototype {
             }
             roundingMode = TemporalRoundingMode.fromString(mode);
             if (roundingMode == null) {
-                context.throwRangeError("Temporal error: Invalid rounding mode.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ROUNDING_MODE.undefined(context);
             }
             smallestUnitText = TemporalUtils.getStringOption(context, optionsObj, "smallestUnit", null);
             if (context.hasPendingException()) {
@@ -216,23 +213,20 @@ public final class TemporalInstantPrototype {
         }
 
         if (roundingIncrement < 1 || roundingIncrement > MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ROUNDING_INCREMENT.undefined(context);
         }
 
         long maximumRoundingIncrement = smallestUnit.getSolarDayDivisor();
         if (maximumRoundingIncrement <= 0 || roundingIncrement > maximumRoundingIncrement
                 || maximumRoundingIncrement % roundingIncrement != 0) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ROUNDING_INCREMENT.undefined(context);
         }
 
         BigInteger incrementNs = smallestUnit.fixedNanoseconds().multiply(BigInteger.valueOf(roundingIncrement));
         BigInteger epochNs = instant.getEpochNanoseconds();
         BigInteger rounded = roundingMode.roundBigIntegerToIncrementAsIfPositive(epochNs, incrementNs);
         if (!TemporalUtils.isValidEpochNanoseconds(rounded)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalInstant.create(context, rounded);
     }

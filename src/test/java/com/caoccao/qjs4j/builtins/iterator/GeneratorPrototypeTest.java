@@ -317,49 +317,15 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testThrowWithCustomErrorAndFinallyYield() {
-        assertStringWithJavet(
-                """
-                        function Test262Error(msg) { this.message = msg || ''; }
-                        Test262Error.prototype = Object.create(Error.prototype);
-                        function* g() {
-                          yield 1;
-                          try {
-                            yield 2;
-                          } finally {
-                            yield 3;
-                          }
-                          yield 4;
-                        }
-                        var iter = g();
-                        var results = [];
-                        results.push(JSON.stringify(iter.next()));
-                        results.push(JSON.stringify(iter.next()));
-                        results.push(JSON.stringify(iter.throw(new Test262Error('hello'))));
-                        try { iter.next(); results.push('NO_THROW'); } catch(e) { results.push('THREW:' + (e instanceof Test262Error)); }
-                        results.push(JSON.stringify(iter.next()));
-                        results.join('|')""");
+        assertStringWithJavet("""
+                function Test262Error(msg) { this.message = msg || ''; }
+                Test262Error.prototype = Object.create(Error.prototype);
+                """ + throwIntoFinally("Test262Error", "(e instanceof Test262Error)"));
     }
 
     @Test
     public void testThrowWithFinallyYieldThenNextRethrows() {
-        assertStringWithJavet("""
-                function* g() {
-                  yield 1;
-                  try {
-                    yield 2;
-                  } finally {
-                    yield 3;
-                  }
-                  yield 4;
-                }
-                var iter = g();
-                var results = [];
-                results.push(JSON.stringify(iter.next()));
-                results.push(JSON.stringify(iter.next()));
-                results.push(JSON.stringify(iter.throw(new Error('hello'))));
-                try { iter.next(); results.push('NO_THROW'); } catch(e) { results.push('THREW:' + e.message); }
-                results.push(JSON.stringify(iter.next()));
-                results.join('|')""");
+        assertStringWithJavet(throwIntoFinally("Error", "e.message"));
     }
 
     @Test
@@ -384,5 +350,26 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
                 };
                 var outer = (function* () { yield* iter; })();
                 JSON.stringify(outer.next());""");
+    }
+
+    private static String throwIntoFinally(String errorType, String caughtValue) {
+        return """
+                function* g() {
+                  yield 1;
+                  try {
+                    yield 2;
+                  } finally {
+                    yield 3;
+                  }
+                  yield 4;
+                }
+                var iter = g();
+                var results = [];
+                results.push(JSON.stringify(iter.next()));
+                results.push(JSON.stringify(iter.next()));
+                results.push(JSON.stringify(iter.throw(new %s('hello'))));
+                try { iter.next(); results.push('NO_THROW'); } catch(e) { results.push('THREW:' + %s); }
+                results.push(JSON.stringify(iter.next()));
+                results.join('|')""".formatted(errorType, caughtValue);
     }
 }

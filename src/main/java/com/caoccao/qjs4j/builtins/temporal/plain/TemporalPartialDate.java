@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoMonth;
@@ -67,12 +68,11 @@ public record TemporalPartialDate(Integer day, Integer month, String monthCode, 
         TemporalPartialDate merged = mergeFields(original.getIsoDate(), calendar);
         IsoMonth code = merged.monthCode == null
                 ? null
-                : IsoMonth.parseByMonthCode(context, merged.monthCode, "Temporal error: Month code out of range.");
+                : IsoMonth.parseByMonthCode(context, merged.monthCode, TemporalError.MONTH_CODE_OUT_OF_RANGE.message());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer resolvedYear = merged.resolveYear(context, calendar,
-                "Temporal error: year argument must be an object.");
+        Integer resolvedYear = merged.resolveYear(context, calendar, TemporalError.INVALID_YEAR_ARGUMENT.message());
         if (resolvedYear == null) {
             return JSUndefined.INSTANCE;
         }
@@ -93,7 +93,7 @@ public record TemporalPartialDate(Integer day, Integer month, String monthCode, 
         }
         IsoMonth parsedCode = code == null
                 ? null
-                : IsoMonth.parseByMonthCode(context, code, "Temporal error: Month code out of range.");
+                : IsoMonth.parseByMonthCode(context, code, TemporalError.MONTH_CODE_OUT_OF_RANGE.message());
         if (context.hasPendingException()) {
             return null;
         }

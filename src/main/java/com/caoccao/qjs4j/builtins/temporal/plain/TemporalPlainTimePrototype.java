@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationConstructor;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -103,8 +104,7 @@ public final class TemporalPlainTimePrototype {
 
         TemporalDuration normalizedDuration = differenceSettings.roundTimeDifference(differenceNanoseconds);
         if (!normalizedDuration.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(normalizedDuration)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalDuration.create(context, normalizedDuration);
     }
@@ -116,7 +116,7 @@ public final class TemporalPlainTimePrototype {
 
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
-                "Temporal error: Option must be object: options.");
+                TemporalError.INVALID_OPTIONS.message());
         if (context.hasPendingException()) {
             return null;
         }

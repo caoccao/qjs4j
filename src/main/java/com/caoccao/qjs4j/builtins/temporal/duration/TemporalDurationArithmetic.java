@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal.duration;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -89,8 +90,7 @@ final class TemporalDurationArithmetic {
             balancedDayCount = Math.addExact(durationRecord.days(), additionalDayCount);
             balancedDayCount = Math.addExact(balancedDayCount, balancedTimeDuration.days());
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
         return new TemporalDuration(durationRecord.years(), durationRecord.months(), durationRecord.weeks(),
                 balancedDayCount, balancedTimeDuration.hours(), balancedTimeDuration.minutes(),
@@ -185,8 +185,7 @@ final class TemporalDurationArithmetic {
                 timeDuration.minutes(), timeDuration.seconds(), timeDuration.milliseconds(),
                 timeDuration.microseconds(), timeDuration.nanoseconds());
         if (!durationRecord.isValid()) {
-            context.throwRangeError("Temporal error: Duration was not valid.");
-            return null;
+            return TemporalError.INVALID_DURATION.reject(context);
         }
         return durationRecord;
     }
@@ -269,19 +268,16 @@ final class TemporalDurationArithmetic {
         if (!relativeToOption.zoned() && !durationRecord.isBlank()
                 && (unit.isTimeUnit() || durationRecord.hasTimeUnits())
                 && !TemporalUtils.isDateTimeWithinTemporalRange(startDateTime)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
         if (relativeToOption.zoned() && !durationRecord.hasCalendarUnits()) {
             BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
             if (dayTimeNanoseconds.abs().compareTo(MAX_FLOAT64_NANOSECONDS_COMPONENT) >= 0) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             BigInteger endEpochNanoseconds = relativeToOption.epochNanoseconds().add(dayTimeNanoseconds);
             if (!TemporalUtils.isValidEpochNanoseconds(endEpochNanoseconds)) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
         }
 
@@ -303,8 +299,7 @@ final class TemporalDurationArithmetic {
             return null;
         }
         if (!withinRelativeRange(unroundedEndDateTime, relativeToOption)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
         return new DurationEndpoint(unroundedEndDateTime, unroundedEndEpochNanoseconds);
     }
@@ -350,8 +345,7 @@ final class TemporalDurationArithmetic {
         if (relativeToOption.zoned() && largestUnit == TemporalUnit.DAY && smallestUnit.isTimeUnit()) {
             BigInteger nextDayEpochNanoseconds = relativeToOption.epochNanoseconds().add(DAY_NANOSECONDS);
             if (!TemporalUtils.isValidEpochNanoseconds(nextDayEpochNanoseconds)) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
         }
 
@@ -370,8 +364,7 @@ final class TemporalDurationArithmetic {
             try {
                 startAnchorDateTime = startDateTime.plusDays(balancedDurationWithoutRounding.days());
             } catch (DateTimeException dateTimeException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             LocalDateTime endAnchorDateTime = startAnchorDateTime.plusDays(durationSign);
             BigInteger daySpanNanoseconds = TemporalUtils.nanosecondsBetween(context, startAnchorDateTime, null,
@@ -402,8 +395,7 @@ final class TemporalDurationArithmetic {
                         .plusMonths(durationRecord.months()).plusWeeks(durationRecord.weeks())
                         .plusDays(durationRecord.days());
             } catch (DateTimeException dateTimeException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             BigInteger timeRemainderNanoseconds = TemporalUtils.nanosecondsBetween(context, dayAdjustedDateTime, null,
                     unroundedEndDateTime, unroundedEndEpochNanoseconds, relativeToOption);
@@ -468,8 +460,7 @@ final class TemporalDurationArithmetic {
         LocalDateTime upperBoundaryDateTime = calendarUnit.addCalendarUnits(startDateTime, upperMultipleCount);
         if (!TemporalUtils.isDateWithinTemporalRange(lowerBoundaryDateTime.toLocalDate())
                 || !TemporalUtils.isDateWithinTemporalRange(upperBoundaryDateTime.toLocalDate())) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
 
         if (endDateTime.equals(lowerBoundaryDateTime)) {
@@ -537,8 +528,7 @@ final class TemporalDurationArithmetic {
         if (roundOptions.largestUnit() == TemporalUnit.MILLISECOND) {
             BigInteger millisecondValue = roundedNanoseconds.divide(MILLISECOND_NANOSECONDS);
             if (millisecondValue.abs().compareTo(MAX_FLOAT64_MILLISECONDS_COMPONENT) > 0) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             BigInteger microsecondRemainder = roundedNanoseconds.remainder(MILLISECOND_NANOSECONDS)
                     .divide(MICROSECOND_NANOSECONDS);
@@ -552,8 +542,7 @@ final class TemporalDurationArithmetic {
         } else if (roundOptions.largestUnit() == TemporalUnit.MICROSECOND) {
             BigInteger microsecondValue = roundedNanoseconds.divide(MICROSECOND_NANOSECONDS);
             if (microsecondValue.abs().compareTo(MAX_FLOAT64_MICROSECONDS_COMPONENT) > 0) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             BigInteger nanosecondRemainder = roundedNanoseconds.remainder(MICROSECOND_NANOSECONDS);
             durationFieldOverrides = new TemporalDurationDouble(0D, 0D, 0D, 0D, 0D, 0D, 0D, 0D,
@@ -563,8 +552,7 @@ final class TemporalDurationArithmetic {
             }
         } else if (roundOptions.largestUnit() == TemporalUnit.NANOSECOND) {
             if (roundedNanoseconds.abs().compareTo(MAX_FLOAT64_NANOSECONDS_COMPONENT) > 0) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             durationFieldOverrides = new TemporalDurationDouble(0D, 0D, 0D, 0D, 0D, 0D, 0D, 0D, 0D,
                     roundedNanoseconds.doubleValue());
@@ -639,7 +627,7 @@ final class TemporalDurationArithmetic {
         }
         LocalDateTime nextBoundaryDateTime = calendarUnit.addCalendarUnits(startDateTime, wholeUnits + direction);
         if (!withinRelativeRange(nextBoundaryDateTime, relativeToOption)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
+            TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
             return Double.NaN;
         }
 
@@ -681,7 +669,7 @@ final class TemporalDurationArithmetic {
         if (relativeToOption.zoned() && unit == TemporalUnit.DAY) {
             BigInteger nextDayEpochNanoseconds = relativeToOption.epochNanoseconds().add(DAY_NANOSECONDS);
             if (!TemporalUtils.isValidEpochNanoseconds(nextDayEpochNanoseconds)) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
+                TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
                 return Double.NaN;
             }
         }

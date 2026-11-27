@@ -75,6 +75,23 @@ final class IntlFormatOptions {
         return options;
     }
 
+    static JSValue constructWithLocaleMatcher(JSContext context, JSObject prototype, JSValue[] args, String name,
+            Factory factory) {
+        try {
+            ConstructorLocale constructor = ConstructorLocale.resolve(context, prototype, args, name);
+            if (constructor == null) {
+                return JSUndefined.INSTANCE;
+            }
+            JSValue options = coerceOptionsWithLocaleMatcher(context, args);
+            if (context.hasPendingException() || !(options instanceof JSObject object)) {
+                return options;
+            }
+            return factory.create(context, constructor, object);
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError(e.getMessage());
+        }
+    }
+
     static JSObject emptyOptions(JSContext context) {
         JSObject empty = context.createJSObject();
         empty.setPrototype(null);
@@ -267,6 +284,12 @@ final class IntlFormatOptions {
             return instance;
         }
     }
+
+    @FunctionalInterface
+    interface Factory {
+        JSValue create(JSContext context, ConstructorLocale constructor, JSObject options);
+    }
+
     record NumberingLocale(Locale locale, String numberingSystem) {
         static NumberingLocale resolve(Locale locale, String option) {
             boolean hasExtensions = locale.hasExtensions();

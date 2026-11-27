@@ -132,8 +132,7 @@ public final class TemporalUtils {
             return "auto";
         }
         if (!(options instanceof JSObject optionsObj)) {
-            context.throwTypeError("Temporal error: Option must be object: options.");
-            return null;
+            return TemporalError.INVALID_OPTIONS.reject(context);
         }
         String calendarNameOption = getStringOption(context, optionsObj, "calendarName", "auto");
         if (context.hasPendingException()) {
@@ -201,8 +200,7 @@ public final class TemporalUtils {
             return "constrain";
         }
         if (!(options instanceof JSObject optionsObj)) {
-            context.throwTypeError("Temporal error: Option must be object: options.");
-            return null;
+            return TemporalError.INVALID_OPTIONS.reject(context);
         }
         String overflow = getStringOption(context, optionsObj, "overflow", "constrain");
         if (context.hasPendingException()) {
@@ -556,8 +554,7 @@ public final class TemporalUtils {
         }
         int expectedYear = calendar.getEraYearFromEra(canonicalEra, eraYear);
         if (year != null && year != expectedYear) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         return expectedYear;
     }
@@ -637,7 +634,7 @@ public final class TemporalUtils {
             return Integer.MIN_VALUE;
         }
         if (!Double.isFinite(numericValue)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
+            TemporalError.EXPECTED_FINITE_INTEGER.raise(context);
             return Integer.MIN_VALUE;
         }
         return (int) numericValue;
@@ -653,11 +650,11 @@ public final class TemporalUtils {
             return Long.MIN_VALUE;
         }
         if (!Double.isFinite(numericValue)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
+            TemporalError.EXPECTED_FINITE_INTEGER.raise(context);
             return Long.MIN_VALUE;
         }
         if (numericValue != Math.floor(numericValue)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
+            TemporalError.EXPECTED_FINITE_INTEGER.raise(context);
             return Long.MIN_VALUE;
         }
         return (long) numericValue;

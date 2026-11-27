@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal.duration;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -39,8 +40,7 @@ public final class TemporalCalendarDifference {
             JSValue options, boolean since, TemporalUnit smallest) {
         TemporalCalendarId calendar = first.getCalendarId();
         if (calendar != second.getCalendarId()) {
-            context.throwRangeError("Temporal error: Mismatched calendars.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISMATCHED_CALENDARS.undefined(context);
         }
         boolean monthDifference = smallest == TemporalUnit.MONTH;
         TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(context, since, options,
@@ -61,8 +61,7 @@ public final class TemporalCalendarDifference {
     public static JSValue between(JSContext context, JSTemporalPlainDateTime plainDateTime,
             JSTemporalPlainDateTime other, JSValue optionsArg, boolean since) {
         if (!plainDateTime.getCalendarId().equals(other.getCalendarId())) {
-            context.throwRangeError("Temporal error: Mismatched calendars.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISMATCHED_CALENDARS.undefined(context);
         }
 
         TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(context, since, optionsArg,
@@ -79,8 +78,7 @@ public final class TemporalCalendarDifference {
     public static JSValue between(JSContext context, JSTemporalZonedDateTime zonedDateTime,
             JSTemporalZonedDateTime other, JSValue optionsArg, boolean since) {
         if (!zonedDateTime.getCalendarId().equals(other.getCalendarId())) {
-            context.throwRangeError("Temporal error: Mismatched calendars.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISMATCHED_CALENDARS.undefined(context);
         }
 
         TemporalDifferenceSettings settings = zonedSettings(context, since, optionsArg);
@@ -208,8 +206,7 @@ public final class TemporalCalendarDifference {
         TemporalDuration resultRecord = (since ? durationRecord.negated() : durationRecord)
                 .normalizeFloat64RepresentableFields();
         if (!resultRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(resultRecord)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalDuration.create(context, resultRecord);
     }
@@ -283,8 +280,7 @@ public final class TemporalCalendarDifference {
         long numerator = destinationEpochDay - startEpochDay;
         long denominator = endEpochDay - startEpochDay;
         if (denominator == 0) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         boolean didExpandCalendarUnit = roundsToEnd(settings, sign, roundingStartValue, roundingEndValue, numerator,
@@ -369,8 +365,7 @@ public final class TemporalCalendarDifference {
 
         if (!isRoundedYearMonthInRange(originDifferenceDate, startYears, startMonths)
                 || !isRoundedYearMonthInRange(originDifferenceDate, endYears, endMonths)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         long startTotalMonths = startYears * 12L + startMonths;
@@ -378,8 +373,7 @@ public final class TemporalCalendarDifference {
         long numerator = destinationMonthsDifference - startTotalMonths;
         long denominator = endTotalMonths - startTotalMonths;
         if (denominator == 0L) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         boolean didExpandCalendarUnit = roundsToEnd(differenceSettings, sign, roundingStartValue, roundingEndValue,
@@ -419,8 +413,7 @@ public final class TemporalCalendarDifference {
         }
 
         if (!thisIsoDate.isWithinSupportedRange() || !otherIsoDate.isWithinSupportedRange()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         TemporalDurationYearMonth durationFields;
         long totalMonthsDifference;
@@ -463,8 +456,7 @@ public final class TemporalCalendarDifference {
             return null;
         }
         if (settings.smallestUnit() == TemporalUnit.DAY && Math.abs(settings.roundingIncrement()) > 100_000_000L) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
+            return TemporalError.INVALID_ROUNDING_INCREMENT.reject(context);
         }
         return settings;
     }

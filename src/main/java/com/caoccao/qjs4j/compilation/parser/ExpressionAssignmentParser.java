@@ -225,12 +225,6 @@ final class ExpressionAssignmentParser {
         return false;
     }
 
-    private boolean isAsyncArrowParameterIdentifierToken(TokenType tokenType) {
-        return tokenType == TokenType.IDENTIFIER || tokenType == TokenType.ASYNC || tokenType == TokenType.AWAIT
-                || tokenType == TokenType.YIELD || tokenType == TokenType.FROM || tokenType == TokenType.OF
-                || tokenType == TokenType.AS || tokenType == TokenType.LET;
-    }
-
     private ArrowFunctionExpression parseArrowBody(FunctionParams params, boolean async, SourceLocation location) {
         enterArrowFunctionContext(async);
         boolean enclosingStaticInit = parserContext.inClassStaticInit;
@@ -298,7 +292,7 @@ final class ExpressionAssignmentParser {
                     return expressions.parsePostPrimaryExpression(asyncFunc, location);
                 }
 
-                if (isAsyncArrowParameterIdentifierToken(parserContext.currentToken.type())
+                if (parserContext.currentToken.type().isIdentifierCandidate()
                         && parserContext.nextToken.type() == TokenType.ARROW) {
                     Identifier param = parserContext.parseIdentifier();
                     validateBindingIdentifier(param.getName(), true);

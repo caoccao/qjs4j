@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalLocaleFormat;
 import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoMonth;
@@ -98,8 +99,7 @@ public final class TemporalPlainMonthDayPrototype {
             return JSUndefined.INSTANCE;
         }
         if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError("Temporal error: year argument must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
         JSObject mergedFields = monthDayFields(context, plainMonthDay);
         JSValue yearValue = fields.get(PropertyKey.fromString("year"));
@@ -135,7 +135,7 @@ public final class TemporalPlainMonthDayPrototype {
             return JSUndefined.INSTANCE;
         }
         JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
-                "Temporal error: Argument to with() must contain some date/time fields.");
+                TemporalError.MISSING_PARTIAL_FIELDS.message());
         if (fields == null) {
             return JSUndefined.INSTANCE;
         }
@@ -155,21 +155,19 @@ public final class TemporalPlainMonthDayPrototype {
             return JSUndefined.INSTANCE;
         }
         if (dayField == null && monthField == null && monthCode == null && yearField == null) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
 
         int year = yearField == null ? originalDate.year() : yearField;
         int dayOfMonth = dayField == null ? originalDate.day() : dayField;
         int month = monthField == null ? originalDate.month() : monthField;
         if (dayOfMonth < 1 || month < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         IsoMonth parsedMonthCode = null;
         if (monthCode != null) {
-            parsedMonthCode = IsoMonth.parseByMonthCode(context, monthCode, "Temporal error: Invalid ISO date.");
+            parsedMonthCode = IsoMonth.parseByMonthCode(context, monthCode, TemporalError.INVALID_ISO_DATE.message());
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -188,8 +186,7 @@ public final class TemporalPlainMonthDayPrototype {
 
         if ("reject".equals(overflow)) {
             if (!new IsoDate(year, month, dayOfMonth).isValid()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ISO_DATE.undefined(context);
             }
             return JSTemporalPlainMonthDay.create(context, new IsoDate(1972, month, dayOfMonth),
                     plainMonthDay.getCalendarId());
@@ -211,8 +208,7 @@ public final class TemporalPlainMonthDayPrototype {
             return JSUndefined.INSTANCE;
         }
         if (hasMonth) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
         boolean hasYear = bag.hasDefined("year");
         boolean hasEra = bag.hasDefined("era");
@@ -221,8 +217,7 @@ public final class TemporalPlainMonthDayPrototype {
             return JSUndefined.INSTANCE;
         }
         if (!hasDay && !hasMonthCode && !hasYear && !hasEra && !hasEraYear) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
 
         JSObject mergedFields = monthDayFields(context, plainMonthDay);

@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal.iso;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalRelativeToOption;
@@ -73,8 +74,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         try {
             return isoDateTime.toEpochNs(relativeToOption.timeZoneId(), "compatible");
         } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
     }
 
@@ -120,8 +120,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         try {
             return addTimeNanoseconds(context, toLocalDateTime(), nanoseconds);
         } catch (DateTimeException exception) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
     }
 
@@ -143,8 +142,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         BigInteger resultEpochNanoseconds = startEpochNanoseconds.add(nanoseconds);
         if (resultEpochNanoseconds.compareTo(NS_MIN_INSTANT) < 0
                 || resultEpochNanoseconds.compareTo(NS_MAX_INSTANT) > 0) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
         IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(resultEpochNanoseconds,
                 relativeToOption.timeZoneId());
@@ -289,8 +287,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
             }
             return dateTime.plusDays(days).plusNanos(remainder);
         } catch (ArithmeticException | DateTimeException exception) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
     }
 

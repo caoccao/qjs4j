@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.format;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDateTime;
@@ -45,8 +46,7 @@ interface TemporalTimePrecision {
                 ? nanos
                 : roundingMode().roundBigIntegerToIncrementAsIfPositive(nanos, BigInteger.valueOf(increment));
         if (!TemporalUtils.isValidEpochNanoseconds(rounded)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return null;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.reject(context);
         }
         return rounded;
     }

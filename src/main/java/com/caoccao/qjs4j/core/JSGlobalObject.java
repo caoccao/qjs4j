@@ -17,17 +17,11 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.array.*;
-import com.caoccao.qjs4j.builtins.buffer.ArrayBufferConstructor;
 import com.caoccao.qjs4j.builtins.buffer.AtomicsObject;
 import com.caoccao.qjs4j.builtins.buffer.DataViewConstructor;
-import com.caoccao.qjs4j.builtins.buffer.SharedArrayBufferConstructor;
 import com.caoccao.qjs4j.builtins.collection.*;
 import com.caoccao.qjs4j.builtins.date.DateConstructor;
 import com.caoccao.qjs4j.builtins.date.DatePrototype;
-import com.caoccao.qjs4j.builtins.disposable.AsyncDisposableStackConstructor;
-import com.caoccao.qjs4j.builtins.disposable.AsyncDisposableStackPrototype;
-import com.caoccao.qjs4j.builtins.disposable.DisposableStackConstructor;
-import com.caoccao.qjs4j.builtins.disposable.DisposableStackPrototype;
 import com.caoccao.qjs4j.builtins.iterator.AsyncGeneratorPrototype;
 import com.caoccao.qjs4j.builtins.iterator.AsyncIteratorPrototype;
 import com.caoccao.qjs4j.builtins.iterator.IteratorConstructor;
@@ -43,15 +37,12 @@ import com.caoccao.qjs4j.builtins.regexp.RegExpPrototype;
 import com.caoccao.qjs4j.builtins.temporal.TemporalNow;
 import com.caoccao.qjs4j.builtins.text.StringConstructor;
 import com.caoccao.qjs4j.builtins.text.StringPrototype;
-import com.caoccao.qjs4j.core.buffer.JSArrayBuffer;
-import com.caoccao.qjs4j.core.buffer.JSSharedArrayBuffer;
+import com.caoccao.qjs4j.core.buffer.JSDataView;
 import com.caoccao.qjs4j.core.buffer.JSUint8Array;
 import com.caoccao.qjs4j.core.buffer.TypedArrayKind;
 import com.caoccao.qjs4j.core.collection.*;
 import com.caoccao.qjs4j.core.console.JSConsole;
 import com.caoccao.qjs4j.core.date.JSDate;
-import com.caoccao.qjs4j.core.disposable.JSAsyncDisposableStack;
-import com.caoccao.qjs4j.core.disposable.JSDisposableStack;
 import com.caoccao.qjs4j.core.error.JSError;
 import com.caoccao.qjs4j.core.iterator.JSIterator;
 import com.caoccao.qjs4j.core.json.JSONObject;
@@ -80,20 +71,21 @@ public final class JSGlobalObject {
         this.jsonObject = new JSONObject(context);
     }
 
-    private void defineGetter(JSObject prototype, String name, JSNativeCallback getter) {
-        JSNativeFunction getterFunc = new JSNativeFunction(context, "get " + name, 0, getter);
-        prototype.defineProperty(PropertyKey.fromString(name), getterFunc,
-                PropertyDescriptor.AccessorState.Configurable);
-    }
-
-    private void defineMethod(JSObject target, String name, int length, JSNativeCallback callback) {
-        defineBuiltin(target, name, new JSNativeFunction(context, name, length, callback));
-    }
-
-    private void defineSpeciesGetter(JSObject constructor, JSNativeCallback callback) {
-        constructor.defineProperty(PropertyKey.SYMBOL_SPECIES,
-                new JSNativeFunction(context, "get [Symbol.species]", 0, callback),
-                PropertyDescriptor.AccessorState.Configurable);
+    private JSObject createGeneratorFunctionPrototype(JSObject generator, String name, JSNativeCallback call,
+            boolean inheritFunctionConstructor) {
+        JSObject prototype = context.createJSObject();
+        context.transferPrototype(prototype, JSFunction.NAME);
+        defineToStringTag(prototype, name);
+        prototype.defineProperty(PropertyKey.PROTOTYPE, generator, PropertyDescriptor.DataState.Configurable);
+        generator.defineProperty(PropertyKey.CONSTRUCTOR, prototype, PropertyDescriptor.DataState.Configurable);
+        JSNativeFunction constructor = new JSNativeFunction(context, name, 1, call, true);
+        if (inheritFunctionConstructor
+                && globalObject.get(PropertyKey.fromString(JSFunction.NAME)) instanceof JSObject function) {
+            constructor.setPrototype(function);
+        }
+        constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
+        prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor, PropertyDescriptor.DataState.Configurable);
+        return prototype;
     }
 
     public JSConsole getConsole() {
@@ -126,12 +118,12 @@ public final class JSGlobalObject {
         initializeRegExpConstructor();
         initializeSymbolConstructor();
         initializeBigIntConstructor();
-        initializeMapConstructor();
-        initializeSetConstructor();
-        initializeWeakMapConstructor();
-        initializeWeakSetConstructor();
-        initializeWeakRefConstructor();
-        initializeFinalizationRegistryConstructor();
+        GlobalConstructor.MAP.install(globalObject);
+        GlobalConstructor.SET.install(globalObject);
+        GlobalConstructor.WEAK_MAP.install(globalObject);
+        GlobalConstructor.WEAK_SET.install(globalObject);
+        GlobalConstructor.WEAK_REF.install(globalObject);
+        GlobalConstructor.FINALIZATION_REGISTRY.install(globalObject);
         initializeMathObject();
         initializeJSONObject();
         initializeIntlObject();
@@ -142,17 +134,17 @@ public final class JSGlobalObject {
         initializeProxyConstructor();
         initializePromiseConstructor();
         if (context.getRuntime().getOptions().isShadowRealmEnabled()) {
-            initializeShadowRealmConstructor();
+            GlobalConstructor.SHADOW_REALM.install(globalObject);
         }
-        initializeDisposableStackConstructor();
-        initializeAsyncDisposableStackConstructor();
+        GlobalConstructor.DISPOSABLE_STACK.install(globalObject);
+        GlobalConstructor.ASYNC_DISPOSABLE_STACK.install(globalObject);
         initializeIteratorConstructor();
         initializeGeneratorPrototype();
         initializeAsyncGeneratorPrototype();
 
         // Binary data constructors
-        initializeArrayBufferConstructor();
-        initializeSharedArrayBufferConstructor();
+        GlobalConstructor.ARRAY_BUFFER.install(globalObject);
+        GlobalConstructor.SHARED_ARRAY_BUFFER.install(globalObject);
         initializeDataViewConstructor();
         initializeTypedArrayConstructors();
         initializeAtomicsObject();
@@ -188,29 +180,6 @@ public final class JSGlobalObject {
     }
 
     /**
-     * Initialize ArrayBuffer constructor and prototype.
-     */
-    private void initializeArrayBufferConstructor() {
-        // Create ArrayBuffer.prototype
-        JSObject arrayBufferPrototype = context.createJSObject();
-        IntrinsicFunctions.ARRAY_BUFFER_PROTOTYPE.install(arrayBufferPrototype);
-        defineToStringTag(arrayBufferPrototype, JSArrayBuffer.NAME);
-
-        // Create ArrayBuffer constructor as a function
-        JSNativeFunction arrayBufferConstructor = new JSNativeFunction(context, JSArrayBuffer.NAME, 1,
-                ArrayBufferConstructor::call, true, true);
-        linkConstructor(arrayBufferConstructor, arrayBufferPrototype, JSConstructorType.ARRAY_BUFFER);
-
-        // Static methods
-        defineMethod(arrayBufferConstructor, "isView", 1, ArrayBufferConstructor::isView);
-
-        // Symbol.species getter
-        defineSpeciesGetter(arrayBufferConstructor, ArrayBufferConstructor::getSpecies);
-
-        defineBuiltin(globalObject, JSArrayBuffer.NAME, arrayBufferConstructor);
-    }
-
-    /**
      * Initialize Array constructor and prototype.
      */
     private void initializeArrayConstructor() {
@@ -241,32 +210,6 @@ public final class JSGlobalObject {
         defineSpeciesGetter(arrayConstructor, ArrayConstructor::getSpecies);
 
         defineBuiltin(globalObject, JSArray.NAME, arrayConstructor);
-    }
-
-    /**
-     * Initialize AsyncDisposableStack constructor and prototype.
-     */
-    private void initializeAsyncDisposableStackConstructor() {
-        JSObject asyncDisposableStackPrototype = context.createJSObject();
-        defineMethod(asyncDisposableStackPrototype, "adopt", 2, AsyncDisposableStackPrototype::adopt);
-        defineMethod(asyncDisposableStackPrototype, "defer", 1, AsyncDisposableStackPrototype::defer);
-        JSNativeFunction disposeAsyncFunction = new JSNativeFunction(context, "disposeAsync", 0,
-                AsyncDisposableStackPrototype::disposeAsync);
-        defineBuiltin(asyncDisposableStackPrototype, "disposeAsync", disposeAsyncFunction);
-        defineMethod(asyncDisposableStackPrototype, "move", 0, AsyncDisposableStackPrototype::move);
-        defineMethod(asyncDisposableStackPrototype, "use", 1, AsyncDisposableStackPrototype::use);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.SYMBOL_ASYNC_DISPOSE, disposeAsyncFunction,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        defineGetter(asyncDisposableStackPrototype, "disposed", AsyncDisposableStackPrototype::getDisposed);
-        defineToStringTag(asyncDisposableStackPrototype, JSAsyncDisposableStack.NAME);
-
-        JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(context, JSAsyncDisposableStack.NAME, 0,
-                AsyncDisposableStackConstructor::call, true, true);
-        linkConstructor(asyncDisposableStackConstructor, asyncDisposableStackPrototype,
-                JSConstructorType.ASYNC_DISPOSABLE_STACK);
-
-        defineBuiltin(globalObject, JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
     }
 
     /**
@@ -341,32 +284,8 @@ public final class JSGlobalObject {
         defineToStringTag(asyncGeneratorPrototype, "AsyncGenerator");
         context.setAsyncGeneratorPrototype(asyncGeneratorPrototype);
 
-        // Create AsyncGeneratorFunction.prototype (not exposed in global scope)
-        // All async generator function objects (async function*) inherit from this
-        JSObject asyncGeneratorFunctionPrototype = context.createJSObject();
-        context.transferPrototype(asyncGeneratorFunctionPrototype, JSFunction.NAME);
-
-        // AsyncGeneratorFunction.prototype[Symbol.toStringTag] = "AsyncGeneratorFunction" (configurable)
-        defineToStringTag(asyncGeneratorFunctionPrototype, "AsyncGeneratorFunction");
-
-        // Link: AsyncGeneratorFunction.prototype.prototype = AsyncGenerator.prototype (configurable)
-        asyncGeneratorFunctionPrototype.defineProperty(PropertyKey.PROTOTYPE, asyncGeneratorPrototype,
-                PropertyDescriptor.DataState.Configurable);
-
-        // Link: AsyncGenerator.prototype.constructor = AsyncGeneratorFunction.prototype (configurable)
-        asyncGeneratorPrototype.defineProperty(PropertyKey.CONSTRUCTOR, asyncGeneratorFunctionPrototype,
-                PropertyDescriptor.DataState.Configurable);
-
-        // Create AsyncGeneratorFunction constructor (uses dynamic function construction)
-        JSNativeFunction asyncGeneratorFunctionConstructor = new JSNativeFunction(context, "AsyncGeneratorFunction", 1,
-                FunctionConstructor::callAsyncGenerator, true);
-        asyncGeneratorFunctionConstructor.defineProperty(PropertyKey.PROTOTYPE, asyncGeneratorFunctionPrototype,
-                PropertyDescriptor.DataState.None);
-        asyncGeneratorFunctionPrototype.defineProperty(PropertyKey.CONSTRUCTOR, asyncGeneratorFunctionConstructor,
-                PropertyDescriptor.DataState.Configurable);
-
-        // Store in context for async generator function prototype chain setup
-        context.setAsyncGeneratorFunctionPrototype(asyncGeneratorFunctionPrototype);
+        context.setAsyncGeneratorFunctionPrototype(createGeneratorFunctionPrototype(asyncGeneratorPrototype,
+                "AsyncGeneratorFunction", FunctionConstructor::callAsyncGenerator, false));
     }
 
     /**
@@ -465,25 +384,15 @@ public final class JSGlobalObject {
         defineBuiltin(globalObject, "console", consoleObj);
     }
 
-    /**
-     * Initialize DataView constructor and prototype.
-     */
     private void initializeDataViewConstructor() {
-        // Create DataView.prototype
-        JSObject dataViewPrototype = context.createJSObject();
-
-        // Define getter properties
-        IntrinsicFunctions.DATA_VIEW_ACCESSORS.install(dataViewPrototype);
-        defineToStringTag(dataViewPrototype, "DataView");
-
-        IntrinsicFunctions.DATA_VIEW_METHODS.install(dataViewPrototype);
-
-        // Create DataView constructor as a function that requires 'new'
-        JSNativeFunction dataViewConstructor = new JSNativeFunction(context, "DataView", 1, DataViewConstructor::call,
+        JSObject prototype = context.createJSObject();
+        IntrinsicFunctions.DATA_VIEW_ACCESSORS.install(prototype);
+        defineToStringTag(prototype, JSDataView.NAME);
+        IntrinsicFunctions.DATA_VIEW_METHODS.install(prototype);
+        JSNativeFunction constructor = new JSNativeFunction(context, JSDataView.NAME, 1, DataViewConstructor::call,
                 true, true);
-        linkConstructor(dataViewConstructor, dataViewPrototype, JSConstructorType.DATA_VIEW);
-
-        defineBuiltin(globalObject, "DataView", dataViewConstructor);
+        linkConstructor(constructor, prototype, JSConstructorType.DATA_VIEW);
+        defineBuiltin(globalObject, JSDataView.NAME, constructor);
     }
 
     /**
@@ -515,31 +424,6 @@ public final class JSGlobalObject {
     }
 
     /**
-     * Initialize DisposableStack constructor and prototype.
-     */
-    private void initializeDisposableStackConstructor() {
-        JSObject disposableStackPrototype = context.createJSObject();
-        JSNativeFunction disposeFunction = new JSNativeFunction(context, "dispose", 0,
-                DisposableStackPrototype::dispose);
-        defineMethod(disposableStackPrototype, "adopt", 2, DisposableStackPrototype::adopt);
-        defineMethod(disposableStackPrototype, "defer", 1, DisposableStackPrototype::defer);
-        defineBuiltin(disposableStackPrototype, "dispose", disposeFunction);
-        defineMethod(disposableStackPrototype, "move", 0, DisposableStackPrototype::move);
-        defineMethod(disposableStackPrototype, "use", 1, DisposableStackPrototype::use);
-        disposableStackPrototype.defineProperty(PropertyKey.SYMBOL_DISPOSE, disposeFunction,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        defineGetter(disposableStackPrototype, "disposed", DisposableStackPrototype::getDisposed);
-        defineToStringTag(disposableStackPrototype, JSDisposableStack.NAME);
-
-        JSNativeFunction disposableStackConstructor = new JSNativeFunction(context, JSDisposableStack.NAME, 0,
-                DisposableStackConstructor::call, true, true);
-        linkConstructor(disposableStackConstructor, disposableStackPrototype, JSConstructorType.DISPOSABLE_STACK);
-
-        defineBuiltin(globalObject, JSDisposableStack.NAME, disposableStackConstructor);
-    }
-
-    /**
      * Initialize Error constructors.
      */
     private void initializeErrorConstructors() {
@@ -551,23 +435,6 @@ public final class JSGlobalObject {
                 defineBuiltin(globalObject, type.name(), type.create(context));
             }
         }
-    }
-
-    /**
-     * Initialize FinalizationRegistry constructor.
-     */
-    private void initializeFinalizationRegistryConstructor() {
-        JSObject finalizationRegistryPrototype = context.createJSObject();
-        defineMethod(finalizationRegistryPrototype, "register", 2, FinalizationRegistryPrototype::register);
-        defineMethod(finalizationRegistryPrototype, "unregister", 1, FinalizationRegistryPrototype::unregister);
-        defineToStringTag(finalizationRegistryPrototype, JSFinalizationRegistry.NAME);
-
-        JSNativeFunction finalizationRegistryConstructor = new JSNativeFunction(context, JSFinalizationRegistry.NAME, 1,
-                FinalizationRegistryConstructor::call, true, true);
-        linkConstructor(finalizationRegistryConstructor, finalizationRegistryPrototype,
-                JSConstructorType.FINALIZATION_REGISTRY);
-
-        defineBuiltin(globalObject, JSFinalizationRegistry.NAME, finalizationRegistryConstructor);
     }
 
     /**
@@ -706,37 +573,8 @@ public final class JSGlobalObject {
         // Matches QuickJS JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Generator", JS_PROP_CONFIGURABLE)
         defineToStringTag(generatorPrototype, "Generator");
 
-        // Create GeneratorFunction.prototype (not exposed in global scope)
-        // All generator function objects (function*) inherit from this
-        JSObject generatorFunctionPrototype = context.createJSObject();
-        context.transferPrototype(generatorFunctionPrototype, JSFunction.NAME);
-
-        // GeneratorFunction.prototype[Symbol.toStringTag] = "GeneratorFunction" (configurable)
-        defineToStringTag(generatorFunctionPrototype, "GeneratorFunction");
-
-        // Link: GeneratorFunction.prototype.prototype = Generator.prototype (configurable)
-        generatorFunctionPrototype.defineProperty(PropertyKey.PROTOTYPE, generatorPrototype,
-                PropertyDescriptor.DataState.Configurable);
-
-        // Link: Generator.prototype.constructor = GeneratorFunction.prototype (configurable)
-        generatorPrototype.defineProperty(PropertyKey.CONSTRUCTOR, generatorFunctionPrototype,
-                PropertyDescriptor.DataState.Configurable);
-
-        // Create GeneratorFunction constructor (uses dynamic function construction)
-        // Following QuickJS JS_AddIntrinsicGenerator pattern
-        JSNativeFunction generatorFunctionConstructor = new JSNativeFunction(context, "GeneratorFunction", 1,
-                FunctionConstructor::callGenerator, true);
-        JSValue functionConstructorValue = globalObject.get(PropertyKey.fromString(JSFunction.NAME));
-        if (functionConstructorValue instanceof JSObject functionConstructorObject) {
-            generatorFunctionConstructor.setPrototype(functionConstructorObject);
-        }
-        generatorFunctionConstructor.defineProperty(PropertyKey.PROTOTYPE, generatorFunctionPrototype,
-                PropertyDescriptor.DataState.None);
-        generatorFunctionPrototype.defineProperty(PropertyKey.CONSTRUCTOR, PropertyDescriptor
-                .dataDescriptor(generatorFunctionConstructor, PropertyDescriptor.DataState.Configurable));
-
-        // Store in context for generator function prototype chain setup
-        context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
+        context.setGeneratorFunctionPrototype(createGeneratorFunctionPrototype(generatorPrototype, "GeneratorFunction",
+                FunctionConstructor::callGenerator, true));
     }
 
     private void initializeGlobalObject() {
@@ -996,39 +834,6 @@ public final class JSGlobalObject {
         defineToStringTag(json, "JSON");
 
         defineBuiltin(globalObject, "JSON", json);
-    }
-
-    /**
-     * Initialize Map constructor and prototype methods.
-     */
-    private void initializeMapConstructor() {
-        // Create Map.prototype
-        JSObject mapPrototype = context.createJSObject();
-        IntrinsicFunctions.MAP_PROTOTYPE.install(mapPrototype);
-        // Create entries function once and use it for both entries and Symbol.iterator (ES spec requirement)
-        JSNativeFunction entriesFunction = new JSNativeFunction(context, "entries", 0,
-                IteratorPrototype::mapEntriesIterator);
-        defineBuiltin(mapPrototype, "entries", entriesFunction);
-        defineMethod(mapPrototype, "keys", 0, IteratorPrototype::mapKeysIterator);
-        defineMethod(mapPrototype, "values", 0, IteratorPrototype::mapValuesIterator);
-        // Map.prototype[Symbol.iterator] is the same function object as entries() (QuickJS uses JS_ALIAS_DEF)
-        mapPrototype.defineProperty(PropertyKey.SYMBOL_ITERATOR, entriesFunction,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        // Map.prototype.size getter
-        defineGetter(mapPrototype, "size", MapPrototype::getSize);
-        defineToStringTag(mapPrototype, JSMap.NAME);
-
-        // Create Map constructor as JSNativeFunction
-        JSNativeFunction mapConstructor = new JSNativeFunction(context, JSMap.NAME, 0, MapConstructor::call, true,
-                true);
-        linkConstructor(mapConstructor, mapPrototype, JSConstructorType.MAP);
-
-        // Map static methods
-        defineMethod(mapConstructor, "groupBy", 2, MapConstructor::groupBy);
-        defineSpeciesGetter(mapConstructor, MapConstructor::getSpecies);
-
-        defineBuiltin(globalObject, JSMap.NAME, mapConstructor);
     }
 
     /**
@@ -1315,77 +1120,6 @@ public final class JSGlobalObject {
     }
 
     /**
-     * Initialize Set constructor and prototype methods.
-     */
-    private void initializeSetConstructor() {
-        // Create Set.prototype
-        JSObject setPrototype = context.createJSObject();
-        IntrinsicFunctions.SET_PROTOTYPE.install(setPrototype);
-
-        // Create values function - keys and Symbol.iterator will alias to this
-        JSNativeFunction valuesFunction = new JSNativeFunction(context, "values", 0, SetPrototype::values);
-        defineBuiltin(setPrototype, "values", valuesFunction);
-        // Set.prototype.keys is the same function object as values (ES spec requirement)
-        setPrototype.defineProperty(PropertyKey.KEYS, valuesFunction,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        // Set.prototype[Symbol.iterator] is the same as values()
-        setPrototype.defineProperty(PropertyKey.SYMBOL_ITERATOR, valuesFunction,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        // Set.prototype.size getter
-        defineGetter(setPrototype, "size", SetPrototype::getSize);
-        defineToStringTag(setPrototype, JSSet.NAME);
-
-        // Create Set constructor as a function
-        JSNativeFunction setConstructor = new JSNativeFunction(context, JSSet.NAME, 0, SetConstructor::call, true,
-                true);
-        linkConstructor(setConstructor, setPrototype, JSConstructorType.SET);
-
-        defineMethod(setConstructor, "groupBy", 2, SetConstructor::groupBy);
-        defineSpeciesGetter(setConstructor, SetConstructor::getSpecies);
-
-        defineBuiltin(globalObject, JSSet.NAME, setConstructor);
-    }
-
-    /**
-     * Initialize ShadowRealm constructor and prototype. ShadowRealm is not provided by QuickJS; implemented per
-     * proposal/test262 behavior.
-     */
-    private void initializeShadowRealmConstructor() {
-        JSObject shadowRealmPrototype = context.createJSObject();
-        defineMethod(shadowRealmPrototype, "evaluate", 1, ShadowRealmPrototype::evaluate);
-        defineMethod(shadowRealmPrototype, "importValue", 2, ShadowRealmPrototype::importValue);
-        defineToStringTag(shadowRealmPrototype, JSShadowRealm.NAME);
-
-        JSNativeFunction shadowRealmConstructor = new JSNativeFunction(context, JSShadowRealm.NAME, 0,
-                ShadowRealmConstructor::call, true, true);
-        linkConstructor(shadowRealmConstructor, shadowRealmPrototype);
-
-        defineBuiltin(globalObject, JSShadowRealm.NAME, shadowRealmConstructor);
-    }
-
-    /**
-     * Initialize SharedArrayBuffer constructor and prototype.
-     */
-    private void initializeSharedArrayBufferConstructor() {
-        // Create SharedArrayBuffer.prototype
-        JSObject sharedArrayBufferPrototype = context.createJSObject();
-        IntrinsicFunctions.SHARED_ARRAY_BUFFER_PROTOTYPE.install(sharedArrayBufferPrototype);
-        defineToStringTag(sharedArrayBufferPrototype, JSSharedArrayBuffer.NAME);
-
-        // Create SharedArrayBuffer constructor as a function
-        JSNativeFunction sharedArrayBufferConstructor = new JSNativeFunction(context, JSSharedArrayBuffer.NAME, 1,
-                SharedArrayBufferConstructor::call, true, // isConstructor
-                true // requiresNew - SharedArrayBuffer() must be called with new
-        );
-        linkConstructor(sharedArrayBufferConstructor, sharedArrayBufferPrototype,
-                JSConstructorType.SHARED_ARRAY_BUFFER);
-        defineSpeciesGetter(sharedArrayBufferConstructor, SharedArrayBufferConstructor::getSpecies);
-
-        defineBuiltin(globalObject, JSSharedArrayBuffer.NAME, sharedArrayBufferConstructor);
-    }
-
-    /**
      * Initialize String constructor and prototype.
      */
     private void initializeStringConstructor() {
@@ -1609,51 +1343,6 @@ public final class JSGlobalObject {
         }
     }
 
-    /**
-     * Initialize WeakMap constructor and prototype methods.
-     */
-    private void initializeWeakMapConstructor() {
-        JSObject weakMapPrototype = context.createJSObject();
-        IntrinsicFunctions.WEAK_MAP_PROTOTYPE.install(weakMapPrototype);
-        defineToStringTag(weakMapPrototype, JSWeakMap.NAME);
-
-        JSNativeFunction weakMapConstructor = new JSNativeFunction(context, JSWeakMap.NAME, 0, WeakMapConstructor::call,
-                true, true);
-        linkConstructor(weakMapConstructor, weakMapPrototype, JSConstructorType.WEAK_MAP);
-
-        defineBuiltin(globalObject, JSWeakMap.NAME, weakMapConstructor);
-    }
-
-    /**
-     * Initialize WeakRef constructor.
-     */
-    private void initializeWeakRefConstructor() {
-        JSObject weakRefPrototype = context.createJSObject();
-        defineMethod(weakRefPrototype, "deref", 0, WeakRefPrototype::deref);
-        defineToStringTag(weakRefPrototype, JSWeakRef.NAME);
-
-        JSNativeFunction weakRefConstructor = new JSNativeFunction(context, JSWeakRef.NAME, 1, WeakRefConstructor::call,
-                true, true);
-        linkConstructor(weakRefConstructor, weakRefPrototype, JSConstructorType.WEAK_REF);
-
-        defineBuiltin(globalObject, JSWeakRef.NAME, weakRefConstructor);
-    }
-
-    /**
-     * Initialize WeakSet constructor and prototype methods.
-     */
-    private void initializeWeakSetConstructor() {
-        JSObject weakSetPrototype = context.createJSObject();
-        IntrinsicFunctions.WEAK_SET_PROTOTYPE.install(weakSetPrototype);
-        defineToStringTag(weakSetPrototype, JSWeakSet.NAME);
-
-        JSNativeFunction weakSetConstructor = new JSNativeFunction(context, JSWeakSet.NAME, 0, WeakSetConstructor::call,
-                true, true);
-        linkConstructor(weakSetConstructor, weakSetPrototype, JSConstructorType.WEAK_SET);
-
-        defineBuiltin(globalObject, JSWeakSet.NAME, weakSetConstructor);
-    }
-
     private void installIntlConstructor(JSObject intl, String name, int length, JSObject prototype, boolean requiresNew,
             JSNativeCallback callback) {
         JSNativeFunction constructor = new JSNativeFunction(context, name, length, callback, true, requiresNew);
@@ -1668,6 +1357,22 @@ public final class JSGlobalObject {
         target.defineProperty(PropertyKey.fromString(name), value, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
+    static void defineGetter(JSObject prototype, String name, JSNativeCallback getter) {
+        JSNativeFunction getterFunc = new JSNativeFunction(prototype.getContext(), "get " + name, 0, getter);
+        prototype.defineProperty(PropertyKey.fromString(name), getterFunc,
+                PropertyDescriptor.AccessorState.Configurable);
+    }
+
+    static void defineMethod(JSObject target, String name, int length, JSNativeCallback callback) {
+        defineBuiltin(target, name, new JSNativeFunction(target.getContext(), name, length, callback));
+    }
+
+    static void defineSpeciesGetter(JSObject constructor, JSNativeCallback callback) {
+        constructor.defineProperty(PropertyKey.SYMBOL_SPECIES,
+                new JSNativeFunction(constructor.getContext(), "get [Symbol.species]", 0, callback),
+                PropertyDescriptor.AccessorState.Configurable);
+    }
+
     static void defineToStringTag(JSObject target, String tag) {
         target.defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG, new JSString(tag),
                 PropertyDescriptor.DataState.Configurable);
@@ -1677,7 +1382,7 @@ public final class JSGlobalObject {
         linkConstructor(constructor, prototype, null);
     }
 
-    private static void linkConstructor(JSObject constructor, JSObject prototype, JSConstructorType type) {
+    static void linkConstructor(JSObject constructor, JSObject prototype, JSConstructorType type) {
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
         if (type != null) {
             constructor.setConstructorType(type);
@@ -1775,13 +1480,7 @@ public final class JSGlobalObject {
          * @see <a href="https://tc39.es/ecma262/#sec-isfinite-number">ECMAScript isFinite</a>
          */
         public static JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
-            JSValue value = JSValue.argumentOrUndefined(args, 0);
-            JSValue error = GlobalNumberParser.numberConversionError(context, value);
-            if (error != null) {
-                return error;
-            }
-            double num = JSTypeConversions.toNumber(context, value).value();
-            return JSBoolean.valueOf(!Double.isNaN(num) && !Double.isInfinite(num));
+            return testNumber(context, args, false);
         }
 
         /**
@@ -1790,13 +1489,7 @@ public final class JSGlobalObject {
          * @see <a href="https://tc39.es/ecma262/#sec-isnan-number">ECMAScript isNaN</a>
          */
         public static JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
-            JSValue value = JSValue.argumentOrUndefined(args, 0);
-            JSValue error = GlobalNumberParser.numberConversionError(context, value);
-            if (error != null) {
-                return error;
-            }
-            double num = JSTypeConversions.toNumber(context, value).value();
-            return JSBoolean.valueOf(Double.isNaN(num));
+            return testNumber(context, args, true);
         }
 
         /**
@@ -1815,6 +1508,16 @@ public final class JSGlobalObject {
          */
         public static JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
             return GlobalNumberParser.parseInt(context, args, argumentString(context, args));
+        }
+
+        private static JSValue testNumber(JSContext context, JSValue[] args, boolean nan) {
+            JSValue value = JSValue.argumentOrUndefined(args, 0);
+            JSValue error = GlobalNumberParser.numberConversionError(context, value);
+            if (error != null) {
+                return error;
+            }
+            double number = JSTypeConversions.toNumber(context, value).value();
+            return JSBoolean.valueOf(nan ? Double.isNaN(number) : Double.isFinite(number));
         }
 
         /**

@@ -93,6 +93,21 @@ public non-sealed class JSObject implements JSValue {
         this.prototype = prototype;
     }
 
+    private boolean callSetter(PropertyKey key, JSObject receiver, JSFunction setter, JSValue value,
+            boolean throwOnFailure) {
+        if (setter == null) {
+            return failSetWithoutSetter(key, receiver, throwOnFailure);
+        }
+        if (isIgnoredLegacyFunctionPropertyWrite(key, receiver, setter)) {
+            return true;
+        }
+        // A pre-existing pending exception does not imply that this setter failed.
+        JSValue before = context.getPendingException();
+        setter.call(context, receiver, new JSValue[]{value});
+        JSValue after = context.getPendingException();
+        return after == null || after == before;
+    }
+
     /**
      * Compact properties by removing deleted properties. Following QuickJS compact_properties() logic.
      */
@@ -271,6 +286,8 @@ public non-sealed class JSObject implements JSValue {
         }
     }
 
+    // Property operations
+
     /**
      * The {@code delete} operator: {@code [[Delete]]} followed by the strict-mode failure throw.
      * <p>
@@ -286,8 +303,6 @@ public non-sealed class JSObject implements JSValue {
     public boolean delete(PropertyKey key) {
         return delete(key, context.isStrictMode());
     }
-
-    // Property operations
 
     /**
      * {@code [[Delete]]}, optionally raising the {@code delete} operator's {@code TypeError}.
@@ -872,6 +887,9 @@ public non-sealed class JSObject implements JSValue {
      * offset directly.
      */
     protected int getOwnPropertyOffset(PropertyKey key) {
+        if (shape.getPropertyCount() == 0) {
+            return -1;
+        }
         int offset = shape.getPropertyOffset(key);
         if (offset >= 0) {
             return offset;
@@ -940,47 +958,8 @@ public non-sealed class JSObject implements JSValue {
      * @return the value, or {@code undefined} when the chain has no such property
      */
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        JSValue ownValue = lookupOwnForGet(key, receiver);
-        if (ownValue != null) {
-            return ownValue;
-        }
-
-        // Walk the prototype chain. A link costs a loop iteration, not a Java frame, so the chain
-        // length a program may build is bounded by memory rather than by a threshold: a thousand
-        // links of `Object.create`, of arrays, or of functions is a valid program, and reading
-        // through it used to be a RangeError once the links stopped being plain objects. Own
-        // lookup is a virtual call, so an array's dense elements and a string wrapper's characters
-        // are found without leaving the loop. Only a link that *replaces* the lookup — a Proxy,
-        // a deferred module namespace, a typed array asked for a canonical numeric index — is
-        // dispatched to virtually, because only those decide the whole operation themselves; each
-        // such hop is one frame and stays bounded.
-        JSObject current = prototype;
-        JSObject tortoise = prototype;
-        boolean advanceTortoise = false;
-        while (current != null && !current.interceptsPropertyLookup(key)) {
-            JSValue value = current.lookupOwnForGet(key, receiver);
-            if (value != null) {
-                return value;
-            }
-            current = current.prototype;
-            // Floyd's cycle detection, in place of a depth threshold. `Object.setPrototypeOf`
-            // rejects cycles, so a cyclic chain can only come from the raw embedder API — but it
-            // must still terminate rather than spin.
-            if (advanceTortoise) {
-                tortoise = tortoise.prototype;
-            }
-            advanceTortoise = !advanceTortoise;
-            if (current != null && current == tortoise) {
-                throw new JSRangeErrorException("Cyclic prototype chain");
-            }
-        }
-        if (current == null) {
-            return JSUndefined.INSTANCE;
-        }
-        if (depth >= MAX_PROTOTYPE_DEPTH) {
-            throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
-        }
-        return current.getWithReceiver(key, receiver, depth + 1);
+        JSValue own = lookupOwnForGet(key, receiver);
+        return own == null ? lookupPrototype(key, receiver, depth, false) : own;
     }
 
     /**
@@ -1017,36 +996,7 @@ public non-sealed class JSObject implements JSValue {
      * @return true when this object or its prototype chain has the property
      */
     protected boolean has(PropertyKey key, int depth) {
-        if (hasOwnProperty(key)) {
-            return true;
-        }
-        // Iterative for every link that does not replace the lookup, for the reason given on
-        // getWithReceiver: `'x' in object` over a thousand-link chain — of plain objects, of
-        // arrays, of functions — is a valid program. hasOwnProperty is virtual, so each link's own
-        // exotic storage is consulted without leaving the loop.
-        JSObject current = prototype;
-        JSObject tortoise = prototype;
-        boolean advanceTortoise = false;
-        while (current != null && !current.interceptsPropertyLookup(key)) {
-            if (current.hasOwnProperty(key)) {
-                return true;
-            }
-            current = current.prototype;
-            if (advanceTortoise) {
-                tortoise = tortoise.prototype;
-            }
-            advanceTortoise = !advanceTortoise;
-            if (current != null && current == tortoise) {
-                throw new JSRangeErrorException("Cyclic prototype chain");
-            }
-        }
-        if (current == null) {
-            return false;
-        }
-        if (depth >= MAX_PROTOTYPE_DEPTH) {
-            throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
-        }
-        return current.has(key, depth + 1);
+        return hasOwnProperty(key) || lookupPrototype(key, this, depth, true) == JSBoolean.TRUE;
     }
 
     /**
@@ -1073,8 +1023,11 @@ public non-sealed class JSObject implements JSValue {
         if (getOwnPropertyOffset(key) >= 0) {
             return true;
         }
+        if (sparseProperties == null) {
+            return false;
+        }
         long arrayIndex = key.toArrayIndex();
-        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE) {
             return sparseProperties.containsKey((int) arrayIndex);
         }
         return false;
@@ -1285,19 +1238,19 @@ public non-sealed class JSObject implements JSValue {
      * @return the value, or {@code null} when this object has no own property for the key
      */
     protected JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
-        long arrayIndex = key.toArrayIndex();
-        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
-            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
-            if (sparseValue != null) {
-                return sparseValue;
+        if (sparseProperties != null) {
+            long index = key.toArrayIndex();
+            if (index >= 0 && index <= Integer.MAX_VALUE) {
+                JSValue value = sparseProperties.get((int) index);
+                if (value != null) {
+                    return value;
+                }
             }
         }
-
-        // String primitive wrapper: return character at numeric index
-        if (primitiveValue instanceof JSString str && arrayIndex >= 0) {
-            String s = str.value();
-            if (arrayIndex < s.length()) {
-                return new JSString(String.valueOf(s.charAt((int) arrayIndex)));
+        if (primitiveValue instanceof JSString string) {
+            long index = key.toArrayIndex();
+            if (index >= 0 && index < string.length()) {
+                return new JSString(String.valueOf(string.value().charAt((int) index)));
             }
         }
 
@@ -1392,6 +1345,43 @@ public non-sealed class JSObject implements JSValue {
         }
 
         return null;
+    }
+
+    /** Walk ordinary links iteratively and delegate only when an exotic object replaces the lookup. */
+    private JSValue lookupPrototype(PropertyKey key, JSValue receiver, int depth, boolean presenceOnly) {
+        JSObject current = prototype;
+        JSObject tortoise = current;
+        boolean advanceTortoise = false;
+        while (current != null && !current.interceptsPropertyLookup(key)) {
+            if (presenceOnly) {
+                if (current.hasOwnProperty(key)) {
+                    return JSBoolean.TRUE;
+                }
+            } else {
+                JSValue value = current.lookupOwnForGet(key, receiver);
+                if (value != null) {
+                    return value;
+                }
+            }
+            current = current.prototype;
+            // Raw embedder prototypes can contain cycles. Ordinary JavaScript chains have no depth limit.
+            if (advanceTortoise) {
+                tortoise = tortoise.prototype;
+            }
+            advanceTortoise = !advanceTortoise;
+            if (current != null && current == tortoise) {
+                throw new JSRangeErrorException("Cyclic prototype chain");
+            }
+        }
+        if (current == null) {
+            return presenceOnly ? JSBoolean.FALSE : JSUndefined.INSTANCE;
+        }
+        if (depth >= MAX_PROTOTYPE_DEPTH) {
+            throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
+        }
+        return presenceOnly
+                ? JSBoolean.valueOf(current.has(key, depth + 1))
+                : current.getWithReceiver(key, receiver, depth + 1);
     }
 
     /**
@@ -1545,6 +1535,8 @@ public non-sealed class JSObject implements JSValue {
         constructorType = type;
     }
 
+    // Prototype chain
+
     /**
      * Set the [IsHTMLDDA] internal slot.
      */
@@ -1560,7 +1552,7 @@ public non-sealed class JSObject implements JSValue {
         immutablePrototype = true;
     }
 
-    // Prototype chain
+    // Object integrity levels (ES5)
 
     /**
      * SetIntegrityLevel(O, level) ES2024 7.3.16.
@@ -1637,17 +1629,7 @@ public non-sealed class JSObject implements JSValue {
             PropertyDescriptor descriptor = shape.getDescriptorAt(offset);
 
             if (descriptor != null && descriptor.isAccessorDescriptor()) {
-                JSFunction setter = descriptor.getSetter();
-                if (setter != null) {
-                    // Compare exception identity, not just presence. Testing only the flag
-                    // reported success whenever an exception was already pending on entry —
-                    // including when the setter itself threw, losing the setter's own failure.
-                    JSValue exceptionBefore = context.getPendingException();
-                    setter.call(context, receiver, new JSValue[]{value});
-                    JSValue exceptionAfter = context.getPendingException();
-                    return exceptionAfter == null || exceptionAfter == exceptionBefore;
-                }
-                return failSetWithoutSetter(key, receiver, throwOnFailure);
+                return callSetter(key, receiver, descriptor.getSetter(), value, throwOnFailure);
             }
 
             if (descriptor == null || !descriptor.isWritable() || frozen) {
@@ -1683,20 +1665,7 @@ public non-sealed class JSObject implements JSValue {
             if (protoOffset >= 0) {
                 PropertyDescriptor protoDescriptor = proto.shape.getDescriptorAt(protoOffset);
                 if (protoDescriptor != null && protoDescriptor.isAccessorDescriptor()) {
-                    JSFunction setter = protoDescriptor.getSetter();
-                    if (setter != null) {
-                        if (isIgnoredLegacyFunctionPropertyWrite(key, receiver, setter)) {
-                            return true;
-                        }
-                        // Exception identity, not just presence: testing only the flag reported
-                        // success whenever an exception was already pending on entry, which
-                        // swallowed the setter's own failure.
-                        JSValue exceptionBefore = context.getPendingException();
-                        setter.call(context, receiver, new JSValue[]{value});
-                        JSValue exceptionAfter = context.getPendingException();
-                        return exceptionAfter == null || exceptionAfter == exceptionBefore;
-                    }
-                    return failSetWithoutSetter(key, receiver, throwOnFailure);
+                    return callSetter(key, receiver, protoDescriptor.getSetter(), value, throwOnFailure);
                 }
                 if (protoDescriptor != null && !protoDescriptor.isWritable()) {
                     return failSet(key, throwOnFailure);
@@ -1708,8 +1677,6 @@ public non-sealed class JSObject implements JSValue {
 
         return setOnReceiver(key, value, receiver, throwOnFailure);
     }
-
-    // Object integrity levels (ES5)
 
     private boolean setOnReceiver(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         if (receiver instanceof JSImportNamespaceObject || receiver instanceof JSDeferredModuleNamespace) {
@@ -1980,6 +1947,8 @@ public non-sealed class JSObject implements JSValue {
         return context.throwTypeError("Cannot redefine property: " + keyName);
     }
 
+    // JSValue implementation
+
     @Override
     public Object toJavaObject() {
         return JavaObjectConverter.convert(this);
@@ -1989,8 +1958,6 @@ public non-sealed class JSObject implements JSValue {
     public String toString() {
         return "[object Object]";
     }
-
-    // JSValue implementation
 
     @Override
     public JSValueType type() {

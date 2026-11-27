@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal.duration;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -179,12 +180,10 @@ public final class TemporalDurationConstructor {
             return null;
         }
         if (!Double.isFinite(numericValueAsDouble)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
-            return null;
+            return TemporalError.EXPECTED_FINITE_INTEGER.reject(context);
         }
         if (numericValueAsDouble != Math.floor(numericValueAsDouble)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
-            return null;
+            return TemporalError.EXPECTED_FINITE_INTEGER.reject(context);
         }
         BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return numericValue;
@@ -194,12 +193,12 @@ public final class TemporalDurationConstructor {
         if (durationRecord.years() > CALENDAR_UNIT_MAX || durationRecord.years() < -CALENDAR_UNIT_MAX
                 || durationRecord.months() > CALENDAR_UNIT_MAX || durationRecord.months() < -CALENDAR_UNIT_MAX
                 || durationRecord.weeks() > CALENDAR_UNIT_MAX || durationRecord.weeks() < -CALENDAR_UNIT_MAX) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
+            TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
             return false;
         }
         BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
         if (dayTimeNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
+            TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
             return false;
         }
         return true;
@@ -229,11 +228,11 @@ public final class TemporalDurationConstructor {
             return Long.MIN_VALUE;
         }
         if (!Double.isFinite(numericValueAsDouble)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
+            TemporalError.EXPECTED_FINITE_INTEGER.raise(context);
             return Long.MIN_VALUE;
         }
         if (numericValueAsDouble != Math.floor(numericValueAsDouble)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
+            TemporalError.EXPECTED_FINITE_INTEGER.raise(context);
             return Long.MIN_VALUE;
         }
         BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
@@ -256,7 +255,7 @@ public final class TemporalDurationConstructor {
 
     private static long toLongDurationField(JSContext context, BigInteger value) {
         if (value.bitLength() > 63) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
+            TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
             return Long.MIN_VALUE;
         }
         long longValue = value.longValue();
@@ -280,7 +279,7 @@ public final class TemporalDurationConstructor {
 
     private static boolean validateRecord(JSContext context, TemporalDuration record) {
         if (!record.isValid()) {
-            context.throwRangeError("Temporal error: Duration was not valid.");
+            TemporalError.INVALID_DURATION.raise(context);
             return false;
         }
         return isDurationRecordInRange(context, record);

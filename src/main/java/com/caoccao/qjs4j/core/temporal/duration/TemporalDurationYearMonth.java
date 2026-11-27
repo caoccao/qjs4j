@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.duration;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
@@ -101,7 +102,7 @@ public record TemporalDurationYearMonth(long years, long months) {
             try {
                 return Math.multiplyExact(yearDelta, 13L);
             } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
+                TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
                 return 0L;
             }
         }
@@ -113,7 +114,7 @@ public record TemporalDurationYearMonth(long years, long months) {
             try {
                 return Math.multiplyExact(yearDelta, 12L);
             } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
+                TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
                 return 0L;
             }
         }
@@ -127,7 +128,7 @@ public record TemporalDurationYearMonth(long years, long months) {
             try {
                 totalMonths = Math.addExact(totalMonths, (long) yearSign * monthsInYear);
             } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
+                TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
                 return 0L;
             }
             TemporalDurationDateWeek oneYearDuration = new TemporalDurationDateWeek(yearSign, 0, 0, 0);
@@ -202,8 +203,7 @@ public record TemporalDurationYearMonth(long years, long months) {
             try {
                 totalMonths = Math.addExact(months, monthsFromYears);
             } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
 
             while (true) {

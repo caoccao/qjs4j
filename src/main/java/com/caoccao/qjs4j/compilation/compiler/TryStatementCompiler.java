@@ -199,21 +199,13 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
                 } else {
                     compilerContext.statementCompiler.compile(statement);
                     if (isLast) {
-                        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                        if (compilerContext.evalReturnLocalIndex >= 0) {
-                            compilerContext.emitter.emitOpcode(Opcode.DUP);
-                            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-                        }
+                        emitUndefinedCompletion();
                     }
                 }
             }
 
             if (effectiveLastIndex < 0) {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                if (compilerContext.evalReturnLocalIndex >= 0) {
-                    compilerContext.emitter.emitOpcode(Opcode.DUP);
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-                }
+                emitUndefinedCompletion();
             }
         }
 
@@ -321,6 +313,14 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             int localIndex = compilerContext.scopeManager.currentScope().getLocal(name);
             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
             compilerContext.tdzLocals.add(name);
+        }
+    }
+
+    private void emitUndefinedCompletion() {
+        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
         }
     }
 

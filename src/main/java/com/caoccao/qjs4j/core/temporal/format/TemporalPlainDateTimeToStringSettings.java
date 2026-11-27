@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.format;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.rounding.TemporalRoundingMode;
@@ -29,7 +30,7 @@ public record TemporalPlainDateTimeToStringSettings(String calendarNameOption, T
 
     public static TemporalPlainDateTimeToStringSettings read(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
-                "Temporal error: Option must be object: options.");
+                TemporalError.INVALID_OPTIONS.message());
         if (context.hasPendingException()) {
             return null;
         }

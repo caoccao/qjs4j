@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.instant.TemporalInstantConstructor;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoMonth;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
@@ -94,8 +95,7 @@ public final class TemporalZonedDateTimeConstructor {
         Integer monthFromProperty = propertyBagData.month();
         IsoMonth parsedMonthCode = propertyBagData.parsedMonthCode();
         if (monthFromProperty == null && parsedMonthCode == null) {
-            context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_DATE_TIME_ARGUMENT.undefined(context);
         }
 
         String monthCodeFromProperty = parsedMonthCode == null ? null : parsedMonthCode.monthCode();
@@ -148,8 +148,7 @@ public final class TemporalZonedDateTimeConstructor {
                 return JSUndefined.INSTANCE;
             }
             if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
-                context.throwRangeError("Temporal error: Nanoseconds out of range.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
             }
             return JSTemporalZonedDateTime.create(context, epochNanoseconds, timeZoneId, parsed.calendarId());
         }
@@ -207,8 +206,7 @@ public final class TemporalZonedDateTimeConstructor {
     static Integer parsePropertyOffset(JSContext context, String text) {
         TemporalOffsetParts parts = TemporalTimeZone.parseOffsetParts(text);
         if (parts == null || !parts.hasValidHoursAndMinutes() || !parts.hasZeroSubMinutePart()) {
-            context.throwRangeError("Temporal error: Invalid offset string.");
-            return null;
+            return TemporalError.INVALID_OFFSET_STRING.reject(context);
         }
         return parts.totalSeconds();
     }
@@ -280,15 +278,14 @@ public final class TemporalZonedDateTimeConstructor {
             Integer eraYear = bag.integral("eraYear");
             if (!context.hasPendingException()) {
                 year = TemporalUtils.resolveEraYear(context, calendarId, year, era, eraYear,
-                        "Temporal error: DateTime argument must be object or string.");
+                        TemporalError.INVALID_DATE_TIME_ARGUMENT.message());
             }
         }
         if (context.hasPendingException()) {
             return null;
         }
         if (year == null || (month == null && parsedMonthCode == null)) {
-            context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-            return null;
+            return TemporalError.INVALID_DATE_TIME_ARGUMENT.reject(context);
         }
 
         return new TemporalZonedDateTimePropertyBagData(calendarId, year, month, parsedMonthCode, dayOfMonth.intValue(),
@@ -297,8 +294,7 @@ public final class TemporalZonedDateTimeConstructor {
 
     private static Long toRequiredIntegralLong(JSContext context, JSValue value) {
         if (value instanceof JSUndefined || value == null) {
-            context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-            return null;
+            return TemporalError.INVALID_DATE_TIME_ARGUMENT.reject(context);
         }
 
         long longValue = TemporalUtils.toLongIfIntegral(context, value);
@@ -310,8 +306,7 @@ public final class TemporalZonedDateTimeConstructor {
 
     private static String toTemporalTimeZoneId(JSContext context, JSValue timeZoneValue) {
         if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
-            context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-            return null;
+            return TemporalError.INVALID_DATE_TIME_ARGUMENT.reject(context);
         }
 
         String timeZoneId;
@@ -382,8 +377,7 @@ public final class TemporalZonedDateTimeConstructor {
             return createZonedDateTimeFromString(context, zonedDateTimeString.value(), parsed, options);
         }
 
-        context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-        return JSUndefined.INSTANCE;
+        return TemporalError.INVALID_DATE_TIME_ARGUMENT.undefined(context);
     }
 
     public static JSTemporalZonedDateTime toTemporalZonedDateTimeObject(JSContext context, JSValue item) {

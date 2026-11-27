@@ -252,49 +252,13 @@ public abstract class IntlBuiltins {
     }
 
     public static JSValue createPluralRules(JSContext context, JSObject prototype, JSValue[] args) {
-        return IntlNumberFormatBuiltins.createPluralRules(context, prototype, args);
+        return IntlFormatOptions.constructWithLocaleMatcher(context, prototype, args, "PluralRules",
+                IntlPluralRulesBuiltins::create);
     }
 
     public static JSValue createRelativeTimeFormat(JSContext context, JSObject prototype, JSValue[] args) {
-        try {
-            IntlFormatOptions.ConstructorLocale constructor = IntlFormatOptions.ConstructorLocale.resolve(context,
-                    prototype, args, "RelativeTimeFormat");
-            if (constructor == null) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue options = IntlFormatOptions.coerceOptionsWithLocaleMatcher(context, args);
-            if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
-                return options;
-            }
-
-            String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject,
-                    "numberingSystem");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (numberingSystemOption != null) {
-                numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
-                if (!IntlFormatOptions.UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
-                    return context.throwRangeError("Invalid numberingSystem: " + numberingSystemOption);
-                }
-            }
-
-            String style = IntlFormatOptions.normalizedStringOption(context, optionsObject, "style", "long", "long",
-                    "short", "narrow");
-            String numeric = IntlFormatOptions.normalizedStringOption(context, optionsObject, "numeric", "always",
-                    "always", "auto");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            IntlFormatOptions.NumberingLocale numbering = IntlFormatOptions.NumberingLocale
-                    .resolve(constructor.locale(), numberingSystemOption);
-            JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(context, numbering.locale(),
-                    style, numeric, numbering.numberingSystem());
-            return constructor.finish(relativeTimeFormat);
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlFormatOptions.constructWithLocaleMatcher(context, prototype, args, "RelativeTimeFormat",
+                IntlBuiltins::relativeTimeFormat);
     }
 
     public static JSValue createSegmenter(JSContext context, JSObject prototype, JSObject segmentsPrototype,
@@ -667,15 +631,43 @@ public abstract class IntlBuiltins {
     }
 
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
-        return IntlNumberFormatBuiltins.pluralRulesResolvedOptions(context, thisArg, args);
+        return IntlPluralRulesBuiltins.pluralRulesResolvedOptions(context, thisArg, args);
     }
 
     public static JSValue pluralRulesSelect(JSContext context, JSValue thisArg, JSValue[] args) {
-        return IntlNumberFormatBuiltins.pluralRulesSelect(context, thisArg, args);
+        return IntlPluralRulesBuiltins.pluralRulesSelect(context, thisArg, args);
     }
 
     public static JSValue pluralRulesSelectRange(JSContext context, JSValue thisArg, JSValue[] args) {
-        return IntlNumberFormatBuiltins.pluralRulesSelectRange(context, thisArg, args);
+        return IntlPluralRulesBuiltins.pluralRulesSelectRange(context, thisArg, args);
+    }
+
+    private static JSValue relativeTimeFormat(JSContext context, IntlFormatOptions.ConstructorLocale constructor,
+            JSObject optionsObject) {
+        String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject, "numberingSystem");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (numberingSystemOption != null) {
+            numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
+            if (!IntlFormatOptions.UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
+                return context.throwRangeError("Invalid numberingSystem: " + numberingSystemOption);
+            }
+        }
+
+        String style = IntlFormatOptions.normalizedStringOption(context, optionsObject, "style", "long", "long",
+                "short", "narrow");
+        String numeric = IntlFormatOptions.normalizedStringOption(context, optionsObject, "numeric", "always", "always",
+                "auto");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IntlFormatOptions.NumberingLocale numbering = IntlFormatOptions.NumberingLocale.resolve(constructor.locale(),
+                numberingSystemOption);
+        JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(context, numbering.locale(), style,
+                numeric, numbering.numberingSystem());
+        return constructor.finish(relativeTimeFormat);
     }
 
     public static JSValue relativeTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {

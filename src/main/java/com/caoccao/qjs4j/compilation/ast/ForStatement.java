@@ -16,37 +16,26 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Represents a for statement.
  */
-public final class ForStatement extends Statement {
-    private final Statement body;
-    private final ASTNode init;
+public final class ForStatement extends ForLoop {
     private final Expression test;
     private final Expression update;
 
     public ForStatement(ASTNode init, Expression test, Expression update, Statement body, SourceLocation location) {
-        super(location);
-        this.init = init;
+        super(init, body, location);
         this.test = test;
         this.update = update;
-        this.body = body;
     }
 
     @Override
     boolean containsSuspension(Suspension kind) {
-        return kind.in(init) || kind.in(test) || kind.in(update) || kind.in(body);
-    }
-
-    public Statement getBody() {
-        return body;
+        return kind.in(head) || kind.in(test) || kind.in(update) || kind.in(body);
     }
 
     public ASTNode getInit() {
-        return init;
+        return head;
     }
 
     public Expression getTest() {
@@ -55,22 +44,6 @@ public final class ForStatement extends Statement {
 
     public Expression getUpdate() {
         return update;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (init instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
-            }
-            if (body != null) {
-                collectedVarDeclarators.addAll(body.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
     }
 
 }

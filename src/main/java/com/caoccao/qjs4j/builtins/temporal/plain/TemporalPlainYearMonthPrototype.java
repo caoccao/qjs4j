@@ -22,6 +22,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalCalendarDifference;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateAddition;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
@@ -123,16 +124,14 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError("Temporal error: year argument must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
         int dayOfMonth = TemporalUtils.getIntegerField(context, fields, "day", Integer.MIN_VALUE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         if (dayOfMonth == Integer.MIN_VALUE) {
-            context.throwTypeError("Temporal error: year argument must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
         IsoCalendarDate calendarDateFields = plainYearMonth.getIsoDate()
                 .toIsoCalendarDate(plainYearMonth.getCalendarId());
@@ -162,7 +161,7 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
-                "Temporal error: Argument to with() must contain some date/time fields.");
+                TemporalError.MISSING_PARTIAL_FIELDS.message());
         if (fields == null) {
             return JSUndefined.INSTANCE;
         }
@@ -206,16 +205,13 @@ public final class TemporalPlainYearMonthPrototype {
         }
 
         if (month == null && monthCode == null && year == null && !hasEra && !hasEraYear) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
         if (!calendarSupportsEras && (hasEra || hasEraYear)) {
-            context.throwTypeError("Temporal error: year argument must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
         if (calendarSupportsEras && hasEra != hasEraYear) {
-            context.throwTypeError("Temporal error: year argument must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
         JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
         String overflow = null;
@@ -227,22 +223,20 @@ public final class TemporalPlainYearMonthPrototype {
             }
         }
         if (month != null && month < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
         IsoMonth monthCodeInfo = null;
         if (monthCode != null) {
-            monthCodeInfo = IsoMonth.parseByMonthCode(context, monthCode, "Temporal error: Month code out of range.");
+            monthCodeInfo = IsoMonth.parseByMonthCode(context, monthCode,
+                    TemporalError.MONTH_CODE_OUT_OF_RANGE.message());
             if (context.hasPendingException() || monthCodeInfo == null) {
                 return JSUndefined.INSTANCE;
             }
             if (calendarId == TemporalCalendarId.ISO8601 && monthCodeInfo.leapMonth()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ISO_DATE.undefined(context);
             }
             if (month != null && month != monthCodeInfo.month()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ISO_DATE.undefined(context);
             }
         }
         if (!shouldReadOptionsFirst) {

@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal.duration;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.format.TemporalDurationToStringOptions;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDateTime;
@@ -133,8 +134,7 @@ public record TemporalDuration(long years, long months, long weeks, long days, l
         BigInteger timeNanoseconds = timeNanoseconds();
         BigInteger endEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
         if (endEpochNanoseconds.compareTo(NS_MIN_INSTANT) < 0 || endEpochNanoseconds.compareTo(NS_MAX_INSTANT) > 0) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
 
         IsoDateTime endIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(endEpochNanoseconds,

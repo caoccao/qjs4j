@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
 import com.caoccao.qjs4j.builtins.temporal.zoned.TemporalOffsetInterpretation;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -73,8 +74,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             return null;
         }
         if (!(optionsValue instanceof JSObject optionsObject)) {
-            context.throwTypeError("Temporal error: Option must be object: options.");
-            return null;
+            return TemporalError.INVALID_OPTIONS.reject(context);
         }
         JSValue relativeToValue = optionsObject.get(PropertyKey.fromString("relativeTo"));
         if (context.hasPendingException()) {
@@ -104,12 +104,10 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                     || relativeToObject.hasOwnProperty(PropertyKey.fromString("monthCode"))
                     || relativeToObject.hasOwnProperty(PropertyKey.fromString("day"));
             if (!hasOwnDateField) {
-                context.throwTypeError("Temporal error: Invalid relativeTo option.");
-                return null;
+                return TemporalError.INVALID_RELATIVE_TO.reject(context);
             }
             if (hasOwnAccessor(relativeToObject, "day") || hasOwnAccessor(relativeToObject, "year")) {
-                context.throwTypeError("Temporal error: Invalid relativeTo option.");
-                return null;
+                return TemporalError.INVALID_RELATIVE_TO.reject(context);
             }
         }
 
@@ -127,8 +125,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             return null;
         }
         if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
-            context.throwRangeError("Temporal error: Invalid offset string.");
-            return null;
+            return TemporalError.INVALID_OFFSET_STRING.reject(context);
         }
         Long second = toOptionalIntegralLong(context, bag.value("second"), 0L);
         JSValue timeZoneValue = bag.value("timeZone");
@@ -146,27 +143,22 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             monthNumber = month.intValue();
         } else if (monthCode != null) {
             if (monthCode.length() != 3 || monthCode.charAt(0) != 'M') {
-                context.throwRangeError("Temporal error: Month code out of range.");
-                return null;
+                return TemporalError.MONTH_CODE_OUT_OF_RANGE.reject(context);
             }
             if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
-                context.throwRangeError("Temporal error: Month code out of range.");
-                return null;
+                return TemporalError.MONTH_CODE_OUT_OF_RANGE.reject(context);
             }
             monthNumber = Integer.parseInt(monthCode.substring(1));
             if (monthNumber < 1 || monthNumber > 12) {
-                context.throwRangeError("Temporal error: Month code out of range.");
-                return null;
+                return TemporalError.MONTH_CODE_OUT_OF_RANGE.reject(context);
             }
         } else {
-            context.throwTypeError("Temporal error: Invalid relativeTo option.");
-            return null;
+            return TemporalError.INVALID_RELATIVE_TO.reject(context);
         }
 
         IsoDate isoDate = new IsoDate(year.intValue(), monthNumber, dayOfMonth.intValue());
         if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         int hourInt = hour.intValue();
@@ -242,8 +234,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             }
         }
         if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
         return new TemporalRelativeTo(isoDate, relativeTime, epochNanoseconds, normalizedTimeZoneId,
                 referenceOffsetSeconds);
@@ -251,8 +242,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
 
     private static TemporalRelativeTo parseRelativeToString(JSContext context, String relativeToText) {
         if (relativeToText.startsWith("-000000")) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         String constrainedRelativeToText = constrainLeapSecond(relativeToText);
         boolean hasTimeZoneAnnotation = relativeToText.contains("[");
@@ -266,8 +256,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             }
             String offsetText = TemporalTimeZone.extractOffsetText(relativeToText);
             if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
-                context.throwRangeError("Temporal error: Invalid offset string.");
-                return null;
+                return TemporalError.INVALID_OFFSET_STRING.reject(context);
             }
             if (!hasTimeZoneAnnotation) {
                 return parsePlainDateTime(context, constrainedRelativeToText);
@@ -278,8 +267,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                 return null;
             }
             if (!parsedZonedDateTime.date().isWithinInstantDateTimeRange(parsedZonedDateTime.time())) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             String timeZoneId = parsedZonedDateTime.timeZoneId();
             boolean offsetTimeZoneIdentifier = TemporalTimeZone.isValidTimeZoneOffsetWithoutSeconds(timeZoneId);
@@ -318,8 +306,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                 return null;
             }
             if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
+                return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
             }
             if (offsetText != null && !TemporalOffsetInterpretation.matches(zoneOffsetSeconds,
                     parsedZonedDateTime.offsetSeconds(), !hasSecondOrFractionOffset)) {
@@ -349,8 +336,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         }
         IsoDate isoDate = parsedDateTime.date();
         if (!isoDate.isWithinSupportedRange()) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
         return new TemporalRelativeTo(isoDate, parsedDateTime.time(), null, null, null);
     }
@@ -379,8 +365,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         if (relativeToValue instanceof JSObject relativeToObject) {
             return parseRelativeToPropertyBag(context, relativeToObject);
         }
-        context.throwTypeError("Temporal error: Invalid relativeTo option.");
-        return null;
+        return TemporalError.INVALID_RELATIVE_TO.reject(context);
     }
 
     private static Long toOptionalIntegralLong(JSContext context, JSValue value, Long defaultValue) {
@@ -391,8 +376,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             return defaultValue;
         }
         if (value instanceof JSFunction) {
-            context.throwTypeError("Temporal error: Invalid relativeTo option.");
-            return null;
+            return TemporalError.INVALID_RELATIVE_TO.reject(context);
         }
         long numericValue = TemporalUtils.toLongIfIntegral(context, value);
         if (context.hasPendingException()) {
@@ -406,8 +390,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             return null;
         }
         if (value instanceof JSUndefined || value == null) {
-            context.throwTypeError("Temporal error: Invalid relativeTo option.");
-            return null;
+            return TemporalError.INVALID_RELATIVE_TO.reject(context);
         }
         return toOptionalIntegralLong(context, value, null);
     }
@@ -434,18 +417,18 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                         .multiply(TemporalConstants.BI_DAY_NANOSECONDS);
             }
         } catch (ArithmeticException | DateTimeException e) {
-            context.throwRangeError("Temporal error: Duration was not valid.");
+            TemporalError.INVALID_DURATION.raise(context);
             return BigInteger.ZERO;
         }
         BigInteger totalNanoseconds = calendarNanoseconds.add(durationRecord.timeNanoseconds());
         if (totalNanoseconds.abs().compareTo(TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
+            TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
             return BigInteger.ZERO;
         }
         if (zoned && durationRecord.hasAnyDateUnits()) {
             BigInteger targetEpochNanoseconds = relativeToReference.epochNanoseconds().add(totalNanoseconds);
             if (!TemporalUtils.isValidEpochNanoseconds(targetEpochNanoseconds)) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
+                TemporalError.DURATION_FIELD_OUT_OF_RANGE.raise(context);
                 return BigInteger.ZERO;
             }
         }

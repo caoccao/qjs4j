@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.calendar;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 
 import java.util.Locale;
 
@@ -70,7 +71,7 @@ public record IsoMonth(int month, boolean leapMonth) {
             }
         }
         if (value instanceof JSString text) {
-            return parseByMonthCode(context, text.value(), "Temporal error: Month code out of range.");
+            return parseByMonthCode(context, text.value(), TemporalError.MONTH_CODE_OUT_OF_RANGE.message());
         }
         context.throwTypeError("Temporal error: Month code must be string.");
         return null;

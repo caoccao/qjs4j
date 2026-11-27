@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.*;
 
@@ -405,8 +406,7 @@ public final class TemporalTimeZone {
             }
             String offsetText = extractOffsetText(adjustedTimeZoneText);
             if (offsetText != null && !isValidOffsetString(offsetText)) {
-                context.throwRangeError("Temporal error: Invalid offset string.");
-                return null;
+                return TemporalError.INVALID_OFFSET_STRING.reject(context);
             }
             IsoZonedDateTimeOffset parsedZonedDateTime = IsoZonedDateTimeOffset.parseZonedDateTimeString(context,
                     adjustedTimeZoneText);
@@ -422,8 +422,7 @@ public final class TemporalTimeZone {
         }
         String offsetText = extractOffsetText(timeZoneText);
         if (offsetText != null && !isValidTimeZoneOffsetWithoutSeconds(offsetText)) {
-            context.throwRangeError("Temporal error: Invalid offset string.");
-            return null;
+            return TemporalError.INVALID_OFFSET_STRING.reject(context);
         }
         IsoDateTimeOffset parsedInstant = IsoDateTimeOffset.parseInstantString(context, timeZoneText);
         if (parsedInstant == null || context.hasPendingException()) {

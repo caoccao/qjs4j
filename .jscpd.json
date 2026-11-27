@@ -2,7 +2,7 @@
   "path": ["."],
   "pattern": "src/{main,test}/java/**/*.java",
   "format": ["java"],
-  "ignore": ["**/core/PluralRulesData.java"],
+  "ignore": ["**/core/intl/PluralRulesData.java"],
   "mode": "weak",
   "failOnEmpty": true,
   "reporters": ["silent", "html", "json"],

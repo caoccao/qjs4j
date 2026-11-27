@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal.instant;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDateTimeOffset;
 import com.caoccao.qjs4j.core.temporal.timezone.TemporalTimeZone;
@@ -79,13 +80,11 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
         if (!Double.isFinite(epochMilliseconds) || epochMilliseconds != Math.floor(epochMilliseconds)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.EXPECTED_FINITE_INTEGER.undefined(context);
         }
         BigInteger epochNs = BigInteger.valueOf((long) epochMilliseconds).multiply(NS_PER_MS);
         if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalInstant.create(context, epochNs);
     }
@@ -114,8 +113,7 @@ public final class TemporalInstantConstructor {
         }
         BigInteger epochNs = bigInt.value();
         if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return null;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.reject(context);
         }
         return epochNs;
     }
@@ -155,8 +153,7 @@ public final class TemporalInstantConstructor {
         BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(parsed.date(), parsed.time(),
                 parsed.offset().totalNanoseconds());
         if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalInstant.create(context, epochNs);
     }

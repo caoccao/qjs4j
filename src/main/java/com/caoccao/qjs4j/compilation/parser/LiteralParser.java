@@ -275,8 +275,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
 
     TemplateLiteral parseTemplateLiteral(boolean tagged) {
         SourceLocation location = parserContext.getLocation();
-        String templateStr = parserContext.currentToken.value();
-        parserContext.advance();
+        String templateStr = parserContext.consumeValue();
 
         List<String> quasis = new ArrayList<>();
         List<String> rawQuasis = new ArrayList<>();

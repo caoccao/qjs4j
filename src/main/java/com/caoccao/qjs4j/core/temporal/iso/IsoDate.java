@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal.iso;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalOverflow;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.*;
@@ -53,8 +54,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         IsoDate resultIsoDate = TemporalCalendarConversion.toIso(calendarId, calendarYear, monthSlot, regulatedDay,
                 overflow);
         if (resultIsoDate == null || !resultIsoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         return resultIsoDate;
     }
@@ -107,11 +107,11 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
     public static int regulateDay(JSContext context, int dayOfMonth, int daysInMonth, String overflow) {
         if (dayOfMonth < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+            TemporalError.INVALID_ISO_DATE.raise(context);
             return 0;
         }
         if (TemporalOverflow.REJECT.matches(overflow) && dayOfMonth > daysInMonth) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+            TemporalError.INVALID_ISO_DATE.raise(context);
             return 0;
         }
         return Math.min(dayOfMonth, daysInMonth);
@@ -120,13 +120,11 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     public static IsoDate resolveReferenceIsoDateForMonthDay(JSContext context, TemporalCalendarId calendarId,
             String monthCode, int dayOfMonth, String overflow) {
         if (dayOfMonth < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         IsoMonth monthCodeData = IsoMonth.parseByMonthCode(monthCode);
         if (monthCodeData == null) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         String normalizedMonthCode = IsoMonth.toMonthCode(monthCodeData.month());
@@ -140,8 +138,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
                 IsoDate exactLeapReferenceIsoDate = calendarId.findReferenceIsoDateExact(normalizedMonthCode,
                         searchDay);
                 if (exactLeapReferenceIsoDate == null) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
+                    return TemporalError.INVALID_ISO_DATE.reject(context);
                 } else {
                     return exactLeapReferenceIsoDate;
                 }
@@ -161,8 +158,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         if (TemporalOverflow.REJECT.matches(overflow)) {
             IsoDate exactReferenceIsoDate = calendarId.findReferenceIsoDateExact(normalizedMonthCode, searchDay);
             if (exactReferenceIsoDate == null) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             } else {
                 return exactReferenceIsoDate;
             }
@@ -174,16 +170,14 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         if (constrainedReferenceIsoDate != null) {
             return constrainedReferenceIsoDate;
         }
-        context.throwRangeError("Temporal error: Invalid ISO date.");
-        return null;
+        return TemporalError.INVALID_ISO_DATE.reject(context);
     }
 
     public IsoDate addCalendarDate(JSContext context, TemporalCalendarId calendarId, long yearsToAdd, long monthsToAdd,
             long weeksToAdd, long daysToAdd, String overflow) {
         IsoCalendarDate baseCalendarDate = toIsoCalendarDate(calendarId);
         if (baseCalendarDate == null) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         if (calendarId == TemporalCalendarId.ISO8601) {
@@ -194,27 +188,23 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         try {
             targetYearLong = Math.addExact(baseCalendarDate.year(), yearsToAdd);
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         if (targetYearLong < Integer.MIN_VALUE || targetYearLong > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         int targetYear = (int) targetYearLong;
 
         IsoCalendarMonth baseMonthSlot = calendarId.findMonthSlotByCode(baseCalendarDate.year(),
                 baseCalendarDate.monthCode());
         if (baseMonthSlot == null) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         IsoCalendarMonth yearAdjustedMonthSlot = calendarId.findMonthSlotByCode(targetYear, baseMonthSlot.monthCode());
         if (yearAdjustedMonthSlot == null && baseMonthSlot.leapMonth()) {
             if (TemporalOverflow.REJECT.matches(overflow)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
             String fallbackMonthCode = calendarId
                     .resolveFallbackMonthCodeForMissingLeapMonth(baseMonthSlot.monthCode());
@@ -223,8 +213,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             }
         }
         if (yearAdjustedMonthSlot == null) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         IsoYearMonth yearMonthIndex = new IsoYearMonth(targetYear, yearAdjustedMonthSlot.monthNumber());
@@ -241,8 +230,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         IsoCalendarMonth targetMonthSlot = calendarId.findMonthSlotByNumber(yearMonthIndex.year(),
                 yearMonthIndex.monthNumber());
         if (targetMonthSlot == null) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         int monthAdjustedDay = regulateDay(context, baseCalendarDate.day(), targetMonthSlot.daysInMonth(), overflow);
@@ -262,20 +250,17 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             daysFromWeeks = Math.multiplyExact(weeksToAdd, 7L);
             totalDayDelta = Math.addExact(daysFromWeeks, daysToAdd);
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         long resultEpochDay;
         try {
             resultEpochDay = Math.addExact(intermediateIsoDate.toEpochDay(), totalDayDelta);
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
                 || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         return createFromEpochDay(resultEpochDay);
     }
@@ -291,8 +276,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         try {
             totalDays = Math.addExact(days, Math.multiplyExact(weeks, 7L));
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
 
         IsoDate intermediateDate = addYearsAndMonths(context, years, months, overflow);
@@ -303,17 +287,14 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         try {
             resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         IsoDate isoDate = createFromEpochDay(resultEpochDay);
         if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         return isoDate;
     }
@@ -324,8 +305,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         try {
             intermediateDate = addYearsAndMonths(context, years, months, overflow);
         } catch (ArithmeticException e) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         if (intermediateDate == null) {
             return null;
@@ -336,15 +316,13 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             long totalDays = Math.addExact(days, daysFromWeeks);
             resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
 
         try {
             return createFromEpochDay(resultEpochDay);
         } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
     }
 
@@ -555,16 +533,14 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         long balancedYear = Math.addExact(year, years);
         balancedYear = Math.addExact(balancedYear, yearDelta);
         if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         int balancedYearInt = (int) balancedYear;
         int maxDay = daysInMonth(balancedYearInt, balancedMonth);
         int regulatedDay = day;
         if ("reject".equals(overflow)) {
             if (regulatedDay > maxDay) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
         } else {
             regulatedDay = Math.min(regulatedDay, maxDay);

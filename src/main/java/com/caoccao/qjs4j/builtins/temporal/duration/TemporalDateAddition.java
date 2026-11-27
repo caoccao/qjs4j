@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal.duration;
 
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -57,8 +58,7 @@ public record TemporalDateAddition(TemporalDuration duration, String overflow) {
         try {
             days = Math.addExact(duration.days(), duration.wholeTimeDays());
         } catch (ArithmeticException e) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
         TemporalCalendarId calendar = plainDate.getCalendarId();
         IsoDate result = addDateParts(context, plainDate.getIsoDate(), calendar, days);
@@ -68,13 +68,11 @@ public record TemporalDateAddition(TemporalDuration duration, String overflow) {
     public JSValue apply(JSContext context, JSTemporalPlainYearMonth plainYearMonth) {
         IsoDate isoDate = plainYearMonth.getIsoDate();
         if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         if (duration.weeks() != 0 || duration.days() != 0 || duration.hasTimeUnits()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         TemporalCalendarId calendarId = plainYearMonth.getCalendarId();
@@ -89,16 +87,14 @@ public record TemporalDateAddition(TemporalDuration duration, String overflow) {
     public JSValue apply(JSContext context, JSTemporalPlainDateTime plainDateTime) {
         TemporalTimeAddResult timeResult = duration.addToTime(plainDateTime.getIsoDateTime().time());
         if (timeResult == null) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
 
         long adjustedDays;
         try {
             adjustedDays = Math.addExact(duration.days(), timeResult.dayCarry());
         } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
 
         TemporalCalendarId calendarId = plainDateTime.getCalendarId();
@@ -108,8 +104,7 @@ public record TemporalDateAddition(TemporalDuration duration, String overflow) {
         }
 
         if (!newDate.isWithinPlainDateTimeRange(timeResult.time())) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         return JSTemporalPlainDateTime.create(context, newDate.atTime(timeResult.time()),
@@ -137,15 +132,13 @@ public record TemporalDateAddition(TemporalDuration duration, String overflow) {
             try {
                 intermediateEpochNanoseconds = addedDateTime.toEpochNs(zonedDateTime.getTimeZoneId());
             } catch (DateTimeException dateTimeException) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ISO_DATE.undefined(context);
             }
         }
 
         BigInteger epochNanoseconds = intermediateEpochNanoseconds.add(duration.timeNanoseconds());
         if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
 
         return JSTemporalZonedDateTime.create(context, epochNanoseconds, zonedDateTime.getTimeZoneId(),

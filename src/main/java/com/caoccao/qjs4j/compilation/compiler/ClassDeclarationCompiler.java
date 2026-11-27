@@ -163,33 +163,18 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         // For base constructors, instance private methods/fields are initialized before
         // parameter default evaluation so defaults can access private members on `this`.
         if (isConstructor && !isDerivedConstructor) {
-            if (!privateInstanceMethodFunctions.isEmpty()) {
-                functionContext.classDeclarationCompiler
-                        .compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
-            }
-            if (!instanceFields.isEmpty()) {
-                functionContext.classDeclarationCompiler.compileFieldInitialization(instanceFields, privateSymbols,
-                        computedFieldSymbols, autoAccessorBackingSymbols);
-            }
+            functionContext.classDeclarationCompiler.initializeInstanceElements(privateInstanceMethodFunctions,
+                    instanceFields, privateSymbols, computedFieldSymbols, autoAccessorBackingSymbols);
         }
 
         compilerContext.functionExpressionCompiler.initializeParameters(methodCompiler, functionExpression,
                 parameterSlotIndexes, methodDestructuringParams, functionExpression.isGenerator());
 
         // For derived constructors, defer until after super() (INIT_CTOR) per ES spec 14.6.13 step 11.
-        if (isConstructor) {
-            if (isDerivedConstructor) {
-                functionContext.pendingPostSuperInitialization = () -> {
-                    if (!privateInstanceMethodFunctions.isEmpty()) {
-                        functionContext.classDeclarationCompiler
-                                .compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
-                    }
-                    if (!instanceFields.isEmpty()) {
-                        functionContext.classDeclarationCompiler.compileFieldInitialization(instanceFields,
-                                privateSymbols, computedFieldSymbols, autoAccessorBackingSymbols);
-                    }
-                };
-            }
+        if (isConstructor && isDerivedConstructor) {
+            functionContext.pendingPostSuperInitialization = () -> functionContext.classDeclarationCompiler
+                    .initializeInstanceElements(privateInstanceMethodFunctions, instanceFields, privateSymbols,
+                            computedFieldSymbols, autoAccessorBackingSymbols);
         }
 
         FunctionBodyCompiler.METHOD.compile(functionContext, functionExpression, functionExpression.getBody(),
@@ -341,14 +326,8 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
 
         // Initialize private methods and instance fields.
         // For derived constructors this runs after super() returns.
-        if (!privateInstanceMethodFunctions.isEmpty()) {
-            ctorCtx.classDeclarationCompiler.compilePrivateMethodInitialization(privateInstanceMethodFunctions,
-                    privateSymbols);
-        }
-        if (!instanceFields.isEmpty()) {
-            ctorCtx.classDeclarationCompiler.compileFieldInitialization(instanceFields, privateSymbols,
-                    computedFieldSymbols, autoAccessorBackingSymbols);
-        }
+        ctorCtx.classDeclarationCompiler.initializeInstanceElements(privateInstanceMethodFunctions, instanceFields,
+                privateSymbols, computedFieldSymbols, autoAccessorBackingSymbols);
 
         ctorCtx.emitter.emitOpcode(hasSuper ? Opcode.PUSH_THIS : Opcode.UNDEFINED);
         ctorCtx.emitter.emitOpcode(Opcode.RETURN);
@@ -384,6 +363,15 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                 JSValue.NO_ARGS, null, false, false, false, false, true, source);
         compilerContext.emitHelpers.emitCapturedValues(compiler, initializer);
         return initializer;
+    }
+
+    private void initializeInstanceElements(List<PrivateMethodEntry> privateMethods, List<PropertyDefinition> fields,
+            Map<String, JSSymbol> privateSymbols, IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
+        if (!privateMethods.isEmpty()) {
+            compilePrivateMethodInitialization(privateMethods, privateSymbols);
+        }
+        compileFieldInitialization(fields, privateSymbols, computedFieldSymbols, autoAccessorBackingSymbols);
     }
 
     void installPrivateStaticMethods(List<PrivateMethodEntry> privateStaticMethodEntries,

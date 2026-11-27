@@ -27,6 +27,7 @@ import com.caoccao.qjs4j.builtins.temporal.plain.TemporalPlainTimeConstructor;
 import com.caoccao.qjs4j.builtins.temporal.plain.TemporalTimeProperty;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
@@ -336,14 +337,12 @@ public final class TemporalZonedDateTimePrototype {
                 IsoDateTime rounded = roundSettings.roundDateTime(zonedDateTime.toLocalDateTime());
                 roundedEpochNanoseconds = rounded.toEpochNs(zonedDateTime.getTimeZoneId());
             } catch (DateTimeException dateTimeException) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ISO_DATE.undefined(context);
             }
         }
 
         if (!TemporalUtils.isValidEpochNanoseconds(roundedEpochNanoseconds)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
 
         return JSTemporalZonedDateTime.create(context, roundedEpochNanoseconds, zonedDateTime.getTimeZoneId(),
@@ -367,19 +366,16 @@ public final class TemporalZonedDateTimePrototype {
         try {
             localDateTime = zonedDateTime.toLocalDateTime();
         } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
         BigInteger epochNs;
         try {
             epochNs = TemporalTimeZone.startOfDayToEpochNs(localDateTime.date(), zonedDateTime.getTimeZoneId());
         } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
         if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalZonedDateTime.create(context, epochNs, zonedDateTime.getTimeZoneId(),
                 zonedDateTime.getCalendarId());
@@ -503,8 +499,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
         if (args.length == 0 || !(args[0] instanceof JSObject fieldsObject)) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
         if (fieldsObject instanceof JSTemporalPlainDate || fieldsObject instanceof JSTemporalPlainDateTime
                 || fieldsObject instanceof JSTemporalPlainMonthDay || fieldsObject instanceof JSTemporalPlainYearMonth
@@ -555,13 +550,11 @@ public final class TemporalZonedDateTimePrototype {
                 || millisecondField != null || minuteField != null || nanosecondField != null || offsetField != null
                 || secondField != null;
         if (!hasAnyWithField) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
 
         if ((dayField != null && dayField < 1) || (monthField != null && monthField < 1)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
@@ -582,8 +575,9 @@ public final class TemporalZonedDateTimePrototype {
         int mergedMillisecond = millisecondField != null ? millisecondField : localDateTime.time().millisecond();
         int mergedMicrosecond = microsecondField != null ? microsecondField : localDateTime.time().microsecond();
         int mergedNanosecond = nanosecondField != null ? nanosecondField : localDateTime.time().nanosecond();
-        IsoTime mergedIsoTime = IsoTime.regulate(context, withOptions.overflow(), "Temporal error: Invalid ISO date.",
-                mergedHour, mergedMinute, mergedSecond, mergedMillisecond, mergedMicrosecond, mergedNanosecond);
+        IsoTime mergedIsoTime = IsoTime.regulate(context, withOptions.overflow(),
+                TemporalError.INVALID_ISO_DATE.message(), mergedHour, mergedMinute, mergedSecond, mergedMillisecond,
+                mergedMicrosecond, mergedNanosecond);
         if (mergedIsoTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -636,8 +630,7 @@ public final class TemporalZonedDateTimePrototype {
                     zonedDateTime.getTimeZoneId());
         }
         if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalZonedDateTime.create(context, epochNanoseconds, zonedDateTime.getTimeZoneId(),
                 zonedDateTime.getCalendarId());

@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
@@ -68,12 +69,10 @@ public final class TemporalPlainYearMonthConstructor {
         }
 
         if (!isValidIsoYearMonth(isoYear, isoMonth)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
         if (referenceDay < 1 || referenceDay > IsoDate.daysInMonth(isoYear, isoMonth)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainYearMonth");
@@ -124,8 +123,7 @@ public final class TemporalPlainYearMonthConstructor {
             }
             return result;
         }
-        context.throwTypeError("Temporal error: year argument must be an object.");
-        return JSUndefined.INSTANCE;
+        return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
     }
 
     public static JSTemporalPlainYearMonth toTemporalYearMonthObject(JSContext context, JSValue item) {

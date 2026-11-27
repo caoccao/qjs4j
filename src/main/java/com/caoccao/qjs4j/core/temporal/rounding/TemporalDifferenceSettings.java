@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.rounding;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -84,7 +85,7 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
             }
 
             roundingIncrement = TemporalUtils.getRoundingIncrementOption(context, optionsObject,
-                    "Temporal error: Invalid rounding increment.");
+                    TemporalError.INVALID_ROUNDING_INCREMENT.message());
             if (context.hasPendingException()) {
                 return null;
             }
@@ -131,8 +132,7 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
         // 5. Validate rounding mode
         TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
         if (roundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
+            return TemporalError.INVALID_ROUNDING_MODE.reject(context);
         }
 
         // 6. Negate rounding mode for since operations
@@ -161,8 +161,7 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
                 long maximumIncrement = smallestUnit.getMaximumSubDayIncrement();
                 if (maximumIncrement > 0
                         && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
-                    context.throwRangeError("Temporal error: Invalid rounding increment.");
-                    return null;
+                    return TemporalError.INVALID_ROUNDING_INCREMENT.reject(context);
                 }
             }
         }

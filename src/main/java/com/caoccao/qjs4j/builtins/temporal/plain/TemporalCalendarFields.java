@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoMonth;
@@ -86,7 +87,7 @@ final class TemporalCalendarFields {
         String monthCode = bag.string("monthCode");
         IsoMonth parsedMonthCode = monthCode == null
                 ? null
-                : IsoMonth.parseByMonthCode(context, monthCode, "Temporal error: Invalid ISO date.");
+                : IsoMonth.parseByMonthCode(context, monthCode, TemporalError.INVALID_ISO_DATE.message());
         Integer resolvedYear = bag.resolvedYear(calendarId,
                 "Temporal error: MonthDay argument must be object or string.");
         if (context.hasPendingException()) {
@@ -135,13 +136,13 @@ final class TemporalCalendarFields {
     static int resolveIsoMonth(JSContext context, Integer month, IsoMonth code, String overflow) {
         if (code != null) {
             if (code.leapMonth() || code.month() < 1 || code.month() > 12 || (month != null && month != code.month())) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
+                TemporalError.INVALID_ISO_DATE.raise(context);
                 return 0;
             }
             return code.month();
         }
         if (month == null || month < 1 || (month > 12 && "reject".equals(overflow))) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+            TemporalError.INVALID_ISO_DATE.raise(context);
             return 0;
         }
         return Math.min(month, 12);
@@ -156,8 +157,7 @@ final class TemporalCalendarFields {
                 return JSUndefined.INSTANCE;
             }
             if (!IsoDate.isValidYearMonth(year, resolvedIsoMonth)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_ISO_DATE.undefined(context);
             }
             return JSTemporalPlainYearMonth.create(context, new IsoDate(year, resolvedIsoMonth, 1), calendarId);
         }
@@ -167,8 +167,7 @@ final class TemporalCalendarFields {
                 .forCalendar(calendarId);
         if (supportedYearMonthBoundary != null && requestedMonthNumber != Integer.MIN_VALUE
                 && supportedYearMonthBoundary.excludes(year, requestedMonthNumber)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         IsoDate convertedIsoDate = IsoDate.calendarDateToIsoDate(context, calendarId, year, monthFromProperty,
@@ -207,8 +206,7 @@ final class TemporalCalendarFields {
     static JSValue yearMonthFromFields(JSContext context, JSObject fields, JSValue options) {
         JSObject plainYearMonthPrototype = TemporalUtils.getTemporalPrototype(context, "PlainYearMonth");
         if (fields == plainYearMonthPrototype) {
-            context.throwTypeError("Temporal error: year argument must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
 
         TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
@@ -219,14 +217,13 @@ final class TemporalCalendarFields {
 
         Integer monthFromProperty = bag.integer("month");
         IsoMonth parsedMonthCode = bag.monthCode();
-        Integer year = bag.resolvedYear(calendarId, "Temporal error: year argument must be an object.");
+        Integer year = bag.resolvedYear(calendarId, TemporalError.INVALID_YEAR_ARGUMENT.message());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
         if (year == null || (monthFromProperty == null && parsedMonthCode == null)) {
-            context.throwTypeError("Temporal error: year argument must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
 
         String overflow = TemporalUtils.getOverflowOption(context, options);

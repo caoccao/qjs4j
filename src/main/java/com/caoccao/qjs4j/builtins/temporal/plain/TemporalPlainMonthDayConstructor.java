@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
@@ -64,8 +65,7 @@ public final class TemporalPlainMonthDayConstructor {
 
         IsoDate isoDate = new IsoDate(referenceYear, isoMonth, isoDay);
         if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainMonthDay");
@@ -112,8 +112,7 @@ public final class TemporalPlainMonthDayConstructor {
         }
 
         if (calendar != TemporalCalendarId.ISO8601) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         return JSTemporalPlainMonthDay.create(context, parsedMonthDay, calendar);

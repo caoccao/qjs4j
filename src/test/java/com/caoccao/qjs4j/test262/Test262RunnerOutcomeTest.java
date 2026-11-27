@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.test262;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.util.concurrent.FutureTask;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -45,34 +45,19 @@ public class Test262RunnerOutcomeTest {
         // still running. run() used to print a summary and return a final-looking outcome anyway,
         // while those workers went on executing files and mutating the reporter behind it.
         Path root = Files.createTempDirectory("qjs4j-test262-abandon");
-        writeFakeTest262Root(root, "slow-000.js", verySlowTestSource());
-        for (int index = 1; index < 200; index++) {
-            Files.writeString(root.resolve("test").resolve(String.format("slow-%03d.js", index)), verySlowTestSource());
-        }
+        writeSlowTests(root, 200, 20_000_000);
         Test262Runner runner = new Test262Runner(root, Test262Config.loadDefault(), null, 2)
                 .setWorkerTerminationTimeoutMilliseconds(1);
-        Test262Runner.RunOutcome[] outcome = {null};
-        Thread runnerThread = new Thread(() -> {
-            try {
-                outcome[0] = runner.run();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }, "test262-runner");
-        runnerThread.start();
-        Thread.sleep(500);
-        runnerThread.interrupt();
-        runnerThread.join(120_000);
-
-        assertThat(runnerThread.isAlive()).isFalse();
-        assertThat(outcome[0]).isNotNull();
-        assertThat(outcome[0].abandonedWorkers()).as("workers that had not stopped are counted, not assumed away")
+        InterruptedRun interrupted = interruptRun(runner);
+        Test262Runner.RunOutcome outcome = interrupted.outcome();
+        assertThat(outcome).isNotNull();
+        assertThat(outcome.abandonedWorkers()).as("workers that had not stopped are counted, not assumed away")
                 .isPositive();
-        assertThat(outcome[0].isSuccessful()).isFalse();
-        assertThat(outcome[0].exitCode()).isEqualTo(1);
-        assertThat(outcome[0].diagnostic()).contains("abandoned");
+        assertThat(outcome.isSuccessful()).isFalse();
+        assertThat(outcome.exitCode()).isEqualTo(1);
+        assertThat(outcome.diagnostic()).contains("abandoned");
 
-        int executedAtReturn = outcome[0].executed();
+        int executedAtReturn = outcome.executed();
         assertThat(runner.reporter().isFrozen()).as("the reporter stops accepting results when the run returns")
                 .isTrue();
         // Give whatever was still running every chance to write, then prove it did not land.
@@ -226,38 +211,22 @@ public class Test262RunnerOutcomeTest {
     }
 
     @Test
-    void testInterruptedRunLeavesNoWorkerRunning() throws IOException, InterruptedException {
+    void testInterruptedRunLeavesNoWorkerRunning() throws Exception {
         // Interruption used to restore the flag and break, which made the awaitTermination that
         // followed throw at once: run() returned a final-looking outcome while non-daemon workers
         // kept executing files and mutating the reporter behind it.
         Path root = Files.createTempDirectory("qjs4j-test262-interrupt");
-        writeFakeTest262Root(root, "slow-000.js", slowTestSource());
-        for (int index = 1; index < 400; index++) {
-            Files.writeString(root.resolve("test").resolve(String.format("slow-%03d.js", index)), slowTestSource());
-        }
+        writeSlowTests(root, 400, 200_000);
         Test262Runner runner = new Test262Runner(root, Test262Config.loadDefault(), null, 2);
-        Test262Runner.RunOutcome[] outcome = {null};
-        boolean[] interruptFlagPreserved = {false};
-        Thread runnerThread = new Thread(() -> {
-            try {
-                outcome[0] = runner.run();
-                interruptFlagPreserved[0] = Thread.currentThread().isInterrupted();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }, "test262-runner");
-        runnerThread.start();
-        Thread.sleep(500);
-        runnerThread.interrupt();
-        runnerThread.join(120_000);
-
-        assertThat(runnerThread.isAlive()).isFalse();
-        assertThat(outcome[0]).isNotNull();
-        assertThat(outcome[0].interrupted()).isTrue();
-        assertThat(outcome[0].isSuccessful()).isFalse();
-        assertThat(outcome[0].exitCode()).isEqualTo(1);
-        assertThat(interruptFlagPreserved[0]).as("the caller's interrupt status survives the cleanup").isTrue();
-        assertThat(outcome[0].abandonedWorkers()).as("the pool stopped within the timeout, so nothing was abandoned")
+        InterruptedRun interrupted = interruptRun(runner);
+        Test262Runner.RunOutcome outcome = interrupted.outcome();
+        assertThat(outcome).isNotNull();
+        assertThat(outcome.interrupted()).isTrue();
+        assertThat(outcome.isSuccessful()).isFalse();
+        assertThat(outcome.exitCode()).isEqualTo(1);
+        assertThat(interrupted.interruptFlagPreserved()).as("the caller's interrupt status survives the cleanup")
+                .isTrue();
+        assertThat(outcome.abandonedWorkers()).as("the pool stopped within the timeout, so nothing was abandoned")
                 .isZero();
         assertThat(liveWorkerThreadCount(runner))
                 .as("no worker of this run may still be running once run() has returned").isZero();
@@ -390,6 +359,18 @@ public class Test262RunnerOutcomeTest {
         return config;
     }
 
+    private static InterruptedRun interruptRun(Test262Runner runner) throws Exception {
+        FutureTask<InterruptedRun> task = new FutureTask<>(
+                () -> new InterruptedRun(runner.run(), Thread.currentThread().isInterrupted()));
+        Thread thread = new Thread(task, "test262-runner");
+        thread.start();
+        Thread.sleep(500);
+        thread.interrupt();
+        thread.join(120_000);
+        assertThat(thread.isAlive()).isFalse();
+        return task.get();
+    }
+
     /**
      * How many worker threads of one runner are still alive.
      * <p>
@@ -410,26 +391,6 @@ public class Test262RunnerOutcomeTest {
         return count;
     }
 
-    /**
-     * A test file that takes long enough for an interruption to land mid-run.
-     *
-     * @return the source
-     */
-    private static String slowTestSource() {
-        return "/*---\nflags: [raw]\n---*/\n" + "var total = 0;\n"
-                + "for (var i = 0; i < 200000; i++) { total += i; }\n";
-    }
-
-    /**
-     * A test file slow enough that a worker running it is still running a moment later.
-     *
-     * @return the source
-     */
-    private static String verySlowTestSource() {
-        return "/*---\nflags: [raw]\n---*/\n" + "var total = 0;\n"
-                + "for (var i = 0; i < 20000000; i++) { total += i; }\n";
-    }
-
     private static Path writeFakeTest262Root(Path root, String testFileName, String testSource) throws IOException {
         Path testDirectory = root.resolve("test");
         Files.createDirectories(testDirectory);
@@ -444,5 +405,17 @@ public class Test262RunnerOutcomeTest {
                 "function Test262Error(message) { this.message = message || ''; }\n"
                         + "function $DONOTEVALUATE() { throw 'Test262: This statement should not be evaluated.'; }\n");
         return root;
+    }
+
+    private static void writeSlowTests(Path root, int count, int iterations) throws IOException {
+        String source = "/*---\nflags: [raw]\n---*/\nvar total = 0;\n" + "for (var i = 0; i < " + iterations
+                + "; i++) { total += i; }\n";
+        writeFakeTest262Root(root, "slow-000.js", source);
+        for (int index = 1; index < count; index++) {
+            Files.writeString(root.resolve("test").resolve(String.format("slow-%03d.js", index)), source);
+        }
+    }
+
+    private record InterruptedRun(Test262Runner.RunOutcome outcome, boolean interruptFlagPreserved) {
     }
 }

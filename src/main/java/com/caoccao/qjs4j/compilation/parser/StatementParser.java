@@ -71,18 +71,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 && !parserContext.currentToken.escaped();
     }
 
-    private boolean isLabelIdentifierToken(TokenType tokenType) {
-        return tokenType == TokenType.IDENTIFIER || tokenType == TokenType.ASYNC || tokenType == TokenType.AWAIT
-                || tokenType == TokenType.YIELD || tokenType == TokenType.FROM || tokenType == TokenType.OF
-                || tokenType == TokenType.AS || tokenType == TokenType.LET;
-    }
-
     private boolean isLabelStart() {
         Token lookaheadToken = parserContext.peek();
         if (lookaheadToken == null || lookaheadToken.type() != TokenType.COLON) {
             return false;
         }
-        return isLabelIdentifierToken(parserContext.currentToken.type());
+        return parserContext.currentToken.type().isIdentifierCandidate();
     }
 
     private boolean isLabelledFunction(Statement statement) {
@@ -337,7 +331,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         validateNoLexicalDeclarationInStatementPosition(consequent);
         validateNoUsingDeclarationWithInitializerInStatementPosition(consequent);
         validateNoLabelledFunctionInIterationBody(consequent);
-        validateNoFunctionDeclarationInIfStatementPosition(consequent);
+        validateFunctionInStatementPosition(consequent, "if");
         Statement alternate = null;
 
         if (parserContext.consumeIf(TokenType.ELSE)) {
@@ -345,7 +339,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             validateNoLexicalDeclarationInStatementPosition(alternate);
             validateNoUsingDeclarationWithInitializerInStatementPosition(alternate);
             validateNoLabelledFunctionInIterationBody(alternate);
-            validateNoFunctionDeclarationInIfStatementPosition(alternate);
+            validateFunctionInStatementPosition(alternate, "if");
         }
 
         return new IfStatement(test, consequent, alternate, location);
@@ -373,16 +367,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             Statement body = parseStatement();
             validateNoLexicalDeclarationInStatementPosition(body);
             validateNoUsingDeclarationWithInitializerInStatementPosition(body);
-            if (body instanceof FunctionDeclaration functionDeclaration) {
-                if (parserContext.strictMode && !functionDeclaration.isAsync() && !functionDeclaration.isGenerator()) {
-                    throw new JSSyntaxErrorException(
-                            "In strict mode code, functions can only be declared at top level or inside a block.");
-                }
-                if (functionDeclaration.isAsync() || functionDeclaration.isGenerator()) {
-                    throw new JSSyntaxErrorException(
-                            "Function declarations are not allowed in labelled statement position");
-                }
-            }
+            validateFunctionInStatementPosition(body, "labelled");
             return new LabeledStatement(label, body, location);
         } finally {
             parserContext.labelStack.pop();
@@ -737,14 +722,15 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
-    private void validateNoFunctionDeclarationInIfStatementPosition(Statement statement) {
+    private void validateFunctionInStatementPosition(Statement statement, String position) {
         if (statement instanceof FunctionDeclaration functionDeclaration) {
-            if (parserContext.strictMode && !functionDeclaration.isAsync() && !functionDeclaration.isGenerator()) {
+            if (parserContext.strictMode && functionDeclaration.isAnnexBSimpleDeclaration()) {
                 throw new JSSyntaxErrorException(
                         "In strict mode code, functions can only be declared at top level or inside a block.");
             }
-            if (functionDeclaration.isAsync() || functionDeclaration.isGenerator()) {
-                throw new JSSyntaxErrorException("Function declarations are not allowed in if statement position");
+            if (!functionDeclaration.isAnnexBSimpleDeclaration()) {
+                throw new JSSyntaxErrorException(
+                        "Function declarations are not allowed in " + position + " statement position");
             }
         }
     }
@@ -872,7 +858,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
     private Identifier parseJumpLabel() {
         Identifier label = null;
-        if (isLabelIdentifierToken(parserContext.currentToken.type()) && !parserContext.hasNewlineBefore()) {
+        if (parserContext.currentToken.type().isIdentifierCandidate() && !parserContext.hasNewlineBefore()) {
             label = parserContext.parseIdentifier();
         }
         parserContext.consumeSemicolon();

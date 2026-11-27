@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal.zoned;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
 import com.caoccao.qjs4j.core.temporal.iso.IsoTime;
@@ -35,14 +36,12 @@ public final class TemporalOffsetInterpretation {
     private static BigInteger computeWallEpochNanoseconds(JSContext context, IsoDate isoDate, IsoTime isoTime,
             String timeZoneId, String disambiguation) {
         if (!isoDate.isWithinInstantDateTimeRange(isoTime)) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
         try {
             return isoDate.atTime(isoTime).toEpochNs(timeZoneId, disambiguation);
         } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
+            return TemporalError.INVALID_ISO_DATE.reject(context);
         }
     }
 
@@ -84,8 +83,7 @@ public final class TemporalOffsetInterpretation {
                     explicitOffsetSeconds == null ? 0 : explicitOffsetSeconds);
         } else {
             if (!isoDate.isWithinInstantDateTimeRange(isoTime)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
             epochNanoseconds = findMatchingEpochNanosecondsForExplicitOffset(context, isoDate, isoTime, timeZoneId,
                     explicitOffsetSeconds == null ? 0 : explicitOffsetSeconds, offsetTimeZoneIdentifier,
@@ -103,8 +101,7 @@ public final class TemporalOffsetInterpretation {
             return null;
         }
         if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return null;
+            return TemporalError.NANOSECONDS_OUT_OF_RANGE.reject(context);
         }
 
         return epochNanoseconds;

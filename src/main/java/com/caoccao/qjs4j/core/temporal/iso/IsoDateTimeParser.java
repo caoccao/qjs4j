@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal.iso;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSString;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 
 import java.math.BigInteger;
@@ -25,7 +26,7 @@ import static com.caoccao.qjs4j.core.temporal.TemporalConstants.*;
 
 /** ISO date and time productions shared by the Temporal string factories. */
 final class IsoDateTimeParser extends IsoParsingState {
-    private static final String INVALID_DATE = "Temporal error: Invalid ISO date.";
+    private static final String INVALID_DATE = TemporalError.INVALID_ISO_DATE.message();
     private static final String INVALID_INSTANT = "Temporal error: Instant argument must be Instant or string.";
     private static final String INVALID_TIME = "Temporal error: Invalid time";
     private static final String INVALID_YEAR = "Temporal error: Invalid character while parsing year value.";
@@ -454,8 +455,7 @@ final class IsoDateTimeParser extends IsoParsingState {
                 && (start == 2 || extended || input.length() == 4 || input.charAt(4) == '[')) {
             IsoDate date = new IsoDate(1972, parseFixedTwoDigits(input, start), parseFixedTwoDigits(input, dayStart));
             if (!date.isValid() || input.indexOf('\u2212') >= 0) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+                return TemporalError.INVALID_ISO_DATE.reject(context);
             }
             IsoDateTimeParser state = new IsoDateTimeParser(context, input);
             state.position = dayStart + 2;

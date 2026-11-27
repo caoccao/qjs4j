@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
@@ -57,8 +58,7 @@ public final class TemporalPlainDateConstructor {
         }
 
         if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
 
         JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainDate");

@@ -46,7 +46,7 @@ final class CompilerAnalysis {
                     collectPatternBindingNames(d.getId(), topLevelLexicals);
                 }
             }
-            scanAnnexBStatement(stmt, topLevelLexicals, candidates);
+            AnnexBFunctions.HOISTING.scan(stmt, topLevelLexicals, candidates);
         }
         return candidates;
     }
@@ -85,17 +85,6 @@ final class CompilerAnalysis {
             }
         }
         return declaredNames.contains(name);
-    }
-
-    void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
-        for (Statement statement : body) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() != VariableKind.VAR) {
-                for (VariableDeclarator variableDeclarator : variableDeclaration.getDeclarations()) {
-                    collectPatternBindingNames(variableDeclarator.getId(), lexicals);
-                }
-            }
-        }
     }
 
     /**
@@ -240,47 +229,6 @@ final class CompilerAnalysis {
         }
     }
 
-    void scanAnnexBBlock(List<Statement> body, Set<String> parentLexicals, Set<String> result) {
-        // Single pass: collect lexical bindings and function names, then scan for Annex B candidates
-        Set<String> blockLexicals = parentLexicals;
-        Set<String> blockFuncNames = null;
-        for (Statement s : body) {
-            if (s instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                if (blockLexicals == parentLexicals) {
-                    blockLexicals = new HashSet<>(parentLexicals);
-                }
-                for (VariableDeclarator d : vd.getDeclarations()) {
-                    collectPatternBindingNames(d.getId(), blockLexicals);
-                }
-            } else {
-                FunctionDeclaration unwrappedFunction = s.unwrapLabeledFunctionDeclaration();
-                if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
-                    if (blockFuncNames == null) {
-                        blockFuncNames = new HashSet<>();
-                    }
-                    blockFuncNames.add(unwrappedFunction.getId().getName());
-                }
-            }
-        }
-        // Per B.3.3.1: block-scoped function declarations create lexical bindings.
-        // Include them so nested blocks see them as lexical conflicts.
-        Set<String> blockLexicalsWithFuncs = blockLexicals;
-        if (blockFuncNames != null) {
-            blockFuncNames.addAll(blockLexicals);
-            blockLexicalsWithFuncs = blockFuncNames;
-        }
-        for (Statement s : body) {
-            FunctionDeclaration unwrappedFunction = s.unwrapLabeledFunctionDeclaration();
-            if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
-                if (unwrappedFunction.isAnnexBSimpleDeclaration()
-                        && !blockLexicals.contains(unwrappedFunction.getId().getName())) {
-                    result.add(unwrappedFunction.getId().getName());
-                }
-            }
-            scanAnnexBStatement(s, blockLexicalsWithFuncs, result);
-        }
-    }
-
     void scanAnnexBFunctions(List<Statement> programBody, Set<String> declaredFuncVarNames) {
         if (compilerContext.strictMode) {
             return; // Annex B does not apply in strict mode
@@ -292,102 +240,6 @@ final class CompilerAnalysis {
                 // on the global object (ES2024 CreateGlobalVarBinding semantics).
                 compilerContext.emitHelpers.emitConditionalVarInit(name);
             }
-        }
-    }
-
-    private void scanAnnexBLoop(ASTNode head, Statement body, Set<String> parentLexicals, Set<String> result) {
-        Set<String> lexicals = parentLexicals;
-        if (head instanceof VariableDeclaration declaration && declaration.getKind() != VariableKind.VAR) {
-            // A let/const in the loop head can block a function of the same name in its body.
-            lexicals = new HashSet<>(parentLexicals);
-            for (VariableDeclarator declarator : declaration.getDeclarations()) {
-                collectPatternBindingNames(declarator.getId(), lexicals);
-            }
-        }
-        scanAnnexBStatement(body, lexicals, result);
-    }
-
-    /**
-     * Recursively scan a statement for Annex B eligible function declarations. A function declaration is Annex B
-     * eligible if it appears inside a block, if-statement, catch clause, or switch case (not at the top level of the
-     * program). The early error check prevents hoisting when a let/const with the same name exists in the same block
-     * scope.
-     */
-    void scanAnnexBStatement(Statement stmt, Set<String> lexicalBindings, Set<String> result) {
-        if (stmt instanceof BlockStatement block) {
-            scanAnnexBBlock(block.getBody(), lexicalBindings, result);
-        } else if (stmt instanceof IfStatement ifStmt) {
-            if (ifStmt.getConsequent() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                if (fd.isAnnexBSimpleDeclaration() && !lexicalBindings.contains(fd.getId().getName())) {
-                    result.add(fd.getId().getName());
-                }
-            } else {
-                scanAnnexBStatement(ifStmt.getConsequent(), lexicalBindings, result);
-            }
-            if (ifStmt.getAlternate() != null) {
-                if (ifStmt.getAlternate() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                    if (fd.isAnnexBSimpleDeclaration() && !lexicalBindings.contains(fd.getId().getName())) {
-                        result.add(fd.getId().getName());
-                    }
-                } else {
-                    scanAnnexBStatement(ifStmt.getAlternate(), lexicalBindings, result);
-                }
-            }
-        } else if (stmt instanceof TryStatement tryStmt) {
-            scanAnnexBBlock(tryStmt.getBlock().getBody(), lexicalBindings, result);
-            if (tryStmt.getHandler() != null) {
-                // Per B.3.5, simple catch parameter (catch(e)) does NOT block Annex B var hoisting.
-                // But destructuring catch parameter (catch({ f })) creates let-like bindings
-                // that DO block hoisting (following QuickJS: destructuring uses TOK_LET).
-                Set<String> catchLexicals = new HashSet<>(lexicalBindings);
-                Pattern catchParam = tryStmt.getHandler().getParam();
-                if (catchParam != null && !(catchParam instanceof Identifier)) {
-                    // Destructuring pattern: collect binding names as lexical blockers
-                    collectPatternBindingNames(catchParam, catchLexicals);
-                }
-                scanAnnexBBlock(tryStmt.getHandler().getBody().getBody(), catchLexicals, result);
-            }
-            if (tryStmt.getFinalizer() != null) {
-                scanAnnexBBlock(tryStmt.getFinalizer().getBody(), lexicalBindings, result);
-            }
-        } else if (stmt instanceof SwitchStatement switchStmt) {
-            // Collect lexical bindings across all cases (switch shares one scope)
-            Set<String> switchLexicals = new HashSet<>(lexicalBindings);
-            for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
-                collectLexicalBindings(sc.getConsequent(), switchLexicals);
-            }
-            for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
-                for (Statement caseStatement : switchCase.getConsequent()) {
-                    FunctionDeclaration unwrappedFunction = caseStatement.unwrapLabeledFunctionDeclaration();
-                    if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
-                        if (unwrappedFunction.isAnnexBSimpleDeclaration()
-                                && !switchLexicals.contains(unwrappedFunction.getId().getName())) {
-                            result.add(unwrappedFunction.getId().getName());
-                        }
-                    }
-                    scanAnnexBStatement(caseStatement, switchLexicals, result);
-                }
-            }
-        } else if (stmt instanceof ForStatement loop) {
-            scanAnnexBLoop(loop.getInit(), loop.getBody(), lexicalBindings, result);
-        } else if (stmt instanceof ForEachStatement loop) {
-            scanAnnexBLoop(loop.getLeft(), loop.getBody(), lexicalBindings, result);
-        } else if (stmt instanceof WhileLoop loop) {
-            scanAnnexBStatement(loop.getBody(), lexicalBindings, result);
-        } else if (stmt instanceof LabeledStatement labeledStmt && labeledStmt.getBody() != null) {
-            // Per Annex B.3.2: labeled function declarations are Annex B eligible
-            FunctionDeclaration labeledFunction = labeledStmt.getBody().unwrapLabeledFunctionDeclaration();
-            if (labeledFunction != null && labeledFunction.getId() != null) {
-                if (labeledFunction.isAnnexBSimpleDeclaration()
-                        && !lexicalBindings.contains(labeledFunction.getId().getName())) {
-                    result.add(labeledFunction.getId().getName());
-                }
-            } else {
-                scanAnnexBStatement(labeledStmt.getBody(), lexicalBindings, result);
-            }
-        } else if (stmt instanceof WithStatement withStatement) {
-            // Per Annex B.3.3: function declarations inside with statements are Annex B eligible
-            scanAnnexBStatement(withStatement.getBody(), lexicalBindings, result);
         }
     }
 }

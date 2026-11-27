@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal.duration;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
@@ -85,8 +86,7 @@ public final class TemporalDurationPrototype {
         }
         BigInteger totalNanoseconds = leftNanoseconds.add(signedRightNanoseconds);
         if (totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
 
         TemporalUnit receiverLargestUnit = leftRecord.largestUnitOfDuration();
@@ -95,8 +95,7 @@ public final class TemporalDurationPrototype {
         TemporalDuration balanced = TemporalDuration.createBalance(totalNanoseconds, largestUnit);
         TemporalDuration normalized = balanced.normalizeFloat64RepresentableFields();
         if (!TemporalDuration.isDurationRecordTimeRangeValid(normalized)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
         return JSTemporalDuration.create(context, normalized);
     }
@@ -208,7 +207,7 @@ public final class TemporalDurationPrototype {
             }
 
             roundingIncrement = TemporalUtils.getRoundingIncrementOption(context, optionsObject,
-                    "Temporal error: Invalid rounding increment.");
+                    TemporalError.INVALID_ROUNDING_INCREMENT.message());
             if (context.hasPendingException()) {
                 return null;
             }
@@ -220,8 +219,7 @@ public final class TemporalDurationPrototype {
             }
             roundingMode = TemporalRoundingMode.fromString(roundingModeText);
             if (roundingMode == null) {
-                context.throwRangeError("Temporal error: Invalid rounding mode.");
-                return null;
+                return TemporalError.INVALID_ROUNDING_MODE.reject(context);
             }
 
             smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
@@ -273,14 +271,12 @@ public final class TemporalDurationPrototype {
         }
 
         if (!canonicalSmallestUnit.isValidIncrement(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
+            return TemporalError.INVALID_ROUNDING_INCREMENT.reject(context);
         }
 
         if (roundingIncrement != 1 && smallestRoundUnit.isDateUnit()
                 && largestRoundUnit.rank() < smallestRoundUnit.rank()) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
+            return TemporalError.INVALID_ROUNDING_INCREMENT.reject(context);
         }
 
         return new TemporalRoundOptions(smallestRoundUnit, largestRoundUnit, roundingIncrement, roundingMode,
@@ -301,12 +297,10 @@ public final class TemporalDurationPrototype {
             return null;
         }
         if (!Double.isFinite(numericValue) || numericValue != Math.floor(numericValue)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
-            return null;
+            return TemporalError.EXPECTED_FINITE_INTEGER.reject(context);
         }
         if (numericValue < Long.MIN_VALUE || numericValue > Long.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
         }
         return new TemporalPartialDurationFieldValue(true, (long) numericValue);
     }
@@ -355,8 +349,7 @@ public final class TemporalDurationPrototype {
                 .normalizeFloat64RepresentableFields();
         if (!normalizedDurationRecord.isValid()
                 || !TemporalDuration.isDurationRecordTimeRangeValid(normalizedDurationRecord)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
         JSTemporalDuration roundedDuration = JSTemporalDuration.create(context, normalizedDurationRecord);
         TemporalDurationDouble durationFieldOverrides = roundComputationResult.durationFieldOverrides();
@@ -414,8 +407,7 @@ public final class TemporalDurationPrototype {
         BigInteger roundedDayTimeNanoseconds = options.roundingMode()
                 .roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds);
         if (roundedDayTimeNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
 
         TemporalUnit largestExistingDayTimeUnit = durationRecord.largestDayTimeUnit();
@@ -429,8 +421,7 @@ public final class TemporalDurationPrototype {
                 balancedDayTime.nanoseconds());
         if (!roundedDurationRecord.isValid()
                 || !TemporalDuration.isDurationRecordTimeRangeValid(roundedDurationRecord)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.DURATION_FIELD_OUT_OF_RANGE.undefined(context);
         }
 
         String formattedDuration = roundedDurationRecord.formatWithPrecision(options);
@@ -520,8 +511,7 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
         if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
 
         long[] components = duration.getDuration().toComponents();
@@ -538,13 +528,11 @@ public final class TemporalDurationPrototype {
             }
         }
         if (!any) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
         TemporalDuration newRecord = TemporalDuration.fromComponents(components);
         if (!newRecord.isValid()) {
-            context.throwRangeError("Temporal error: Duration was not valid.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_DURATION.undefined(context);
         }
 
         return JSTemporalDuration.create(context, newRecord);

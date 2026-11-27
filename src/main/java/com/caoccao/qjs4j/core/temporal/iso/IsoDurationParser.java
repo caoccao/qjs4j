@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.iso;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
 
 import static com.caoccao.qjs4j.core.temporal.TemporalConstants.*;
@@ -68,8 +69,7 @@ public final class IsoDurationParser {
             while (position < input.length() && isAsciiDigit(next = input.charAt(position))) {
                 int digit = next - '0';
                 if (number >= Long.MAX_VALUE / 10 && (number > Long.MAX_VALUE / 10 || digit > Long.MAX_VALUE % 10)) {
-                    context.throwRangeError("Temporal error: Duration was not valid.");
-                    return null;
+                    return TemporalError.INVALID_DURATION.reject(context);
                 }
                 number = number * 10 + digit;
                 position++;

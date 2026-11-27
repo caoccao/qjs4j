@@ -344,19 +344,10 @@ final class ExpressionPrimaryParser {
                 parserContext.advance();
                 yield parseNumericLiteral(value, location, false);
             }
-            case BIGINT -> {
-                String value = parserContext.currentToken.value();
-                parserContext.advance();
-                yield parseNumericLiteral(value, location, true);
-            }
-            case STRING -> {
-                String value = parserContext.currentToken.value();
-                parserContext.advance();
-                yield new Literal(value, location);
-            }
+            case BIGINT -> parseNumericLiteral(parserContext.consumeValue(), location, true);
+            case STRING -> new Literal(parserContext.consumeValue(), location);
             case REGEX -> {
-                String value = parserContext.currentToken.value();
-                parserContext.advance();
+                String value = parserContext.consumeValue();
                 yield new Literal(new RegExpLiteralValue(value), location);
             }
             case TEMPLATE -> delegates.literals.parseTemplateLiteral(false);
@@ -621,21 +612,9 @@ final class ExpressionPrimaryParser {
         SourceLocation location = parserContext.getLocation();
         return switch (type) {
             case PRIVATE_NAME -> parserContext.consumePrivateName();
-            case STRING -> {
-                String value = parserContext.currentToken.value();
-                parserContext.advance();
-                yield new Literal(value, location);
-            }
-            case NUMBER -> {
-                String value = parserContext.currentToken.value();
-                parserContext.advance();
-                yield parseNumericLiteral(value, location, false);
-            }
-            case BIGINT -> {
-                String value = parserContext.currentToken.value();
-                parserContext.advance();
-                yield parseNumericLiteral(value, location, true);
-            }
+            case STRING -> new Literal(parserContext.consumeValue(), location);
+            case NUMBER -> parseNumericLiteral(parserContext.consumeValue(), location, false);
+            case BIGINT -> parseNumericLiteral(parserContext.consumeValue(), location, true);
             case LBRACKET -> {
                 parserContext.advance();
                 // Allow 'in' operator inside computed property names

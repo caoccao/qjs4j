@@ -236,12 +236,8 @@ public class Test262EnvironmentTest {
         // those are in the repository's common directory, named by the commondir file beside that
         // HEAD. Looking only beside HEAD resolved a detached worktree and gave up on this one,
         // which is the ordinary shape of a worktree, so the run could not say what it was testing.
-        Path worktreeDirectory = workingDirectory.resolve("main/.git/worktrees/conformance");
         Path commonDirectory = workingDirectory.resolve("main/.git");
-        write(workingDirectory.resolve(".git"), "gitdir: main/.git/worktrees/conformance\n");
-        write(worktreeDirectory.resolve("HEAD"), "ref: refs/heads/pinned\n");
-        write(worktreeDirectory.resolve("commondir"), "../..\n");
-        write(commonDirectory.resolve("refs/heads/pinned"), PINNED + "\n");
+        Path worktreeDirectory = writeLinkedWorktree(commonDirectory);
         assertThat(Test262Environment.checkoutRevision(workingDirectory))
                 .as("a loose reference in the common directory").isEqualTo(PINNED);
 
@@ -271,12 +267,8 @@ public class Test262EnvironmentTest {
         // case asserting it — let a stale or hand-made file make the run report a revision the
         // worktree does not have checked out, which is the disagreement with Git this parser exists
         // to avoid.
-        Path worktreeDirectory = workingDirectory.resolve("main/.git/worktrees/conformance");
         Path commonDirectory = workingDirectory.resolve("main/.git");
-        write(workingDirectory.resolve(".git"), "gitdir: main/.git/worktrees/conformance\n");
-        write(worktreeDirectory.resolve("HEAD"), "ref: refs/heads/pinned\n");
-        write(worktreeDirectory.resolve("commondir"), "../..\n");
-        write(commonDirectory.resolve("refs/heads/pinned"), PINNED + "\n");
+        Path worktreeDirectory = writeLinkedWorktree(commonDirectory);
         write(worktreeDirectory.resolve("refs/heads/pinned"), OTHER + "\n");
         assertThat(Test262Environment.checkoutRevision(workingDirectory))
                 .as("a branch beside the worktree HEAD is a file Git ignores").isEqualTo(PINNED);
@@ -472,6 +464,15 @@ public class Test262EnvironmentTest {
     private void write(Path path, String contents) throws IOException {
         Files.createDirectories(path.getParent());
         Files.writeString(path, contents, StandardCharsets.UTF_8);
+    }
+
+    private Path writeLinkedWorktree(Path commonDirectory) throws IOException {
+        Path worktreeDirectory = commonDirectory.resolve("worktrees/conformance");
+        write(workingDirectory.resolve(".git"), "gitdir: main/.git/worktrees/conformance\n");
+        write(worktreeDirectory.resolve("HEAD"), "ref: refs/heads/pinned\n");
+        write(worktreeDirectory.resolve("commondir"), "../..\n");
+        write(commonDirectory.resolve("refs/heads/pinned"), PINNED + "\n");
+        return worktreeDirectory;
     }
 
     /**

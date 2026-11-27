@@ -16,9 +16,6 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Represents a for-of statement: for (variable of iterable) { ... } * or async for-of: for await (variable of iterable)
  * { ... } *
@@ -26,52 +23,28 @@ import java.util.List;
  * * Based on ES2015 for-of loops and ES2018 async iteration. * left can be a VariableDeclaration (e.g., let x) or a
  * Pattern/Expression (e.g., x, obj.prop).
  */
-public abstract sealed class ForEachStatement extends Statement permits ForInStatement, ForOfStatement {
-    private final Statement body;
+public abstract sealed class ForEachStatement extends ForLoop permits ForInStatement, ForOfStatement {
     private final boolean isAsync;
-    private final ASTNode left;
     private final Expression right;
 
     protected ForEachStatement(ASTNode left, Expression right, Statement body, boolean isAsync,
             SourceLocation location) {
-        super(location);
-        this.left = left;
+        super(left, body, location);
         this.right = right;
-        this.body = body;
         this.isAsync = isAsync;
     }
 
     @Override
     boolean containsSuspension(Suspension kind) {
-        return (isAsync && kind == Suspension.AWAIT) || kind.in(left) || kind.in(right) || kind.in(body);
-    }
-
-    public Statement getBody() {
-        return body;
+        return (isAsync && kind == Suspension.AWAIT) || kind.in(head) || kind.in(right) || kind.in(body);
     }
 
     public ASTNode getLeft() {
-        return left;
+        return head;
     }
 
     public Expression getRight() {
         return right;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (left instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
-            }
-            if (body != null) {
-                collectedVarDeclarators.addAll(body.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
     }
 
     public boolean isAsync() {

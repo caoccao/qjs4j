@@ -17,54 +17,17 @@
 package com.caoccao.qjs4j.core.disposable;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.error.JSSuppressedError;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Represents a JavaScript DisposableStack object. Tracks disposable callbacks and runs them in LIFO order.
  */
-public final class JSDisposableStack extends JSObject {
+public final class JSDisposableStack extends JSDisposableStackBase {
     public static final String NAME = "DisposableStack";
-    private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal";
-    private boolean disposed;
-    private final List<DisposeRecord> disposeRecords;
 
     public JSDisposableStack(JSContext context) {
         super(context);
-        this.disposeRecords = new ArrayList<>();
-        this.disposed = false;
-    }
-
-    public JSValue adopt(JSContext context, JSValue value, JSValue onDispose) {
-        if (disposed) {
-            return context.throwReferenceError(
-                    "Cannot call DisposableStack.prototype.adopt on an already-disposed DisposableStack");
-        }
-        if (!(onDispose instanceof JSFunction disposeCallback)) {
-            return context.throwTypeError("DisposableStack.adopt requires a function");
-        }
-        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, new JSValue[]{value}));
-        return value;
-    }
-
-    private JSValue composeSuppressedError(JSContext context, JSValue error, JSValue suppressed) {
-        return JSSuppressedError.create(context, error, suppressed, new JSString(SUPPRESSED_ERROR_MESSAGE));
-    }
-
-    public JSValue defer(JSContext context, JSValue onDispose) {
-        if (disposed) {
-            return context.throwReferenceError(
-                    "Cannot call DisposableStack.prototype.defer on an already-disposed DisposableStack");
-        }
-        if (!(onDispose instanceof JSFunction disposeCallback)) {
-            return context.throwTypeError("DisposableStack.defer requires a function");
-        }
-        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        return JSUndefined.INSTANCE;
     }
 
     public JSValue dispose(JSContext context) {
@@ -72,10 +35,7 @@ public final class JSDisposableStack extends JSObject {
     }
 
     public JSValue dispose(JSContext context, JSValue completionError) {
-        JSValue initialError = completionError;
-        if (initialError == null && context.hasPendingException()) {
-            initialError = context.takePendingException();
-        }
+        JSValue initialError = completionError == null ? context.takePendingException() : completionError;
 
         if (disposed) {
             if (initialError != null) {
@@ -93,9 +53,7 @@ public final class JSDisposableStack extends JSObject {
         for (int i = disposeRecords.size() - 1; i >= 0; i--) {
             DisposeRecord record = disposeRecords.get(i);
             JSValue error = invokeDisposer(context, record);
-            if (error != null) {
-                completion = completion == null ? error : composeSuppressedError(context, error, completion);
-            }
+            completion = mergeDisposalError(context, error, completion);
         }
         disposeRecords.clear();
 
@@ -104,6 +62,12 @@ public final class JSDisposableStack extends JSObject {
             return completion;
         }
         return JSUndefined.INSTANCE;
+    }
+
+    @Override
+    JSValue disposedError(JSContext context, String operation) {
+        return context.throwReferenceError(
+                "Cannot call DisposableStack.prototype." + operation + " on an already-disposed DisposableStack");
     }
 
     private JSValue invokeDisposer(JSContext context, DisposeRecord record) {
@@ -140,26 +104,20 @@ public final class JSDisposableStack extends JSObject {
         return null;
     }
 
-    public boolean isDisposed() {
-        return disposed;
-    }
-
+    @Override
     public JSValue move(JSContext context) {
         if (disposed) {
-            return context.throwReferenceError(
-                    "Cannot call DisposableStack.prototype.move on an already-disposed DisposableStack");
+            return disposedError(context, "move");
         }
         JSDisposableStack newStack = context.createJSDisposableStack();
-        newStack.disposeRecords.addAll(disposeRecords);
-        disposeRecords.clear();
-        disposed = true;
+        transferRecords(newStack);
         return newStack;
     }
 
+    @Override
     public JSValue use(JSContext context, JSValue value) {
         if (disposed) {
-            return context.throwReferenceError(
-                    "Cannot call DisposableStack.prototype.use on an already-disposed DisposableStack");
+            return disposedError(context, "use");
         }
         if (value.isNullOrUndefined()) {
             return value;
@@ -173,14 +131,11 @@ public final class JSDisposableStack extends JSObject {
             return context.throwTypeError("Object is not disposable");
         }
 
-        disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, JSValue.NO_ARGS));
+        disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, JSValue.NO_ARGS, false));
         return value;
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
         return context.createJSDisposableStack();
-    }
-
-    private record DisposeRecord(JSFunction function, JSValue thisArg, JSValue[] args) {
     }
 }

@@ -17,12 +17,13 @@
 package com.caoccao.qjs4j.core.intl;
 
 import com.caoccao.qjs4j.core.*;
+import static com.caoccao.qjs4j.core.intl.IntlNumberOptions.*;
 
 import java.math.BigDecimal;
 import java.util.*;
 
 /**
- * NumberFormat and PluralRules built-ins and their shared digit and rounding options.
+ * Intl.NumberFormat constructor and prototype methods.
  */
 final class IntlNumberFormatBuiltins {
     private static final String[] COMPACT_DISPLAY_VALUES = {"short", "long"};
@@ -31,23 +32,11 @@ final class IntlNumberFormatBuiltins {
 
     private static final String[] CURRENCY_SIGN_VALUES = {"standard", "accounting"};
 
-    private static final String[] NOTATION_VALUES = {"standard", "scientific", "engineering", "compact"};
-
     private static final String[] NUMBER_STYLE_VALUES = {"decimal", "currency", "percent", "unit"};
-
-    private static final String[] ROUNDING_MODE_VALUES = {"ceil", "floor", "expand", "trunc", "halfCeil", "halfFloor",
-            "halfExpand", "halfTrunc", "halfEven"};
-
-    private static final String[] ROUNDING_PRIORITY_VALUES = {"auto", "morePrecision", "lessPrecision"};
 
     private static final String[] SIGN_DISPLAY_VALUES = {"auto", "never", "always", "exceptZero", "negative"};
 
-    private static final String[] TRAILING_ZERO_DISPLAY_VALUES = {"auto", "stripIfInteger"};
-
     private static final String[] UNIT_DISPLAY_VALUES = {"short", "narrow", "long"};
-
-    private static final Set<Integer> VALID_ROUNDING_INCREMENTS = Set.of(1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500,
-            1000, 2000, 2500, 5000);
 
     private IntlNumberFormatBuiltins() {
     }
@@ -249,60 +238,6 @@ final class IntlNumberFormatBuiltins {
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
         }
-    }
-
-    static JSValue createPluralRules(JSContext context, JSObject prototype, JSValue[] args) {
-        try {
-            IntlFormatOptions.ConstructorLocale constructor = IntlFormatOptions.ConstructorLocale.resolve(context,
-                    prototype, args, "PluralRules");
-            if (constructor == null) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue options = IntlFormatOptions.coerceOptionsWithLocaleMatcher(context, args);
-            if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
-                return options;
-            }
-
-            String type = IntlFormatOptions.normalizedStringOption(context, optionsObject, "type", "cardinal",
-                    "cardinal", "ordinal");
-            DigitOptions digits = DigitOptions.read(context, optionsObject);
-            if (digits == null) {
-                return JSUndefined.INSTANCE;
-            }
-            String notation = digits.notation();
-            int minimumIntegerDigits = digits.minimumIntegerDigits();
-            DigitRange fractionDigits = digits.fractionDigits();
-
-            boolean hasFractionDigits = fractionDigits.specified();
-            fractionDigits = fractionDigits.resolveFraction(0, 3);
-
-            DigitRange significantDigits = DigitRange.readSignificant(context, optionsObject);
-            if (significantDigits == null) {
-                return JSUndefined.INSTANCE;
-            }
-            if (significantDigits.specified()) {
-                significantDigits = significantDigits.resolveSignificant();
-            } else if ("compact".equals(notation) && !hasFractionDigits) {
-                significantDigits = new DigitRange(1, 2);
-            }
-
-            if (readRoundingOptions(context, optionsObject, false) == null) {
-                return JSUndefined.INSTANCE;
-            }
-            JSIntlPluralRules pluralRules = new JSIntlPluralRules(context, constructor.locale(), type, notation,
-                    minimumIntegerDigits, fractionDigits.minimum(), fractionDigits.maximum(),
-                    significantDigits.minimum(), significantDigits.maximum());
-            return constructor.finish(pluralRules);
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
-    }
-
-    private static void defineDigitRange(JSObject options, boolean significant, int minimum, int maximum) {
-        IntlBuiltins.createDataProperty(options, significant ? "minimumSignificantDigits" : "minimumFractionDigits",
-                JSNumber.of(minimum));
-        IntlBuiltins.createDataProperty(options, significant ? "maximumSignificantDigits" : "maximumFractionDigits",
-                JSNumber.of(maximum));
     }
 
     private static int findFirstDigitIndex(String text) {
@@ -649,157 +584,5 @@ final class IntlNumberFormatBuiltins {
         context.throwRangeError(
                 "Invalid option value: " + JSTypeConversions.toString(context, useGroupingValue).value());
         return defaultValue;
-    }
-
-    // ---- New Locale prototype methods ----
-
-    static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
-            return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
-        }
-        JSObject resolvedOptions = context.createJSObject();
-        IntlBuiltins.createDataProperty(resolvedOptions, "locale",
-                new JSString(pluralRules.getLocale().toLanguageTag()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "type", new JSString(pluralRules.getType()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "notation", new JSString(pluralRules.getNotation()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "minimumIntegerDigits",
-                JSNumber.of(pluralRules.getMinimumIntegerDigits()));
-        if (pluralRules.getMinimumSignificantDigits() != null) {
-            defineDigitRange(resolvedOptions, true, pluralRules.getMinimumSignificantDigits(),
-                    pluralRules.getMaximumSignificantDigits());
-        } else {
-            defineDigitRange(resolvedOptions, false, pluralRules.getMinimumFractionDigits(),
-                    pluralRules.getMaximumFractionDigits());
-        }
-        JSArray categories = context.createJSArray();
-        for (String category : pluralRules.getPluralCategories()) {
-            categories.push(new JSString(category));
-        }
-        IntlBuiltins.createDataProperty(resolvedOptions, "pluralCategories", categories);
-        return resolvedOptions;
-    }
-
-    static JSValue pluralRulesSelect(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
-            return context.throwTypeError("Intl.PluralRules.prototype.select called on incompatible receiver");
-        }
-        double value = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
-        return new JSString(pluralRules.select(value));
-    }
-
-    static JSValue pluralRulesSelectRange(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
-            return context.throwTypeError("Intl.PluralRules.prototype.selectRange called on incompatible receiver");
-        }
-        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
-        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
-        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
-            return context.throwTypeError("Intl.PluralRules.prototype.selectRange requires start and end");
-        }
-        double start = JSTypeConversions.toNumber(context, startValue).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        double end = JSTypeConversions.toNumber(context, endValue).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (Double.isNaN(start) || Double.isNaN(end)) {
-            return context.throwRangeError("NaN is not allowed in Intl.PluralRules.prototype.selectRange");
-        }
-        try {
-            return new JSString(pluralRules.selectRange(start, end));
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
-    }
-
-    private static int readMinimumIntegerDigits(JSContext context, JSObject options) {
-        Integer digits = IntlFormatOptions.getOptionIntegerOrUndefined(context, options, "minimumIntegerDigits", 1, 21);
-        return digits == null ? 1 : digits;
-    }
-
-    private static RoundingOptions readRoundingOptions(JSContext context, JSObject optionsObject,
-            boolean validateIncrement) {
-        Integer increment = IntlFormatOptions.getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement",
-                1, 5000);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        int roundingIncrement = increment == null ? 1 : increment;
-        if (validateIncrement && !VALID_ROUNDING_INCREMENTS.contains(roundingIncrement)) {
-            context.throwRangeError("Invalid roundingIncrement value: " + roundingIncrement);
-            return null;
-        }
-        String mode = IntlFormatOptions.normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand",
-                ROUNDING_MODE_VALUES);
-        String priority = IntlFormatOptions.normalizedStringOption(context, optionsObject, "roundingPriority", "auto",
-                ROUNDING_PRIORITY_VALUES);
-        String trailingZero = IntlFormatOptions.normalizedStringOption(context, optionsObject, "trailingZeroDisplay",
-                "auto", TRAILING_ZERO_DISPLAY_VALUES);
-        return context.hasPendingException()
-                ? null
-                : new RoundingOptions(roundingIncrement, mode, priority, trailingZero);
-    }
-
-    private record DigitOptions(String notation, int minimumIntegerDigits, DigitRange fractionDigits) {
-        static DigitOptions read(JSContext context, JSObject optionsObject) {
-            String notation = IntlFormatOptions.normalizedStringOption(context, optionsObject, "notation", "standard",
-                    NOTATION_VALUES);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            int minimum = readMinimumIntegerDigits(context, optionsObject);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            DigitRange fraction = DigitRange.readFraction(context, optionsObject);
-            return fraction == null ? null : new DigitOptions(notation, minimum, fraction);
-        }
-    }
-
-    private record DigitRange(Integer minimum, Integer maximum) {
-        static DigitRange readFraction(JSContext context, JSObject options) {
-            return read(context, options, "minimumFractionDigits", "maximumFractionDigits", 0, 100);
-        }
-
-        static DigitRange readSignificant(JSContext context, JSObject options) {
-            return read(context, options, "minimumSignificantDigits", "maximumSignificantDigits", 1, 21);
-        }
-
-        static DigitRange read(JSContext context, JSObject options, String minKey, String maxKey, int low, int high) {
-            Integer min = IntlFormatOptions.getOptionIntegerOrUndefined(context, options, minKey, low, high);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            Integer max = IntlFormatOptions.getOptionIntegerOrUndefined(context, options, maxKey, low, high);
-            return context.hasPendingException() ? null : new DigitRange(min, max);
-        }
-
-        boolean specified() {
-            return minimum != null || maximum != null;
-        }
-
-        DigitRange resolveFraction(int defaultMin, int defaultMax) {
-            int min = minimum != null ? minimum : maximum == null ? defaultMin : Math.min(defaultMin, maximum);
-            int max = maximum != null ? maximum : Math.max(min, defaultMax);
-            if (min > max) {
-                throw new IllegalArgumentException("minimumFractionDigits value is out of range");
-            }
-            return new DigitRange(min, max);
-        }
-
-        DigitRange resolveSignificant() {
-            int min = minimum == null ? 1 : minimum;
-            int max = maximum == null ? 21 : maximum;
-            if (min > max) {
-                throw new IllegalArgumentException("minimumSignificantDigits value is out of range");
-            }
-            return new DigitRange(min, max);
-        }
-    }
-
-    private record RoundingOptions(int roundingIncrement, String roundingMode, String roundingPriority,
-            String trailingZeroDisplay) {
     }
 }
