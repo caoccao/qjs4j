@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for Intl object and Intl.* constructors.
@@ -38,10 +35,8 @@ public class JSIntlObjectTest extends BaseJavetTest {
                 """
                         Intl.Collator.supportedLocalesOf(['en-US', 'fr-FR']).length >= 2""");
 
-        assertThatThrownBy(() -> context.eval("Intl.Collator.prototype.compare.call({}, 'a', 'b')"))
-                .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.Collator('')")).isInstanceOf(JSException.class)
-                .hasMessageContaining("RangeError");
+        assertEvalThrows("Intl.Collator.prototype.compare.call({}, 'a', 'b')", "TypeError");
+        assertEvalThrows("new Intl.Collator('')", "RangeError");
     }
 
     @Test
@@ -72,12 +67,9 @@ public class JSIntlObjectTest extends BaseJavetTest {
                         var resolvedOptions = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).resolvedOptions();
                         typeof resolvedOptions.locale === 'string' && typeof resolvedOptions.timeZone === 'string'""");
 
-        assertThatThrownBy(() -> context.eval("Intl.DateTimeFormat.prototype.format.call({}, 1704067200000)"))
-                .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.DateTimeFormat('', { dateStyle: 'short' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
-        assertThatThrownBy(() -> context.eval("new Intl.DateTimeFormat('en-US', { dateStyle: 'invalid-style' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
+        assertEvalThrows("Intl.DateTimeFormat.prototype.format.call({}, 1704067200000)", "TypeError");
+        assertEvalThrows("new Intl.DateTimeFormat('', { dateStyle: 'short' })", "RangeError");
+        assertEvalThrows("new Intl.DateTimeFormat('en-US', { dateStyle: 'invalid-style' })", "RangeError");
     }
 
     @Test
@@ -86,10 +78,8 @@ public class JSIntlObjectTest extends BaseJavetTest {
                 "JSON.stringify(Intl.NumberFormat.supportedLocalesOf(['en-US', 'fr-FR', 'en-US']))",
                 "JSON.stringify(Intl.Collator.supportedLocalesOf(['de-DE']))");
 
-        assertThatThrownBy(() -> context.eval("Intl.getCanonicalLocales([''])")).isInstanceOf(JSException.class)
-                .hasMessageContaining("RangeError");
-        assertThatThrownBy(() -> context.eval("Intl.NumberFormat.supportedLocalesOf([''])"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
+        assertEvalThrows("Intl.getCanonicalLocales([''])", "RangeError");
+        assertEvalThrows("Intl.NumberFormat.supportedLocalesOf([''])", "RangeError");
     }
 
     @Test
@@ -121,12 +111,10 @@ public class JSIntlObjectTest extends BaseJavetTest {
                         var resolvedOptions = new Intl.ListFormat('en-US', { style: 'narrow', type: 'unit' }).resolvedOptions();
                         resolvedOptions.style === 'narrow' && resolvedOptions.type === 'unit'""");
 
-        assertThatThrownBy(() -> context.eval("Intl.ListFormat.prototype.format.call({}, ['a', 'b'])"))
-                .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
+        assertEvalThrows("Intl.ListFormat.prototype.format.call({}, ['a', 'b'])", "TypeError");
         // Strings are iterable and yield single-character strings, so format() accepts them per spec
         assertBooleanWithJavet("typeof new Intl.ListFormat('en-US').format('abc') === 'string'");
-        assertThatThrownBy(() -> context.eval("new Intl.ListFormat('', { style: 'short' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
+        assertEvalThrows("new Intl.ListFormat('', { style: 'short' })", "RangeError");
     }
 
     @Test
@@ -139,12 +127,9 @@ public class JSIntlObjectTest extends BaseJavetTest {
                         var locale = new Intl.Locale('en');
                         locale.baseName === 'en' && locale.region === undefined && locale.script === undefined""");
 
-        assertThatThrownBy(() -> context.eval("Intl.Locale('en-US')")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.Locale()")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.Locale('')")).isInstanceOf(JSException.class)
-                .hasMessageContaining("RangeError");
+        assertEvalThrows("Intl.Locale('en-US')", "TypeError");
+        assertEvalThrows("new Intl.Locale()", "TypeError");
+        assertEvalThrows("new Intl.Locale('')", "RangeError");
     }
 
     @Test
@@ -159,14 +144,10 @@ public class JSIntlObjectTest extends BaseJavetTest {
                         var numberFormat = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
                         numberFormat.resolvedOptions().currency === 'USD'""");
 
-        assertThatThrownBy(() -> context.eval("Intl.NumberFormat.prototype.format.call({}, 1)"))
-                .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.NumberFormat('', { style: 'decimal' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
-        assertThatThrownBy(() -> context.eval("new Intl.NumberFormat('en-US', { style: 'currency', currency: 'US' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
-        assertThatThrownBy(() -> context.eval("new Intl.NumberFormat('en-US', { style: 'bad-style' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
+        assertEvalThrows("Intl.NumberFormat.prototype.format.call({}, 1)", "TypeError");
+        assertEvalThrows("new Intl.NumberFormat('', { style: 'decimal' })", "RangeError");
+        assertEvalThrows("new Intl.NumberFormat('en-US', { style: 'currency', currency: 'US' })", "RangeError");
+        assertEvalThrows("new Intl.NumberFormat('en-US', { style: 'bad-style' })", "RangeError");
     }
 
     @Test
@@ -179,12 +160,9 @@ public class JSIntlObjectTest extends BaseJavetTest {
                 var resolvedOptions = new Intl.PluralRules('en-US').resolvedOptions();
                 resolvedOptions.type === 'cardinal' && Array.isArray(resolvedOptions.pluralCategories)""");
 
-        assertThatThrownBy(() -> context.eval("Intl.PluralRules.prototype.select.call({}, 1)"))
-                .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.PluralRules('', { type: 'cardinal' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
-        assertThatThrownBy(() -> context.eval("new Intl.PluralRules('en-US', { type: 'bad-type' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
+        assertEvalThrows("Intl.PluralRules.prototype.select.call({}, 1)", "TypeError");
+        assertEvalThrows("new Intl.PluralRules('', { type: 'cardinal' })", "RangeError");
+        assertEvalThrows("new Intl.PluralRules('en-US', { type: 'bad-type' })", "RangeError");
     }
 
     @Test
@@ -200,12 +178,9 @@ public class JSIntlObjectTest extends BaseJavetTest {
                         var relativeTimeFormat = new Intl.RelativeTimeFormat('en-US');
                         relativeTimeFormat.format(2, 'week').includes('2')""");
 
-        assertThatThrownBy(() -> context.eval("Intl.RelativeTimeFormat.prototype.format.call({}, 1, 'day')"))
-                .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.RelativeTimeFormat('', { numeric: 'always' })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
-        assertThatThrownBy(() -> context.eval("new Intl.RelativeTimeFormat('en-US').format(1, 'bad-unit')"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
+        assertEvalThrows("Intl.RelativeTimeFormat.prototype.format.call({}, 1, 'day')", "TypeError");
+        assertEvalThrows("new Intl.RelativeTimeFormat('', { numeric: 'always' })", "RangeError");
+        assertEvalThrows("new Intl.RelativeTimeFormat('en-US').format(1, 'bad-unit')", "RangeError");
     }
 
     @Test

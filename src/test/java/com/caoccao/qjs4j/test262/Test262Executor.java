@@ -182,33 +182,8 @@ public class Test262Executor {
      * @return the type name, or {@code null} when the value is not one the suite can require
      */
     private String errorConstructorName(JSValue thrown) {
-        // Order matters: the sealed subclasses before the base class they extend.
-        if (thrown instanceof JSAggregateError) {
-            return "AggregateError";
-        }
-        if (thrown instanceof JSEvalError) {
-            return "EvalError";
-        }
-        if (thrown instanceof JSRangeError) {
-            return "RangeError";
-        }
-        if (thrown instanceof JSReferenceError) {
-            return "ReferenceError";
-        }
-        if (thrown instanceof JSSuppressedError) {
-            return "SuppressedError";
-        }
-        if (thrown instanceof JSSyntaxError) {
-            return "SyntaxError";
-        }
-        if (thrown instanceof JSTypeError) {
-            return "TypeError";
-        }
-        if (thrown instanceof JSURIError) {
-            return "URIError";
-        }
-        if (thrown instanceof JSError) {
-            return "Error";
+        if (thrown instanceof JSError error) {
+            return error.getErrorName();
         }
         JSObject capturedHarnessErrorPrototype = harnessErrorPrototype.get();
         if (capturedHarnessErrorPrototype != null && thrown instanceof JSObject thrownObject) {
@@ -236,10 +211,37 @@ public class Test262Executor {
      * @return the result
      */
     private TestResult evaluate(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
-        if (test.hasFlag("async")) {
-            return executeAsync(context, runtime, code, test);
+        try {
+            if (syncTimeoutMs > 0) {
+                context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
+            }
+            AsyncCompletion done = test.hasFlag("async") ? new AsyncCompletion(context) : null;
+            context.eval(code, test.getPath().toString(), test.getVariant() == Test262TestCase.Variant.MODULE);
+            if (done == null) {
+                synchronized (runtime) {
+                    runtime.runJobs();
+                }
+            } else {
+                if (!done.await(context, runtime, asyncTimeoutMs)) {
+                    return TestResult.timeout(test);
+                }
+                if (done.error != null) {
+                    return test.getNegative() == null
+                            ? TestResult.fail(test, "Async error: " + describeAsyncFailure(done.error))
+                            : checkNegativeResult(done.error, test);
+                }
+            }
+            return test.getNegative() == null
+                    ? TestResult.pass(test)
+                    : TestResult.fail(test, "Expected error " + test.getNegative().getType() + " was not thrown");
+        } catch (JSTerminationException e) {
+            // The runner owns the deadline, so it can observe termination here.
+            return TestResult.timeout(test);
+        } catch (Exception e) {
+            return handleException(e, test);
+        } finally {
+            context.getVirtualMachine().setExecutionDeadline(0);
         }
-        return executeSync(context, runtime, code, test);
     }
 
     public TestResult execute(Test262TestCase test) {
@@ -325,85 +327,6 @@ public class Test262Executor {
         return result;
     }
 
-    private TestResult executeAsync(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
-        try {
-            // Set execution deadline to prevent hangs in eval/runJobs
-            if (syncTimeoutMs > 0) {
-                context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
-            }
-
-            JSObject globalObject = context.getGlobalObject();
-
-            // $DONE is called synchronously from within runJobs on the same thread,
-            // so a simple array is sufficient to capture the result. The value itself is kept,
-            // not a rendering of it: reducing an error to its message string is what let an
-            // arbitrary message satisfy a typed negative test.
-            JSValue[] doneResult = {null};
-            boolean[] doneCalled = {false};
-
-            JSNativeFunction doneFunction = new JSNativeFunction(context, "$DONE", 1, (childContext, thisArg, args) -> {
-                doneCalled[0] = true;
-                if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-                    doneResult[0] = args[0];
-                }
-                return JSUndefined.INSTANCE;
-            });
-
-            globalObject.set("$DONE", doneFunction);
-
-            // Execute test code (module source is evaluated as a module for top-level await)
-            context.eval(code, test.getPath().toString(), test.getVariant() == Test262TestCase.Variant.MODULE);
-
-            long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1);
-            while (!doneCalled[0] && System.currentTimeMillis() <= deadline) {
-                synchronized (runtime) {
-                    runtime.runJobs();
-                    context.processMicrotasks();
-                }
-                if (!doneCalled[0]) {
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-            }
-
-            if (!doneCalled[0]) {
-                return TestResult.timeout(test);
-            }
-
-            if (doneResult[0] != null) {
-                // $DONE was called with an error
-                if (test.getNegative() != null) {
-                    return checkNegativeResult(doneResult[0], test);
-                } else {
-                    return TestResult.fail(test, "Async error: " + describeAsyncFailure(doneResult[0]));
-                }
-            } else {
-                // $DONE was called without error
-                if (test.getNegative() != null) {
-                    return TestResult.fail(test, "Expected error " + test.getNegative().getType() + " was not thrown");
-                } else {
-                    return TestResult.pass(test);
-                }
-            }
-
-        } catch (JSException e) {
-            return handleException(e, test);
-        } catch (JSTerminationException e) {
-            // The runner is the host that set the deadline, so it is entitled to observe it. The
-            // engine no longer lets a script or any internal catch block intercept termination,
-            // which is why this needs its own clause: JSTerminationException is an Error.
-            return TestResult.timeout(test);
-        } catch (Exception e) {
-            return handleException(e, test);
-        } finally {
-            context.getVirtualMachine().setExecutionDeadline(0);
-        }
-    }
-
     /**
      * Compile the source and require that compilation is what fails.
      *
@@ -434,37 +357,6 @@ public class Test262Executor {
         }
         return TestResult.fail(test,
                 "Expected a parse-phase " + negative.getType() + " but the source compiled successfully");
-    }
-
-    private TestResult executeSync(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
-        try {
-            // Set execution deadline for sync tests to prevent hangs
-            if (syncTimeoutMs > 0) {
-                context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
-            }
-            context.eval(code, test.getPath().toString(), test.getVariant() == Test262TestCase.Variant.MODULE);
-            synchronized (runtime) {
-                runtime.runJobs();
-            }
-
-            if (test.getNegative() != null) {
-                return TestResult.fail(test, "Expected error " + test.getNegative().getType() + " was not thrown");
-            }
-            return TestResult.pass(test);
-
-        } catch (JSException e) {
-            return handleException(e, test);
-        } catch (JSTerminationException e) {
-            // The runner is the host that set the deadline, so it is entitled to observe it. The
-            // engine no longer lets a script or any internal catch block intercept termination,
-            // which is why this needs its own clause: JSTerminationException is an Error.
-            return TestResult.timeout(test);
-        } catch (Exception e) {
-            return handleException(e, test);
-        } finally {
-            // Clear the deadline after execution
-            context.getVirtualMachine().setExecutionDeadline(0);
-        }
     }
 
     public long getAsyncTimeoutMs() {
@@ -771,4 +663,40 @@ public class Test262Executor {
         return null;
     }
 
+    /** The runner thread calls $DONE during evaluation or while draining jobs. */
+    private static final class AsyncCompletion {
+        private boolean called;
+        private JSValue error;
+
+        AsyncCompletion(JSContext context) {
+            context.getGlobalObject().set("$DONE", new JSNativeFunction(context, "$DONE", 1, this::complete));
+        }
+
+        boolean await(JSContext context, JSRuntime runtime, long timeoutMs) {
+            long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 1);
+            while (!called && System.currentTimeMillis() <= deadline) {
+                synchronized (runtime) {
+                    runtime.runJobs();
+                    context.processMicrotasks();
+                }
+                if (!called) {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+            return called;
+        }
+
+        private JSValue complete(JSContext context, JSValue receiver, JSValue[] args) {
+            called = true;
+            if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
+                error = args[0];
+            }
+            return JSUndefined.INSTANCE;
+        }
+    }
 }

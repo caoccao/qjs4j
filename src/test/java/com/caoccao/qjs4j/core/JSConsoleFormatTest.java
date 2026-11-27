@@ -16,12 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,26 +27,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * expected lines are Node v24's output for the same calls; Node's string quoting and multi-line layout are not
  * reproduced, so the cases avoid quoted strings inside inspected values.
  */
-public class JSConsoleFormatTest extends BaseTest {
-    private ByteArrayOutputStream errStream;
-    private ByteArrayOutputStream outStream;
+public class JSConsoleFormatTest extends ConsoleOutputTestBase {
 
     private String log(String code) {
         outStream.reset();
         errStream.reset();
         context.eval(code);
-        return (outStream + errStream.toString()).replace(System.lineSeparator(), "\n");
-    }
-
-    @BeforeEach
-    @Override
-    public void setUp() throws Exception {
-        super.setUp();
-        outStream = new ByteArrayOutputStream();
-        errStream = new ByteArrayOutputStream();
-        JSConsole console = context.getJSGlobalObject().getConsole();
-        console.setOut(new PrintStream(outStream));
-        console.setErr(new PrintStream(errStream));
+        return out() + err();
     }
 
     @Test

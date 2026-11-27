@@ -16,47 +16,22 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseJavetTest;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for JSConsole. Uses custom PrintStreams to capture and verify output.
  */
-public class JSConsoleTest extends BaseJavetTest {
-    private static final String LINE_SEPARATOR = System.lineSeparator();
-    private ByteArrayOutputStream errStream;
-    private JSConsole jsConsole;
-    private ByteArrayOutputStream outStream;
-
-    private String err() {
-        return normalizeLineEndings(errStream.toString());
+public class JSConsoleTest extends ConsoleOutputTestBase {
+    private void assertStderr(String code, String expected) {
+        context.eval(code);
+        assertThat(err()).as(code).isEqualTo(expected);
     }
 
-    private String normalizeLineEndings(String value) {
-        if ("\n".equals(LINE_SEPARATOR)) {
-            return value;
-        }
-        return value.replace(LINE_SEPARATOR, "\n");
-    }
-
-    private String out() {
-        return normalizeLineEndings(outStream.toString());
-    }
-
-    @BeforeEach
-    public void setUp() throws Exception {
-        super.setUp();
-        errStream = new ByteArrayOutputStream();
-        outStream = new ByteArrayOutputStream();
-        jsConsole = context.getJSGlobalObject().getConsole();
-        jsConsole.setErr(new PrintStream(errStream));
-        jsConsole.setOut(new PrintStream(outStream));
+    private void assertStdout(String code, String expected) {
+        context.eval(code);
+        assertThat(out()).as(code).isEqualTo(expected);
     }
 
     @Test
@@ -83,42 +58,34 @@ public class JSConsoleTest extends BaseJavetTest {
 
     @Test
     public void testAssertFalseCondition() {
-        context.eval("console.assert(false, 'oops')");
-        assertThat(err()).isEqualTo("Assertion failed: oops\n");
+        assertStderr("console.assert(false, 'oops')", "Assertion failed: oops\n");
     }
 
     @Test
     public void testAssertFalseMultipleArgs() {
-        context.eval("console.assert(false, 'a', 'b', 42)");
-        assertThat(err()).isEqualTo("Assertion failed: a b 42\n");
+        assertStderr("console.assert(false, 'a', 'b', 42)", "Assertion failed: a b 42\n");
     }
 
     @Test
     public void testAssertFalseNoMessage() {
-        context.eval("console.assert(false)");
-        assertThat(err()).isEqualTo("Assertion failed:\n");
+        assertStderr("console.assert(false)", "Assertion failed:\n");
     }
 
     @Test
     public void testAssertFalsyValues() {
-        context.eval("console.assert(0, 'zero')");
-        assertThat(err()).isEqualTo("Assertion failed: zero\n");
+        assertStderr("console.assert(0, 'zero')", "Assertion failed: zero\n");
         errStream.reset();
-        context.eval("console.assert('', 'empty')");
-        assertThat(err()).isEqualTo("Assertion failed: empty\n");
+        assertStderr("console.assert('', 'empty')", "Assertion failed: empty\n");
         errStream.reset();
-        context.eval("console.assert(null, 'null')");
-        assertThat(err()).isEqualTo("Assertion failed: null\n");
+        assertStderr("console.assert(null, 'null')", "Assertion failed: null\n");
         errStream.reset();
-        context.eval("console.assert(undefined, 'undef')");
-        assertThat(err()).isEqualTo("Assertion failed: undef\n");
+        assertStderr("console.assert(undefined, 'undef')", "Assertion failed: undef\n");
     }
 
     @Test
     public void testAssertNoArgs() {
         // No args means condition is undefined (falsy)
-        context.eval("console.assert()");
-        assertThat(err()).isEqualTo("Assertion failed:\n");
+        assertStderr("console.assert()", "Assertion failed:\n");
     }
 
     @Test
@@ -181,26 +148,20 @@ public class JSConsoleTest extends BaseJavetTest {
 
     @Test
     public void testCountDefault() {
-        context.eval("console.count()");
-        assertThat(out()).isEqualTo("default: 1\n");
+        assertStdout("console.count()", "default: 1\n");
         outStream.reset();
-        context.eval("console.count()");
-        assertThat(out()).isEqualTo("default: 2\n");
+        assertStdout("console.count()", "default: 2\n");
         outStream.reset();
-        context.eval("console.count()");
-        assertThat(out()).isEqualTo("default: 3\n");
+        assertStdout("console.count()", "default: 3\n");
     }
 
     @Test
     public void testCountMultipleLabels() {
-        context.eval("console.count('a')");
-        assertThat(out()).isEqualTo("a: 1\n");
+        assertStdout("console.count('a')", "a: 1\n");
         outStream.reset();
-        context.eval("console.count('b')");
-        assertThat(out()).isEqualTo("b: 1\n");
+        assertStdout("console.count('b')", "b: 1\n");
         outStream.reset();
-        context.eval("console.count('a')");
-        assertThat(out()).isEqualTo("a: 2\n");
+        assertStdout("console.count('a')", "a: 2\n");
     }
 
     @Test
@@ -209,8 +170,7 @@ public class JSConsoleTest extends BaseJavetTest {
         context.eval("console.count()");
         outStream.reset();
         context.eval("console.countReset()");
-        context.eval("console.count()");
-        assertThat(out()).isEqualTo("default: 1\n");
+        assertStdout("console.count()", "default: 1\n");
     }
 
     @Test
@@ -219,8 +179,7 @@ public class JSConsoleTest extends BaseJavetTest {
         context.eval("console.count('b')");
         outStream.reset();
         context.eval("console.countReset('a')");
-        context.eval("console.count('b')");
-        assertThat(out()).isEqualTo("b: 2\n");
+        assertStdout("console.count('b')", "b: 2\n");
     }
 
     @Test
@@ -229,24 +188,20 @@ public class JSConsoleTest extends BaseJavetTest {
         context.eval("console.count('x')");
         outStream.reset();
         context.eval("console.countReset('x')");
-        context.eval("console.count('x')");
-        assertThat(out()).isEqualTo("x: 1\n");
+        assertStdout("console.count('x')", "x: 1\n");
     }
 
     @Test
     public void testCountUndefinedLabel() {
         // Explicit undefined should use "default"
-        context.eval("console.count(undefined)");
-        assertThat(out()).isEqualTo("default: 1\n");
+        assertStdout("console.count(undefined)", "default: 1\n");
     }
 
     @Test
     public void testCountWithLabel() {
-        context.eval("console.count('myLabel')");
-        assertThat(out()).isEqualTo("myLabel: 1\n");
+        assertStdout("console.count('myLabel')", "myLabel: 1\n");
         outStream.reset();
-        context.eval("console.count('myLabel')");
-        assertThat(out()).isEqualTo("myLabel: 2\n");
+        assertStdout("console.count('myLabel')", "myLabel: 2\n");
     }
 
     @Test
@@ -257,8 +212,7 @@ public class JSConsoleTest extends BaseJavetTest {
 
     @Test
     public void testDebug() {
-        context.eval("console.debug('debug message')");
-        assertThat(out()).isEqualTo("debug message\n");
+        assertStdout("console.debug('debug message')", "debug message\n");
     }
 
     @Test
@@ -270,124 +224,104 @@ public class JSConsoleTest extends BaseJavetTest {
 
     @Test
     public void testDir() {
-        context.eval("console.dir('hello')");
-        assertThat(out()).isEqualTo("hello\n");
+        assertStdout("console.dir('hello')", "hello\n");
     }
 
     @Test
     public void testDirxml() {
-        context.eval("console.dirxml('hello')");
-        assertThat(out()).isEqualTo("hello\n");
+        assertStdout("console.dirxml('hello')", "hello\n");
     }
 
     @Test
     public void testError() {
-        context.eval("console.error('error')");
-        assertThat(err()).isEqualTo("error\n");
+        assertStderr("console.error('error')", "error\n");
         assertThat(out()).isEmpty();
     }
 
     @Test
     public void testErrorMultipleArgs() {
-        context.eval("console.error('err', 42)");
-        assertThat(err()).isEqualTo("err 42\n");
+        assertStderr("console.error('err', 42)", "err 42\n");
     }
 
     @Test
     public void testErrorNoArgs() {
-        context.eval("console.error()");
-        assertThat(err()).isEqualTo("\n");
+        assertStderr("console.error()", "\n");
     }
 
     @Test
     public void testFormatValueBigInt() {
-        context.eval("console.log(123n)");
-        assertThat(out()).isEqualTo("123n\n");
+        assertStdout("console.log(123n)", "123n\n");
     }
 
     @Test
     public void testFormatValueEmptyArray() {
-        context.eval("console.log([])");
-        assertThat(out()).isEqualTo("[ ]\n");
+        assertStdout("console.log([])", "[ ]\n");
     }
 
     @Test
     public void testFormatValueEmptyString() {
-        context.eval("console.log('')");
-        assertThat(out()).isEqualTo("\n");
+        assertStdout("console.log('')", "\n");
     }
 
     @Test
     public void testFormatValueInfinity() {
-        context.eval("console.log(Infinity, -Infinity)");
-        assertThat(out()).isEqualTo("Infinity -Infinity\n");
+        assertStdout("console.log(Infinity, -Infinity)", "Infinity -Infinity\n");
     }
 
     @Test
     public void testFormatValueInvalidDateFallsBackToDateObject() {
-        context.eval("console.log(new Date(NaN))");
-        assertThat(out()).isEqualTo("Date {  }\n");
+        assertStdout("console.log(new Date(NaN))", "Date {  }\n");
     }
 
     @Test
     public void testFormatValueNaN() {
-        context.eval("console.log(NaN)");
-        assertThat(out()).isEqualTo("NaN\n");
+        assertStdout("console.log(NaN)", "NaN\n");
     }
 
     @Test
     public void testFormatValueNestedArray() {
-        context.eval("console.log([1, [2, 3], 4])");
-        assertThat(out()).isEqualTo("[ 1, [ 2, 3 ], 4 ]\n");
+        assertStdout("console.log([1, [2, 3], 4])", "[ 1, [ 2, 3 ], 4 ]\n");
     }
 
     @Test
     public void testFormatValueNestedStringQuoted() {
-        context.eval("console.log(['x'])");
-        assertThat(out()).isEqualTo("[ \"x\" ]\n");
+        assertStdout("console.log(['x'])", "[ \"x\" ]\n");
     }
 
     @Test
     public void testFormatValueRegExp() {
-        context.eval("console.log(/a/)");
-        assertThat(out()).isEqualTo("/a/\n");
+        assertStdout("console.log(/a/)", "/a/\n");
     }
 
     @Test
     public void testFormatValueRegExpEscapesSlash() {
-        context.eval("console.log(/a\\/b/)");
-        assertThat(out()).isEqualTo("/a\\/b/\n");
+        assertStdout("console.log(/a\\/b/)", "/a\\/b/\n");
     }
 
     @Test
     public void testFormatValueSparseArrayHoles() {
-        context.eval("console.log([,])");
-        assertThat(out()).isEqualTo("[ <1 empty item> ]\n");
+        assertStdout("console.log([,])", "[ <1 empty item> ]\n");
     }
 
     @Test
     public void testFormatValueSymbol() {
-        context.eval("console.log(Symbol('test'))");
-        assertThat(out()).isEqualTo("Symbol(test)\n");
+        assertStdout("console.log(Symbol('test'))", "Symbol(test)\n");
     }
 
     @Test
     public void testFormatValueTypedArray() {
-        context.eval("console.log(new Uint8Array([1, 2, 3]))");
-        assertThat(out()).isEqualTo("Uint8Array(3) [ 1, 2, 3 ]\n");
+        assertStdout("console.log(new Uint8Array([1, 2, 3]))", "Uint8Array(3) [ 1, 2, 3 ]\n");
     }
 
     @Test
     public void testFormatValueValidDateAsIsoString() {
-        context.eval("console.log(new Date('2020-01-01T00:00:00.000Z'))");
-        assertThat(out()).isEqualTo("2020-01-01T00:00:00.000Z\n");
+        assertStdout("console.log(new Date('2020-01-01T00:00:00.000Z'))", "2020-01-01T00:00:00.000Z\n");
     }
 
     @Test
     public void testGroupAffectsAssert() {
         context.eval("console.group()");
-        context.eval("console.assert(false, 'msg')");
-        assertThat(err()).isEqualTo("  Assertion failed: msg\n");
+        assertStderr("console.assert(false, 'msg')", "  Assertion failed: msg\n");
     }
 
     @Test
@@ -408,26 +342,21 @@ public class JSConsoleTest extends BaseJavetTest {
     @Test
     public void testGroupAffectsTrace() {
         context.eval("console.group()");
-        context.eval("console.trace('t')");
-        assertThat(err()).isEqualTo("  Trace: t\n");
+        assertStderr("console.trace('t')", "  Trace: t\n");
     }
 
     @Test
     public void testGroupAffectsWarnAndError() {
         context.eval("console.group()");
-        context.eval("console.warn('w')");
-        assertThat(err()).isEqualTo("  w\n");
-        context.eval("console.error('e')");
-        assertThat(err()).isEqualTo("  w\n  e\n");
+        assertStderr("console.warn('w')", "  w\n");
+        assertStderr("console.error('e')", "  w\n  e\n");
     }
 
     @Test
     public void testGroupCollapsed() {
-        context.eval("console.groupCollapsed('label')");
-        assertThat(out()).isEqualTo("label\n");
+        assertStdout("console.groupCollapsed('label')", "label\n");
         outStream.reset();
-        context.eval("console.log('indented')");
-        assertThat(out()).isEqualTo("  indented\n");
+        assertStdout("console.log('indented')", "  indented\n");
     }
 
     @Test
@@ -436,23 +365,20 @@ public class JSConsoleTest extends BaseJavetTest {
         context.eval("console.log('indented')");
         outStream.reset();
         context.eval("console.groupEnd()");
-        context.eval("console.log('normal')");
-        assertThat(out()).isEqualTo("normal\n");
+        assertStdout("console.log('normal')", "normal\n");
     }
 
     @Test
     public void testGroupEndAtZero() {
         // groupEnd when not in a group should be a no-op
         context.eval("console.groupEnd()");
-        context.eval("console.log('ok')");
-        assertThat(out()).isEqualTo("ok\n");
+        assertStdout("console.log('ok')", "ok\n");
     }
 
     @Test
     public void testGroupIndent() {
         context.eval("console.group()");
-        context.eval("console.log('indented')");
-        assertThat(out()).isEqualTo("  indented\n");
+        assertStdout("console.log('indented')", "  indented\n");
     }
 
     @Test
@@ -461,80 +387,67 @@ public class JSConsoleTest extends BaseJavetTest {
         String output = out();
         assertThat(output).isEqualTo("label\n");
         outStream.reset();
-        context.eval("console.log('indented')");
-        assertThat(out()).isEqualTo("  indented\n");
+        assertStdout("console.log('indented')", "  indented\n");
     }
 
     @Test
     public void testInfo() {
-        context.eval("console.info('info message')");
-        assertThat(out()).isEqualTo("info message\n");
+        assertStdout("console.info('info message')", "info message\n");
     }
 
     @Test
     public void testLog() {
-        context.eval("console.log('hello')");
-        assertThat(out()).isEqualTo("hello\n");
+        assertStdout("console.log('hello')", "hello\n");
     }
 
     @Test
     public void testLogAnonymousFunction() {
-        context.eval("console.log(function () {})");
-        assertThat(out()).isEqualTo("[Function (anonymous)]\n");
+        assertStdout("console.log(function () {})", "[Function (anonymous)]\n");
     }
 
     @Test
     public void testLogArray() {
-        context.eval("console.log([1, 2, 3])");
-        assertThat(out()).isEqualTo("[ 1, 2, 3 ]\n");
+        assertStdout("console.log([1, 2, 3])", "[ 1, 2, 3 ]\n");
     }
 
     @Test
     public void testLogBoolean() {
-        context.eval("console.log(true, false)");
-        assertThat(out()).isEqualTo("true false\n");
+        assertStdout("console.log(true, false)", "true false\n");
     }
 
     @Test
     public void testLogMixedTypes() {
-        context.eval("console.log('count:', 42, true, null, undefined)");
-        assertThat(out()).isEqualTo("count: 42 true null undefined\n");
+        assertStdout("console.log('count:', 42, true, null, undefined)", "count: 42 true null undefined\n");
     }
 
     @Test
     public void testLogMultipleArgs() {
-        context.eval("console.log('a', 'b', 'c')");
-        assertThat(out()).isEqualTo("a b c\n");
+        assertStdout("console.log('a', 'b', 'c')", "a b c\n");
     }
 
     @Test
     public void testLogNamedFunction() {
-        context.eval("console.log(function f() {})");
-        assertThat(out()).isEqualTo("[Function f]\n");
+        assertStdout("console.log(function f() {})", "[Function f]\n");
     }
 
     @Test
     public void testLogNoArgs() {
-        context.eval("console.log()");
-        assertThat(out()).isEqualTo("\n");
+        assertStdout("console.log()", "\n");
     }
 
     @Test
     public void testLogNull() {
-        context.eval("console.log(null)");
-        assertThat(out()).isEqualTo("null\n");
+        assertStdout("console.log(null)", "null\n");
     }
 
     @Test
     public void testLogNumber() {
-        context.eval("console.log(42)");
-        assertThat(out()).isEqualTo("42\n");
+        assertStdout("console.log(42)", "42\n");
     }
 
     @Test
     public void testLogObject() {
-        context.eval("console.log({})");
-        assertThat(out()).isEqualTo("{  }\n");
+        assertStdout("console.log({})", "{  }\n");
     }
 
     @Test
@@ -546,26 +459,22 @@ public class JSConsoleTest extends BaseJavetTest {
 
     @Test
     public void testLogObjectWithNonAsciiPropertyKey() {
-        context.eval("console.log({ 'é': 1 })");
-        assertThat(out()).isEqualTo("{ \"é\": 1 }\n");
+        assertStdout("console.log({ 'é': 1 })", "{ \"é\": 1 }\n");
     }
 
     @Test
     public void testLogObjectWithProperties() {
-        context.eval("console.log({ a: 1, b: 'x' })");
-        assertThat(out()).isEqualTo("{ a: 1, b: \"x\" }\n");
+        assertStdout("console.log({ a: 1, b: 'x' })", "{ a: 1, b: \"x\" }\n");
     }
 
     @Test
     public void testLogObjectWithQuotedPropertyKey() {
-        context.eval("console.log({ 'a b': 1 })");
-        assertThat(out()).isEqualTo("{ \"a b\": 1 }\n");
+        assertStdout("console.log({ 'a b': 1 })", "{ \"a b\": 1 }\n");
     }
 
     @Test
     public void testLogUndefined() {
-        context.eval("console.log(undefined)");
-        assertThat(out()).isEqualTo("undefined\n");
+        assertStdout("console.log(undefined)", "undefined\n");
     }
 
     @Test
@@ -583,14 +492,12 @@ public class JSConsoleTest extends BaseJavetTest {
     public void testNestedGroups() {
         context.eval("console.group()");
         context.eval("console.group()");
-        context.eval("console.log('deep')");
-        assertThat(out()).isEqualTo("    deep\n");
+        assertStdout("console.log('deep')", "    deep\n");
     }
 
     @Test
     public void testTable() {
-        context.eval("console.table([1, 2])");
-        assertThat(out()).isEqualTo("[ 1, 2 ]\n");
+        assertStdout("console.table([1, 2])", "[ 1, 2 ]\n");
     }
 
     @Test
@@ -657,38 +564,32 @@ public class JSConsoleTest extends BaseJavetTest {
 
     @Test
     public void testTrace() {
-        context.eval("console.trace('msg')");
-        assertThat(err()).isEqualTo("Trace: msg\n");
+        assertStderr("console.trace('msg')", "Trace: msg\n");
     }
 
     @Test
     public void testTraceMultipleArgs() {
-        context.eval("console.trace('a', 'b')");
-        assertThat(err()).isEqualTo("Trace: a b\n");
+        assertStderr("console.trace('a', 'b')", "Trace: a b\n");
     }
 
     @Test
     public void testTraceNoArgs() {
-        context.eval("console.trace()");
-        assertThat(err()).isEqualTo("Trace:\n");
+        assertStderr("console.trace()", "Trace:\n");
     }
 
     @Test
     public void testWarn() {
-        context.eval("console.warn('warning')");
-        assertThat(err()).isEqualTo("warning\n");
+        assertStderr("console.warn('warning')", "warning\n");
         assertThat(out()).isEmpty();
     }
 
     @Test
     public void testWarnMultipleArgs() {
-        context.eval("console.warn('a', 'b')");
-        assertThat(err()).isEqualTo("a b\n");
+        assertStderr("console.warn('a', 'b')", "a b\n");
     }
 
     @Test
     public void testWarnNoArgs() {
-        context.eval("console.warn()");
-        assertThat(err()).isEqualTo("\n");
+        assertStderr("console.warn()", "\n");
     }
 }

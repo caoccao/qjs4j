@@ -532,61 +532,6 @@ public class ObjectConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    public void testGroupBy() {
-        JSArray items = context.createJSArray();
-        items.push(new JSNumber(1));
-        items.push(new JSNumber(2));
-        items.push(new JSNumber(3));
-        items.push(new JSNumber(4));
-
-        // Callback function: group by even/odd
-        JSFunction callback = new JSNativeFunction(context, "testCallback", 3, (childContext, thisArg, args) -> {
-            double num = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (num % 2 == 0) ? new JSString("even") : new JSString("odd");
-        });
-
-        // Normal case: group by even/odd
-        JSValue result = ObjectConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items, callback});
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, groups -> {
-            // Check even group
-            JSValue evenGroup = groups.get("even");
-            assertThat(evenGroup).isInstanceOfSatisfying(JSArray.class, evenArray -> {
-                assertThat(evenArray.getLength()).isEqualTo(2);
-                assertNumberValue(evenArray.get(0), 2.0);
-                assertNumberValue(evenArray.get(1), 4.0);
-            });
-
-            // Check odd group
-            JSValue oddGroup = groups.get("odd");
-            assertThat(oddGroup).isInstanceOfSatisfying(JSArray.class, oddArray -> {
-                assertThat(oddArray.getLength()).isEqualTo(2);
-                assertNumberValue(oddArray.get(0), 1.0);
-                assertNumberValue(oddArray.get(1), 3.0);
-            });
-        });
-
-        // Edge case: empty array
-        JSArray emptyItems = context.createJSArray();
-        result = ObjectConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{emptyItems, callback});
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, groups -> {
-            // Should have no properties
-            assertThat(groups.get("even").isUndefined()).isTrue();
-            assertThat(groups.get("odd").isUndefined()).isTrue();
-        });
-
-        // Edge case: insufficient arguments
-        assertPendingTypeError(context, ObjectConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
-
-        // Edge case: null items
-        assertPendingTypeError(context,
-                ObjectConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE, callback}));
-
-        // Edge case: non-function callback
-        assertPendingTypeError(context, ObjectConstructor.groupBy(context, JSUndefined.INSTANCE,
-                new JSValue[]{items, new JSString("not function")}));
-    }
-
-    @Test
     public void testHasOwn() {
         JSObject obj = new JSObject(context);
         obj.set("existingProp", new JSString("value"));

@@ -63,8 +63,7 @@ public class FinalizationRegistryConstructorTest extends BaseJavetTest {
 
     @Test
     public void testNewWithNoArgs() {
-        assertThatThrownBy(() -> context.eval("new FinalizationRegistry()")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+        assertEvalThrows("new FinalizationRegistry()", "TypeError");
     }
 
     @Test

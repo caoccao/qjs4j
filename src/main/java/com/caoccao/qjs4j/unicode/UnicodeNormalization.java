@@ -32,14 +32,7 @@ public final class UnicodeNormalization {
             return true;
         }
 
-        Normalizer.Form javaForm = switch (form) {
-            case NFC -> Normalizer.Form.NFC;
-            case NFD -> Normalizer.Form.NFD;
-            case NFKC -> Normalizer.Form.NFKC;
-            case NFKD -> Normalizer.Form.NFKD;
-        };
-
-        return Normalizer.isNormalized(input, javaForm);
+        return Normalizer.isNormalized(input, form.javaForm);
     }
 
     /**
@@ -84,14 +77,7 @@ public final class UnicodeNormalization {
             return input;
         }
 
-        Normalizer.Form javaForm = switch (form) {
-            case NFC -> Normalizer.Form.NFC;
-            case NFD -> Normalizer.Form.NFD;
-            case NFKC -> Normalizer.Form.NFKC;
-            case NFKD -> Normalizer.Form.NFKD;
-        };
-
-        return Normalizer.normalize(input, javaForm);
+        return Normalizer.normalize(input, form.javaForm);
     }
 
     /**
@@ -129,21 +115,26 @@ public final class UnicodeNormalization {
         /**
          * Canonical Decomposition, followed by Canonical Composition.
          */
-        NFC,
+        NFC(Normalizer.Form.NFC),
 
         /**
          * Canonical Decomposition.
          */
-        NFD,
+        NFD(Normalizer.Form.NFD),
 
         /**
          * Compatibility Decomposition, followed by Canonical Composition.
          */
-        NFKC,
+        NFKC(Normalizer.Form.NFKC),
 
         /**
          * Compatibility Decomposition.
          */
-        NFKD
+        NFKD(Normalizer.Form.NFKD);
+        private final Normalizer.Form javaForm;
+
+        Form(Normalizer.Form javaForm) {
+            this.javaForm = javaForm;
+        }
     }
 }

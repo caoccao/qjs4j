@@ -460,6 +460,18 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testReviverSourceForSubstitutedObjectWithEmptyKey() {
+        assertBooleanWithJavet("""
+                let observed;
+                JSON.parse('{"first":1,"second":2}', function (key, value, context) {
+                    if (key === 'first') this.second = { '': 42 };
+                    if (key === '' && value === 42) observed = !('source' in context);
+                    return value;
+                });
+                observed""");
+    }
+
+    @Test
     public void testRoundTrip() {
         // Test round-trip: stringify then parse
         JSObject original = new JSObject(context);

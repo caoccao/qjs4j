@@ -1503,7 +1503,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSError throwAggregateError(String message) {
-        return errorReporter.throwAggregateError(message);
+        return errorReporter.throwError(JSAggregateError.NAME, message);
     }
 
     public JSError throwError(JSError jsError) {
@@ -1527,35 +1527,35 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSError throwEvalError(String message) {
-        return errorReporter.throwEvalError(message);
+        return errorReporter.throwError(JSEvalError.NAME, message);
     }
 
     public JSError throwRangeError(String message) {
-        return errorReporter.throwRangeError(message);
+        return errorReporter.throwError(JSRangeError.NAME, message);
     }
 
     public JSError throwReferenceError(String message) {
-        return errorReporter.throwReferenceError(message);
+        return errorReporter.throwError(JSReferenceError.NAME, message);
     }
 
     public JSError throwSyntaxError(String message) {
-        return errorReporter.throwSyntaxError(message);
+        return errorReporter.throwError(JSSyntaxError.NAME, message);
     }
 
     public JSError throwSyntaxError(String message, SourceLocation sourceLocation) {
-        return errorReporter.throwSyntaxError(message, sourceLocation);
+        return errorReporter.throwError(JSSyntaxError.NAME, message, sourceLocation);
     }
 
     public JSError throwTypeError(String message) {
-        return errorReporter.throwTypeError(message);
+        return errorReporter.throwError(JSTypeError.NAME, message);
     }
 
     public JSError throwTypeError(String message, SourceLocation sourceLocation) {
-        return errorReporter.throwTypeError(message, sourceLocation);
+        return errorReporter.throwError(JSTypeError.NAME, message, sourceLocation);
     }
 
     public JSError throwURIError(String message) {
-        return errorReporter.throwURIError(message);
+        return errorReporter.throwError(JSURIError.NAME, message);
     }
 
     public boolean transferPrototype(JSObject receiver, JSObject constructor) {

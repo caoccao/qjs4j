@@ -1102,42 +1102,6 @@ public final class JSProxy extends JSObject {
     }
 
     /**
-     * SameValue comparison (ES2020 7.2.10).
-     */
-    private boolean sameValue(Object a, Object b) {
-        if (a == b) {
-            return true;
-        }
-        if (a == null || b == null) {
-            return false;
-        }
-        if (a instanceof JSValue valA && b instanceof JSValue valB) {
-            // Simplified comparison - should use full SameValue algorithm
-            if (valA instanceof JSNumber numA && valB instanceof JSNumber numB) {
-                double da = numA.value();
-                double db = numB.value();
-                // Handle NaN case
-                if (Double.isNaN(da) && Double.isNaN(db)) {
-                    return true;
-                }
-                // Handle -0 vs +0
-                if (da == 0 && db == 0) {
-                    return Double.doubleToRawLongBits(da) == Double.doubleToRawLongBits(db);
-                }
-                return da == db;
-            }
-            if (valA instanceof JSString strA && valB instanceof JSString strB) {
-                return strA.value().equals(strB.value());
-            }
-            if (valA instanceof JSBoolean boolA && valB instanceof JSBoolean boolB) {
-                return boolA == boolB;
-            }
-            return valA == valB;
-        }
-        return a.equals(b);
-    }
-
-    /**
      * Override set to intercept property assignment by index.
      */
     @Override

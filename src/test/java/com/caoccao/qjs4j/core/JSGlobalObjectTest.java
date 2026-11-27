@@ -406,8 +406,7 @@ public class JSGlobalObjectTest extends BaseJavetTest {
 
     @Test
     public void testIdentifierResolutionWithReferenceErrorAndTypeof() {
-        assertThatThrownBy(() -> context.eval("missingIdentifier;")).isInstanceOf(JSException.class)
-                .hasMessageContaining("ReferenceError");
+        assertEvalThrows("missingIdentifier;", "ReferenceError");
         assertStringWithJavet("typeof missingIdentifier");
         assertBooleanWithJavet("""
                 (() => {

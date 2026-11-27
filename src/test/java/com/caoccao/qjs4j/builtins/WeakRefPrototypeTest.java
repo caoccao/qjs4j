@@ -1,10 +1,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for WeakRef.prototype methods.
@@ -56,7 +53,6 @@ public class WeakRefPrototypeTest extends BaseJavetTest {
 
     @Test
     void testWeakRefPrototypeDerefReceiverValidation() {
-        assertThatThrownBy(() -> context.eval("WeakRef.prototype.deref.call({})")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+        assertEvalThrows("WeakRef.prototype.deref.call({})", "TypeError");
     }
 }

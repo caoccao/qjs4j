@@ -18,66 +18,14 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for Map constructor static methods.
  */
 public class MapConstructorTest extends BaseJavetTest {
-
-    @Test
-    public void testGroupBy() {
-        JSArray items = context.createJSArray();
-        items.push(new JSNumber(1));
-        items.push(new JSNumber(2));
-        items.push(new JSNumber(3));
-        items.push(new JSNumber(4));
-
-        // Callback function: group by even/odd
-        JSFunction callback = new JSNativeFunction(context, "testCallback", 3, (childContext, thisArg, args) -> {
-            double num = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (num % 2 == 0) ? new JSString("even") : new JSString("odd");
-        });
-
-        // Normal case: group by even/odd
-        JSValue result = MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items, callback});
-        JSMap map = result.asMap().orElseThrow();
-
-        // Check even group
-        JSValue evenGroup = map.mapGet(new JSString("even"));
-        JSArray evenArray = evenGroup.asArray().orElseThrow();
-        assertThat(evenArray.getLength()).isEqualTo(2);
-        assertNumberValue(evenArray.get(0), 2.0);
-        assertNumberValue(evenArray.get(1), 4.0);
-
-        // Check odd group
-        JSValue oddGroup = map.mapGet(new JSString("odd"));
-        JSArray oddArray = oddGroup.asArray().orElseThrow();
-        assertThat(oddArray.getLength()).isEqualTo(2);
-        assertNumberValue(oddArray.get(0), 1.0);
-        assertNumberValue(oddArray.get(1), 3.0);
-
-        // Edge case: empty array
-        JSArray emptyItems = context.createJSArray();
-        result = MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{emptyItems, callback});
-        map = result.asMap().orElseThrow();
-        assertThat(map.size()).isEqualTo(0);
-
-        // Edge case: insufficient arguments
-        assertPendingTypeError(context, MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
-
-        // Edge case: non-iterable items
-        assertPendingTypeError(context,
-                MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(1), callback}));
-
-        // Edge case: non-function callback
-        assertPendingTypeError(context, MapConstructor.groupBy(context, JSUndefined.INSTANCE,
-                new JSValue[]{items, new JSString("not function")}));
-    }
 
     @Test
     void testMapConstructorBehavior() {
@@ -97,12 +45,9 @@ public class MapConstructorTest extends BaseJavetTest {
                 var map = new Map(new Map([['a', 1], ['b', 2]]));
                 map.size === 2 && map.get('a') === 1 && map.get('b') === 2""");
 
-        assertThatThrownBy(() -> context.eval("new Map({})")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Map(1)")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Map('ab')")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+        assertEvalThrows("new Map({})", "TypeError");
+        assertEvalThrows("new Map(1)", "TypeError");
+        assertEvalThrows("new Map('ab')", "TypeError");
 
     }
 

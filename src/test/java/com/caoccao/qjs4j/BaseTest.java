@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +50,11 @@ public abstract class BaseTest {
                         }
                     });
         });
+    }
+
+    protected void assertEvalThrows(String source, String expectedMessage) {
+        assertThatThrownBy(() -> context.eval(source)).as(source).isInstanceOf(JSException.class)
+                .hasMessageContaining(expectedMessage);
     }
 
     protected void assertIteratorResult(JSValue result, JSValue expectedValue, boolean done) {

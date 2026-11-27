@@ -1059,9 +1059,9 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThatThrownBy(() -> context
                 .eval("new Set([1]).intersection({ size: 1, has: 1, keys() { return [1][Symbol.iterator](); } })"))
                 .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval(
-                "new Set([1]).isSubsetOf({ size: -1, has() { return true; }, keys() { return [][Symbol.iterator](); } })"))
-                .isInstanceOf(JSException.class).hasMessageContaining("RangeError");
+        assertEvalThrows(
+                "new Set([1]).isSubsetOf({ size: -1, has() { return true; }, keys() { return [][Symbol.iterator](); } })",
+                "RangeError");
     }
 
     @Test

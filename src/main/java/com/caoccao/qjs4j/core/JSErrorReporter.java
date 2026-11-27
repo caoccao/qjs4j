@@ -242,17 +242,6 @@ final class JSErrorReporter {
         return value >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) value;
     }
 
-    /**
-     * Throw a AggregateError.
-     *
-     * @param message
-     *            Error message
-     * @return The error value
-     */
-    JSError throwAggregateError(String message) {
-        return throwError(JSAggregateError.NAME, message);
-    }
-
     JSError throwError(JSError jsError) {
         context.transferPrototype(jsError, jsError.getErrorName());
         // Capture stack trace
@@ -318,80 +307,6 @@ final class JSErrorReporter {
             default -> new JSError(context, message, sourceLocation);
         };
         return throwError(jsError);
-    }
-
-    /**
-     * Throw a EvalError.
-     *
-     * @param message
-     *            Error message
-     * @return The error value
-     */
-    JSError throwEvalError(String message) {
-        return throwError(JSEvalError.NAME, message);
-    }
-
-    /**
-     * Throw a RangeError.
-     *
-     * @param message
-     *            Error message
-     * @return The error value
-     */
-    JSError throwRangeError(String message) {
-        return throwError(JSRangeError.NAME, message);
-    }
-
-    /**
-     * Throw a ReferenceError.
-     *
-     * @param message
-     *            Error message
-     * @return The error value
-     */
-    JSError throwReferenceError(String message) {
-        return throwError(JSReferenceError.NAME, message);
-    }
-
-    /**
-     * Throw a SyntaxError.
-     *
-     * @param message
-     *            Error message
-     * @return The error value
-     */
-    JSError throwSyntaxError(String message) {
-        return throwError(JSSyntaxError.NAME, message);
-    }
-
-    JSError throwSyntaxError(String message, SourceLocation sourceLocation) {
-        return throwError(JSSyntaxError.NAME, message, sourceLocation);
-    }
-
-    /**
-     * Throw a TypeError.
-     *
-     * @param message
-     *            Error message
-     * @return The error value
-     */
-    JSError throwTypeError(String message) {
-        return throwError(JSTypeError.NAME, message);
-    }
-
-    JSError throwTypeError(String message, SourceLocation sourceLocation) {
-        return throwError(JSTypeError.NAME, message, sourceLocation);
-    }
-
-    /**
-     * Throw a URIError.
-     *
-     * @param message
-     *            Error message
-     * @return The error value
-     */
-    JSError throwURIError(String message) {
-        return throwError(JSURIError.NAME, message);
     }
 
     private static void appendStackFrame(StringBuilder stackTrace, StackFrame frame, JSObject globalObject) {

@@ -58,18 +58,33 @@ public final class WeakMapPrototype {
      * WeakMap.prototype.getOrInsert(key, defaultValue) QuickJS extension.
      */
     public static JSValue getOrInsert(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
-            return context.throwTypeError("WeakMap.prototype.getOrInsert called on non-WeakMap");
+        return getOrInsert(context, thisArg, args, false);
+    }
+
+    private static JSValue getOrInsert(JSContext context, JSValue receiver, JSValue[] args, boolean computed) {
+        if (!(receiver instanceof JSWeakMap map)) {
+            String method = computed ? "getOrInsertComputed" : "getOrInsert";
+            return context.throwTypeError("WeakMap.prototype." + method + " called on non-WeakMap");
+        }
+        JSValue value = JSValue.argumentOrUndefined(args, 1);
+        if (computed && !(value instanceof JSFunction)) {
+            return context.throwTypeError("not a function");
         }
         JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakMap.isWeakMapKey(key)) {
             return context.throwTypeError("Invalid value used as weak map key");
         }
-        if (jsWeakMap.weakMapHas(key)) {
-            return jsWeakMap.weakMapGet(key);
+        if (map.weakMapHas(key)) {
+            return map.weakMapGet(key);
         }
-        JSValue value = JSValue.argumentOrUndefined(args, 1);
-        jsWeakMap.weakMapSet(key, value);
+        if (computed) {
+            value = ((JSFunction) value).call(context, JSUndefined.INSTANCE, new JSValue[]{key});
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            map.weakMapDelete(key);
+        }
+        map.weakMapSet(key, value);
         return value;
     }
 
@@ -77,27 +92,7 @@ public final class WeakMapPrototype {
      * WeakMap.prototype.getOrInsertComputed(key, callback) QuickJS extension.
      */
     public static JSValue getOrInsertComputed(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
-            return context.throwTypeError("WeakMap.prototype.getOrInsertComputed called on non-WeakMap");
-        }
-        if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
-            return context.throwTypeError("not a function");
-        }
-        JSValue key = JSValue.argumentOrUndefined(args, 0);
-        if (!JSWeakMap.isWeakMapKey(key)) {
-            return context.throwTypeError("Invalid value used as weak map key");
-        }
-        if (jsWeakMap.weakMapHas(key)) {
-            return jsWeakMap.weakMapGet(key);
-        }
-
-        JSValue value = callback.call(context, JSUndefined.INSTANCE, new JSValue[]{key});
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        jsWeakMap.weakMapDelete(key);
-        jsWeakMap.weakMapSet(key, value);
-        return value;
+        return getOrInsert(context, thisArg, args, true);
     }
 
     /**

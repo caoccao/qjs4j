@@ -17,11 +17,9 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class SetConstructorTest extends BaseJavetTest {
 
@@ -77,10 +75,8 @@ public class SetConstructorTest extends BaseJavetTest {
                 var set = new Set('aba');
                 set.size === 2 && set.has('a') && set.has('b')""");
 
-        assertThatThrownBy(() -> context.eval("new Set({})")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Set(1)")).isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+        assertEvalThrows("new Set({})", "TypeError");
+        assertEvalThrows("new Set(1)", "TypeError");
 
     }
 
@@ -119,8 +115,7 @@ public class SetConstructorTest extends BaseJavetTest {
                 };
                 """);
         try {
-            assertThatThrownBy(() -> context.eval("new Set(__setIterable)")).isInstanceOf(JSException.class)
-                    .hasMessageContaining("boom");
+            assertEvalThrows("new Set(__setIterable)", "boom");
             assertThat(context.eval("__setAddCallCount + ':' + __setReturnCallCount").toJavaObject()).isEqualTo("2:1");
         } finally {
             context.eval("""

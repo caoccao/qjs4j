@@ -87,24 +87,17 @@ class Review02ResourcesTest extends BaseJavetTest {
 
     @Test
     void jsonSourceMetadataIsAbsentWithoutReviver() throws Exception {
-        Class<?> parseContextClass = Class.forName("com.caoccao.qjs4j.core.JSONObject$ParseContext");
-        var constructor = parseContextClass.getDeclaredConstructor(String.class, boolean.class);
-        constructor.setAccessible(true);
-        var parse = JSONObject.class.getDeclaredMethod("parseValue", parseContextClass, int.class);
-        parse.setAccessible(true);
-        JSONObject json = new JSONObject(context);
-        for (boolean track : new boolean[]{false, true}) {
-            Object parsing = constructor.newInstance("{\"a\":[1,2,3],\"b\":42}", track);
-            parse.invoke(json, parsing, 0);
-            for (String name : new String[]{"elementSources", "structuredRanges"}) {
-                var field = parseContextClass.getDeclaredField(name);
-                field.setAccessible(true);
-                if (track)
-                    assertThat((java.util.Map<?, ?>) field.get(parsing)).isNotEmpty();
-                else
-                    assertThat(field.get(parsing)).isNull();
-            }
-        }
+        var sources = JSONParser.class.getDeclaredField("elementSources");
+        sources.setAccessible(true);
+        String text = "{\"a\":[1,2,3],\"b\":42}";
+        JSONParser plain = new JSONParser(context, text, null);
+        plain.parse();
+        assertThat(sources.get(plain)).isNull();
+
+        JSFunction identity = new JSNativeFunction(context, "reviver", 2, (ctx, receiver, args) -> args[1]);
+        JSONParser tracked = new JSONParser(context, text, identity);
+        tracked.parse();
+        assertThat((java.util.Map<?, ?>) sources.get(tracked)).isNotEmpty();
     }
 
     @Test
