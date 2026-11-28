@@ -24,38 +24,37 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.ArrayList;
 import java.util.List;
 
-final class ExpressionAssignmentParser {
+final class ExpressionParser extends GrammarProduction {
 
-    private ExpressionAssignmentParser() {
+    ExpressionParser(ParserContext parserContext) {
+        super(parserContext);
     }
 
-    private static ArrowFunctionExpression finishArrow(ParserContext parserContext, FunctionParams params, ASTNode body,
-            boolean async, SourceLocation location) {
+    private ArrowFunctionExpression finishArrow(FunctionParams params, ASTNode body, boolean async,
+            SourceLocation location) {
         ParameterEarlyErrors.validateArrow(parserContext, params, body);
         if (body instanceof BlockStatement block) {
-            ParameterEarlyErrors.validateFormalsBodyDuplicate(params, block.getBody());
+            ParameterEarlyErrors.validateFormalsBodyDuplicate(params,
+                    DeclarationEarlyErrors.collectFunctionBodyLexicalNames(block.getBody()));
         }
-        return new ArrowFunctionExpression(params, body, async,
-                location.withEndOffset(parserContext.tokens.previousEnd()));
+        return new ArrowFunctionExpression(params, body, async, location.withEndOffset(tokens.previousEnd()));
     }
 
-    private static ArrowFunctionExpression parseArrowBody(ParserContext parserContext, FunctionParams params,
-            boolean async, SourceLocation location) {
+    private ArrowFunctionExpression parseArrowBody(FunctionParams params, boolean async, SourceLocation location) {
         parserContext.enterLexicalFunction(async);
         boolean enclosingStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         ASTNode body;
         try {
-            body = readArrowBody(parserContext);
+            body = readArrowBody();
         } finally {
             parserContext.inClassStaticInit = enclosingStaticInit;
             parserContext.exitLexicalFunction(async);
         }
-        return finishArrow(parserContext, params, body, async, location);
+        return finishArrow(params, body, async, location);
     }
 
-    static Expression parseAssignmentExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parseAssignmentExpression() {
         SourceLocation location = tokens.getLocation();
         // Save whether the current token is a direct identifier for fn-name inference (spec 13.15.2 step 1.c)
         TokenType startTokenType = tokens.current().type();
@@ -78,9 +77,8 @@ final class ExpressionAssignmentParser {
 
             if (!tokens.hasNewlineBefore()) {
                 if (tokens.match(TokenType.FUNCTION)) {
-                    Expression asyncFunc = FunctionClassParser.parseFunctionExpression(parserContext, true,
-                            asyncLocation);
-                    return ExpressionPrimaryParser.parsePostPrimaryExpression(parserContext, asyncFunc, location);
+                    Expression asyncFunc = parserContext.functions.parseFunctionExpression(true, asyncLocation);
+                    return parserContext.primary.parsePostPrimaryExpression(asyncFunc);
                 }
 
                 if (tokens.current().type().isIdentifierCandidate() && tokens.nextIs(TokenType.ARROW)) {
@@ -92,20 +90,19 @@ final class ExpressionAssignmentParser {
                     }
                     tokens.expect(TokenType.ARROW);
 
-                    return parseArrowBody(parserContext, new FunctionParams(List.of(param), null, null), true,
-                            asyncLocation);
+                    return parseArrowBody(new FunctionParams(List.of(param), null, null), true, asyncLocation);
                 }
 
-                if (tokens.match(TokenType.LPAREN) && peekPastParensIsArrow(parserContext)) {
+                if (tokens.match(TokenType.LPAREN) && peekPastParensIsArrow()) {
                     parserContext.enterLexicalFunction(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
                         tokens.advance();
-                        FunctionParams funcParams = FunctionClassParser.parseFunctionParameters(parserContext);
+                        FunctionParams funcParams = parserContext.functions.parseFunctionParameters();
                         tokens.advance();
 
-                        return finishArrow(parserContext, funcParams, readArrowBody(parserContext), true, location);
+                        return finishArrow(funcParams, readArrowBody(), true, location);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
                         parserContext.exitLexicalFunction(true);
@@ -136,13 +133,13 @@ final class ExpressionAssignmentParser {
                 Expression argument = null;
                 if (delegate) {
                     // yield* requires an AssignmentExpression (no line terminator restriction)
-                    argument = parseAssignmentExpression(parserContext);
+                    argument = parseAssignmentExpression();
                 } else if (!tokens.hasNewlineBefore() && !tokens.match(TokenType.SEMICOLON)
                         && !tokens.match(TokenType.RBRACE) && !tokens.match(TokenType.RBRACKET)
                         && !tokens.match(TokenType.RPAREN) && !tokens.match(TokenType.TEMPLATE)
                         && !tokens.match(TokenType.COLON) && !tokens.match(TokenType.COMMA)
                         && !tokens.match(TokenType.EOF)) {
-                    argument = parseAssignmentExpression(parserContext);
+                    argument = parseAssignmentExpression();
                 }
 
                 return new YieldExpression(argument, delegate, yieldLocation);
@@ -151,7 +148,7 @@ final class ExpressionAssignmentParser {
             // to parseConditionalExpression which will error when it hits yield
         }
 
-        Expression left = ExpressionBinaryParser.parseConditionalExpression(parserContext);
+        Expression left = parseConditionalExpression();
 
         if (tokens.match(TokenType.ARROW) && !tokens.hasNewlineBefore()) {
             List<Pattern> params = new ArrayList<>();
@@ -207,7 +204,7 @@ final class ExpressionAssignmentParser {
 
             tokens.advance();
 
-            return parseArrowBody(parserContext, new FunctionParams(params, defaults, restParameter), false, location);
+            return parseArrowBody(new FunctionParams(params, defaults, restParameter), false, location);
         }
 
         AssignmentOperator operator = AssignmentOperator.fromToken(tokens.current().type());
@@ -251,7 +248,7 @@ final class ExpressionAssignmentParser {
             location = tokens.getLocation();
             int assignmentOperatorOffset = location.offset();
             tokens.advance();
-            Expression right = parseAssignmentExpression(parserContext);
+            Expression right = parseAssignmentExpression();
 
             if (operator == AssignmentOperator.ASSIGN
                     && (left instanceof ArrayExpression || left instanceof ObjectExpression)) {
@@ -265,14 +262,66 @@ final class ExpressionAssignmentParser {
         return left;
     }
 
-    static Expression parseExpression(ParserContext parserContext) {
-        SourceLocation location = parserContext.tokens.getLocation();
+    private Expression parseBinaryExpression(int minimumPrecedence) {
+        Expression left = minimumPrecedence <= BinaryOperator.Precedence.RELATIONAL.level
+                && parserContext.inOperatorAllowed && tokens.match(TokenType.PRIVATE_NAME)
+                && tokens.nextIs(TokenType.IN) ? parserContext.consumePrivateName() : parseExponentiationExpression();
+        while (true) {
+            BinaryOperator infix = BinaryOperator.infixOperator(tokens.current().type());
+            if (infix == null || infix.precedence().level < minimumPrecedence
+                    || (infix == BinaryOperator.IN && !parserContext.inOperatorAllowed)) {
+                return left;
+            }
+            SourceLocation location = tokens.consumeLocation();
+            // Only strictly tighter operators belong to the right operand of a left-associative operator.
+            Expression right = parseBinaryExpression(infix.precedence().level + 1);
+            left = new BinaryExpression(infix, left, right, location);
+        }
+    }
+
+    private Expression parseConditionalExpression() {
+        Expression test = parseLogicalOrExpression();
+
+        if (tokens.match(TokenType.QUESTION)) {
+            SourceLocation location = tokens.consumeLocation();
+            boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+            parserContext.inOperatorAllowed = true;
+            Expression consequent = parseAssignmentExpression();
+            parserContext.inOperatorAllowed = savedInOperatorAllowed;
+            tokens.expect(TokenType.COLON);
+            Expression alternate = parseAssignmentExpression();
+
+            return new ConditionalExpression(test, consequent, alternate, location);
+        }
+
+        return test;
+    }
+
+    private Expression parseExponentiationExpression() {
+        TokenType firstTokenType = tokens.current().type();
+        Expression left = parserContext.primary.parseUnaryExpression();
+
+        if (tokens.match(TokenType.EXP)) {
+            if (isDisallowedExponentiationUnaryBaseToken(firstTokenType)
+                    || (left instanceof AwaitExpression && !parserContext.isParenthesizedExpression(left))) {
+                throw new JSSyntaxErrorException("Unary operator used immediately before exponentiation expression");
+            }
+            SourceLocation location = tokens.consumeLocation();
+            Expression right = parseExponentiationExpression();
+            return new BinaryExpression(BinaryOperator.EXP, left, right, location);
+        }
+
+        return left;
+    }
+
+    Expression parseExpression() {
+        SourceLocation location = tokens.getLocation();
         List<Expression> expressionsList = new ArrayList<>();
 
-        expressionsList.add(parseAssignmentExpression(parserContext));
+        expressionsList.add(parseAssignmentExpression());
 
-        while (parserContext.tokens.consumeIf(TokenType.COMMA)) {
-            expressionsList.add(parseAssignmentExpression(parserContext));
+        while (tokens.consumeIf(TokenType.COMMA)) {
+            expressionsList.add(parseAssignmentExpression());
         }
 
         if (expressionsList.size() == 1) {
@@ -282,8 +331,57 @@ final class ExpressionAssignmentParser {
         return new SequenceExpression(expressionsList, location);
     }
 
-    private static boolean peekPastParensIsArrow(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    private Expression parseLogicalAndExpression() {
+        Expression left = parseBinaryExpression(BinaryOperator.Precedence.BIT_OR.level);
+
+        boolean hasLogicalAnd = false;
+        while (tokens.match(TokenType.LOGICAL_AND)) {
+            hasLogicalAnd = true;
+            SourceLocation location = tokens.consumeLocation();
+            Expression right = parseBinaryExpression(BinaryOperator.Precedence.BIT_OR.level);
+            left = new BinaryExpression(BinaryOperator.LOGICAL_AND, left, right, location);
+        }
+
+        if (hasLogicalAnd && tokens.match(TokenType.NULLISH_COALESCING)) {
+            throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
+        }
+
+        return left;
+    }
+
+    private Expression parseLogicalOrExpression() {
+        Expression left = parseLogicalAndExpression();
+
+        if (tokens.match(TokenType.NULLISH_COALESCING)) {
+            // Parse CoalesceExpression: left ?? right ?? ...
+            // Cannot mix with || or && (ES2020 spec)
+            do {
+                SourceLocation location = tokens.consumeLocation();
+                Expression right = parseBinaryExpression(BinaryOperator.Precedence.BIT_OR.level);
+                left = new BinaryExpression(BinaryOperator.NULLISH_COALESCING, left, right, location);
+            } while (tokens.match(TokenType.NULLISH_COALESCING));
+            if (tokens.match(TokenType.LOGICAL_OR) || tokens.match(TokenType.LOGICAL_AND)) {
+                throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
+            }
+            return left;
+        }
+
+        boolean hasLogicalOr = false;
+        while (tokens.match(TokenType.LOGICAL_OR)) {
+            hasLogicalOr = true;
+            SourceLocation location = tokens.consumeLocation();
+            Expression right = parseLogicalAndExpression();
+            left = new BinaryExpression(BinaryOperator.LOGICAL_OR, left, right, location);
+        }
+
+        if (hasLogicalOr && tokens.match(TokenType.NULLISH_COALESCING)) {
+            throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
+        }
+
+        return left;
+    }
+
+    private boolean peekPastParensIsArrow() {
         TokenCursor.TokenPosition start = tokens.saveTokenPosition();
         try {
             tokens.advance();
@@ -309,14 +407,18 @@ final class ExpressionAssignmentParser {
         }
     }
 
-    private static ASTNode readArrowBody(ParserContext parserContext) {
-        return parserContext.tokens.match(TokenType.LBRACE)
-                ? StatementParser.parseBlockStatementAsBody(parserContext)
-                : parseAssignmentExpression(parserContext);
+    private ASTNode readArrowBody() {
+        return tokens.match(TokenType.LBRACE)
+                ? parserContext.statements.parseBlockStatementAsBody()
+                : parseAssignmentExpression();
     }
 
-    static void validateForInOfAssignmentTarget(ParserContext parserContext, Expression expression,
-            int assignmentBoundaryOffset) {
+    void validateForInOfAssignmentTarget(Expression expression, int assignmentBoundaryOffset) {
         AssignmentPatterns.validateForInOfAssignmentTarget(parserContext, expression, assignmentBoundaryOffset);
     }
+
+    private static boolean isDisallowedExponentiationUnaryBaseToken(TokenType tokenType) {
+        return UnaryExpression.UnaryOperator.prefixOperator(tokenType) != null;
+    }
+
 }

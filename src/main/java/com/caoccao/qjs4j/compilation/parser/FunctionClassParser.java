@@ -28,38 +28,17 @@ import java.util.*;
  * Delegate parser for function declarations/expressions and class declarations/expressions. Extracted from the
  * monolithic Parser class as part of the parser refactoring.
  */
-final class FunctionClassParser {
-    private FunctionClassParser() {
+final class FunctionClassParser extends GrammarProduction {
+    FunctionClassParser(ParserContext parserContext) {
+        super(parserContext);
     }
 
-    private static String getSimpleClassElementName(Expression key) {
-        if (key instanceof Identifier identifier) {
-            return identifier.getName();
-        }
-        if (key instanceof Literal literal && literal.getValue() instanceof String literalString) {
-            return literalString;
-        }
-        return null;
-    }
-
-    private static boolean hasFunctionNameToken(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    private boolean hasFunctionNameToken() {
         return tokens.match(TokenType.IDENTIFIER) || tokens.match(TokenType.AWAIT) || tokens.match(TokenType.YIELD)
                 || tokens.match(TokenType.LET);
     }
 
-    private static boolean isPrivateConstructorName(Expression key, boolean isPrivate) {
-        if (!isPrivate) {
-            return false;
-        }
-        if (key instanceof PrivateIdentifier privateIdentifier) {
-            return JSKeyword.CONSTRUCTOR.equals(privateIdentifier.getName());
-        }
-        return false;
-    }
-
-    private static <T extends ASTNode> T parseClass(ParserContext parserContext, ClassFactory<T> factory) {
-        TokenCursor tokens = parserContext.tokens;
+    private <T extends ASTNode> T parseClass(ClassFactory<T> factory) {
         SourceLocation startLocation = tokens.getLocation();
         int startOffset = tokens.current().offset();
         tokens.expect(TokenType.CLASS);
@@ -80,7 +59,7 @@ final class FunctionClassParser {
             // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
             Expression superClass = null;
             if (tokens.consumeIf(TokenType.EXTENDS)) {
-                superClass = ExpressionPrimaryParser.parseCallExpression(parserContext);
+                superClass = parserContext.primary.parseCallExpression();
             }
 
             // Parse class body
@@ -96,7 +75,7 @@ final class FunctionClassParser {
                         continue;
                     }
 
-                    ClassElement element = parseClassElement(parserContext);
+                    ClassElement element = parseClassElement();
                     if (element != null) {
                         body.add(element);
                     }
@@ -123,21 +102,20 @@ final class FunctionClassParser {
     /**
      * Parse a class declaration or expression. Syntax: class Name extends Super { body }
      */
-    static ClassDeclaration parseClassDeclaration(ParserContext parserContext) {
-        return parseClass(parserContext, ClassDeclaration::new);
+    ClassDeclaration parseClassDeclaration() {
+        return parseClass(ClassDeclaration::new);
     }
 
     /**
      * Parse a single class element (method, field, or static block).
      */
-    static ClassElement parseClassElement(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    ClassElement parseClassElement() {
         boolean isStatic = false;
         SourceLocation location = tokens.getLocation();
         SourceLocation methodStartLocation = location;
 
         if (tokens.match(TokenType.AT)) {
-            parseDecoratorList(parserContext);
+            parseDecoratorList();
             location = tokens.getLocation();
             methodStartLocation = location;
         }
@@ -155,19 +133,18 @@ final class FunctionClassParser {
 
                 // Check for static block: static { }
                 if (tokens.match(TokenType.LBRACE)) {
-                    return parseStaticBlock(parserContext);
+                    return parseStaticBlock();
                 }
             } else {
                 Expression key = new Identifier(JSKeyword.STATIC, location);
                 tokens.advance();
-                return parseMethodOrField(parserContext, key, false, false, false, location);
+                return parseMethodOrField(key, false, false, false, location);
             }
         }
 
         // Check for private identifier (#name)
         if (tokens.match(TokenType.PRIVATE_NAME)) {
-            return parseMethodOrField(parserContext, parseClassElementName(parserContext), isStatic, true, true,
-                    methodStartLocation);
+            return parseMethodOrField(parseClassElementName(), isStatic, true, true, methodStartLocation);
         }
 
         if (tokens.identifier("accessor")) {
@@ -178,9 +155,9 @@ final class FunctionClassParser {
                 tokens.advance(); // consume "accessor"
                 boolean computed = tokens.match(TokenType.LBRACKET);
                 boolean isPrivate = tokens.match(TokenType.PRIVATE_NAME);
-                Expression key = parseClassElementName(parserContext);
+                Expression key = parseClassElementName();
                 validateClassFieldName(key, computed, isPrivate);
-                Expression value = parseClassFieldInitializer(parserContext);
+                Expression value = parseClassFieldInitializer();
                 parserContext.consumeSemicolon();
                 return new PropertyDefinition(key, value, computed, isStatic, isPrivate, true);
             }
@@ -202,7 +179,7 @@ final class FunctionClassParser {
                 // async = value; async; async() {}; or async at the end of a line — element named "async"
                 Expression key = new Identifier(JSKeyword.ASYNC, methodStartLocation);
                 tokens.advance();
-                return parseMethodOrField(parserContext, key, isStatic, false, false, methodStartLocation);
+                return parseMethodOrField(key, isStatic, false, false, methodStartLocation);
             }
             if (tokens.current().escaped() && tokens.nextOnSameLine()) {
                 throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
@@ -211,12 +188,12 @@ final class FunctionClassParser {
             tokens.advance(); // consume 'async'
 
             boolean generator = tokens.consumeIf(TokenType.MUL);
-            return parseNamedClassMethod(parserContext, "method", methodStartLocation, true, generator, isStatic);
+            return parseNamedClassMethod("method", methodStartLocation, true, generator, isStatic);
         }
 
         // Check for generator method: *name() {}
         if (tokens.consumeIf(TokenType.MUL)) {
-            return parseNamedClassMethod(parserContext, "method", methodStartLocation, false, true, isStatic);
+            return parseNamedClassMethod("method", methodStartLocation, false, true, isStatic);
         }
 
         // Check for getter/setter
@@ -231,38 +208,37 @@ final class FunctionClassParser {
                 String kind = name;
                 tokens.advance(); // consume 'get' or 'set'
 
-                return parseNamedClassMethod(parserContext, kind, methodStartLocation, false, false, isStatic);
+                return parseNamedClassMethod(kind, methodStartLocation, false, false, isStatic);
             }
         }
 
         // Regular property name (identifier, string, number, or reserved keyword)
         boolean computed = tokens.match(TokenType.LBRACKET);
-        Expression key = ExpressionPrimaryParser.parsePropertyName(parserContext);
+        Expression key = parserContext.primary.parsePropertyName();
 
-        return parseMethodOrField(parserContext, key, isStatic, false, computed, methodStartLocation);
+        return parseMethodOrField(key, isStatic, false, computed, methodStartLocation);
     }
 
-    private static Expression parseClassElementName(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    private Expression parseClassElementName() {
         if (tokens.match(TokenType.PRIVATE_NAME)) {
             SourceLocation location = tokens.getLocation();
             String name = tokens.current().value().substring(1);
             tokens.advance();
             return new PrivateIdentifier(name, location);
         }
-        return ExpressionPrimaryParser.parsePropertyName(parserContext);
+        return parserContext.primary.parsePropertyName();
     }
 
     /**
      * Parse a class expression (class used as an expression). Syntax: class [Name] [extends Super] { body }
      */
-    static ClassExpression parseClassExpression(ParserContext parserContext) {
-        return parseClass(parserContext, ClassExpression::new);
+    ClassExpression parseClassExpression() {
+        return parseClass(ClassExpression::new);
     }
 
-    private static Expression parseClassFieldInitializer(ParserContext parserContext) {
+    private Expression parseClassFieldInitializer() {
         Expression value = null;
-        if (parserContext.tokens.consumeIf(TokenType.ASSIGN)) {
+        if (tokens.consumeIf(TokenType.ASSIGN)) {
             boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
             boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
             parserContext.inClassFieldInitializer = true;
@@ -275,7 +251,7 @@ final class FunctionClassParser {
             parserContext.asyncFunctionNesting = 0;
             parserContext.enterLexicalFunction(false);
             try {
-                value = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                value = parserContext.expressions.parseAssignmentExpression();
             } finally {
                 parserContext.exitLexicalFunction(false);
                 parserContext.asyncFunctionNesting = savedAsyncFunctionNesting;
@@ -287,9 +263,8 @@ final class FunctionClassParser {
         return value;
     }
 
-    private static FunctionExpression parseClassMethod(ParserContext parserContext, String kind,
-            SourceLocation methodStartLocation, boolean isAsync, boolean isGenerator, boolean isStatic,
-            boolean isComputed, Expression key) {
+    private FunctionExpression parseClassMethod(String kind, SourceLocation methodStartLocation, boolean isAsync,
+            boolean isGenerator, boolean isStatic, boolean isComputed, Expression key) {
         // Per ES2024 spec, only non-computed "constructor" is treated as the class constructor.
         // Computed ["constructor"]() is a regular method, not the constructor.
         String keyName = isComputed ? null : getSimpleClassElementName(key);
@@ -301,21 +276,20 @@ final class FunctionClassParser {
         }
         parserContext.superPropertyAllowed = true;
         try {
-            return parseMethod(parserContext, kind, methodStartLocation, isAsync, isGenerator);
+            return parseMethod(kind, methodStartLocation, isAsync, isGenerator);
         } finally {
             parserContext.inDerivedConstructor = savedInDerivedConstructor;
             parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
         }
     }
 
-    static void parseDecoratorList(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    void parseDecoratorList() {
         while (tokens.consumeIf(TokenType.AT)) {
             if (tokens.consumeIf(TokenType.LPAREN)) {
                 boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                 parserContext.inOperatorAllowed = true;
                 try {
-                    ExpressionAssignmentParser.parseExpression(parserContext);
+                    parserContext.expressions.parseExpression();
                 } finally {
                     parserContext.inOperatorAllowed = savedInOperatorAllowed;
                 }
@@ -325,14 +299,14 @@ final class FunctionClassParser {
             parserContext.parseIdentifier();
             while (tokens.consumeIf(TokenType.DOT)) {
                 if (!tokens.consumeIf(TokenType.PRIVATE_NAME)) {
-                    ExpressionPrimaryParser.parsePropertyName(parserContext);
+                    parserContext.primary.parsePropertyName();
                 }
             }
             if (tokens.consumeIf(TokenType.LPAREN)) {
                 if (!tokens.match(TokenType.RPAREN)) {
-                    ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                    parserContext.expressions.parseAssignmentExpression();
                     while (tokens.consumeIf(TokenType.COMMA)) {
-                        ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                        parserContext.expressions.parseAssignmentExpression();
                     }
                 }
                 tokens.expect(TokenType.RPAREN);
@@ -343,31 +317,30 @@ final class FunctionClassParser {
     /**
      * Parse export default async function declaration with optional name.
      */
-    static Statement parseExportDefaultAsyncFunctionDeclaration(ParserContext parserContext) {
-        SourceLocation asyncLocation = parserContext.tokens.consumeLocation(); // consume 'async'
-        return parseExportDefaultFunctionDeclaration(parserContext, true);
+    Statement parseExportDefaultAsyncFunctionDeclaration() {
+        SourceLocation asyncLocation = tokens.consumeLocation(); // consume 'async'
+        return parseExportDefaultFunctionDeclaration(true);
     }
 
     /**
      * Parse export default function declaration with optional name. Per ES spec, export default HoistableDeclaration
      * allows anonymous functions.
      */
-    static Statement parseExportDefaultFunctionDeclaration(ParserContext parserContext, boolean isAsync) {
-        TokenCursor tokens = parserContext.tokens;
+    Statement parseExportDefaultFunctionDeclaration(boolean isAsync) {
         SourceLocation location = tokens.getLocation();
         tokens.expect(TokenType.FUNCTION);
 
         boolean isGenerator = tokens.consumeIf(TokenType.MUL);
 
         Identifier id;
-        if (hasFunctionNameToken(parserContext)) {
+        if (hasFunctionNameToken()) {
             id = parserContext.parseIdentifier();
             // Named function in export default creates a lexical binding for the name
-            parserContext.declarations.addModuleLexicalName(id.getName());
+            parserContext.modules().addModuleLexicalName(id.getName());
         } else {
             id = new Identifier(JSKeyword.DEFAULT, location);
         }
-        return parseFunctionDefinition(parserContext, id, location, isAsync, isGenerator, FunctionDeclaration::new);
+        return parseFunctionDefinition(id, location, isAsync, isGenerator, FunctionDeclaration::new);
     }
 
     /**
@@ -381,9 +354,7 @@ final class FunctionClassParser {
      *            The function name (or null for anonymous)
      * @return The parsed BlockStatement
      */
-    static BlockStatement parseFunctionBody(ParserContext parserContext, FunctionParams funcParams,
-            Identifier funcName) {
-        TokenCursor tokens = parserContext.tokens;
+    BlockStatement parseFunctionBody(FunctionParams funcParams, Identifier funcName) {
         SourceLocation location = tokens.getLocation();
         tokens.expect(TokenType.LBRACE);
 
@@ -419,11 +390,11 @@ final class FunctionClassParser {
         }
 
         // Parse remaining body statements, with no enclosing labels in scope
-        StatementParser.parseFunctionStatements(parserContext, body);
+        Set<String> lexicalNames = parserContext.statements.parseFunctionStatements(body);
         // Check that parameter names don't conflict with lexical declarations in body
         // Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs
         // in the LexicallyDeclaredNames of FunctionBody"
-        ParameterEarlyErrors.validateFormalsBodyDuplicate(funcParams, body);
+        ParameterEarlyErrors.validateFormalsBodyDuplicate(funcParams, lexicalNames);
 
         // Restore outer strict mode
         parserContext.setStrictMode(savedStrictMode);
@@ -434,14 +405,11 @@ final class FunctionClassParser {
         return block;
     }
 
-    static FunctionDeclaration parseFunctionDeclaration(ParserContext parserContext, boolean isAsync,
-            boolean isGenerator) {
-        return parseFunctionDeclaration(parserContext, isAsync, isGenerator, null);
+    FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator) {
+        return parseFunctionDeclaration(isAsync, isGenerator, null);
     }
 
-    static FunctionDeclaration parseFunctionDeclaration(ParserContext parserContext, boolean isAsync,
-            boolean isGenerator, SourceLocation startLocation) {
-        TokenCursor tokens = parserContext.tokens;
+    FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator, SourceLocation startLocation) {
         // Use provided start location (for async functions) or get current location
         SourceLocation location = startLocation != null ? startLocation : tokens.getLocation();
         tokens.expect(TokenType.FUNCTION);
@@ -459,18 +427,18 @@ final class FunctionClassParser {
         // at global scope while rejecting `function await() {}` inside async functions.
         Identifier id = parserContext.parseIdentifier();
 
-        return parseFunctionDefinition(parserContext, id, location, isAsync, isGenerator, FunctionDeclaration::new);
+        return parseFunctionDefinition(id, location, isAsync, isGenerator, FunctionDeclaration::new);
     }
 
-    private static <T extends ASTNode> T parseFunctionDefinition(ParserContext parserContext, Identifier id,
-            SourceLocation location, boolean isAsync, boolean isGenerator, FunctionFactory<T> factory) {
+    private <T extends ASTNode> T parseFunctionDefinition(Identifier id, SourceLocation location, boolean isAsync,
+            boolean isGenerator, FunctionFactory<T> factory) {
         parserContext.enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         boolean savedInFunctionBody = parserContext.inFunctionBody;
         try {
             // A declaration's name was read in its enclosing scope. An expression binds its name here.
-            if (id == null && hasFunctionNameToken(parserContext)) {
+            if (id == null && hasFunctionNameToken()) {
                 id = parserContext.parseIdentifier();
             }
             // Per QuickJS: in_function_body == FALSE prevents yield/await during
@@ -479,18 +447,18 @@ final class FunctionClassParser {
                 parserContext.inFunctionBody = false;
             }
 
-            parserContext.tokens.expect(TokenType.LPAREN);
-            FunctionParams funcParams = parseFunctionParameters(parserContext);
+            tokens.expect(TokenType.LPAREN);
+            FunctionParams funcParams = parseFunctionParameters();
 
             parserContext.inFunctionBody = true;
 
             // Parse body with "use strict" detection and parameter validation
-            BlockStatement body = parseFunctionBody(parserContext, funcParams, id);
+            BlockStatement body = parseFunctionBody(funcParams, id);
             boolean needsArguments = parserContext.needsArguments;
 
             // Use previousTokenEndOffset (position after closing '}') instead of
             // currentToken.offset() (position of NEXT token, which may include trailing comments)
-            SourceLocation fullLocation = location.withEndOffset(parserContext.tokens.previousEnd());
+            SourceLocation fullLocation = location.withEndOffset(tokens.previousEnd());
 
             return factory.create(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
@@ -500,13 +468,11 @@ final class FunctionClassParser {
         }
     }
 
-    static Expression parseFunctionExpression(ParserContext parserContext) {
-        return parseFunctionExpression(parserContext, false, null);
+    Expression parseFunctionExpression() {
+        return parseFunctionExpression(false, null);
     }
 
-    static Expression parseFunctionExpression(ParserContext parserContext, boolean isAsync,
-            SourceLocation startLocation) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parseFunctionExpression(boolean isAsync, SourceLocation startLocation) {
         SourceLocation location = startLocation != null ? startLocation : tokens.getLocation();
         tokens.expect(TokenType.FUNCTION);
 
@@ -514,7 +480,7 @@ final class FunctionClassParser {
         // Following QuickJS implementation: check for '*' after 'function' keyword
         boolean isGenerator = tokens.consumeIf(TokenType.MUL);
 
-        return parseFunctionDefinition(parserContext, null, location, isAsync, isGenerator, FunctionExpression::new);
+        return parseFunctionDefinition(null, location, isAsync, isGenerator, FunctionExpression::new);
     }
 
     /**
@@ -523,8 +489,7 @@ final class FunctionClassParser {
      *
      * @return FunctionParams containing regular params and optional rest parameter
      */
-    static FunctionParams parseFunctionParameters(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    FunctionParams parseFunctionParameters() {
         List<Pattern> params = new ArrayList<>();
         List<Expression> defaults = new ArrayList<>();
         RestParameter restParameter = null;
@@ -534,12 +499,7 @@ final class FunctionClassParser {
                 // Check for rest parameter (...args)
                 if (tokens.match(TokenType.ELLIPSIS)) {
                     SourceLocation location = tokens.consumeLocation(); // consume '...'
-                    Pattern restArg;
-                    if (tokens.match(TokenType.LBRACE) || tokens.match(TokenType.LBRACKET)) {
-                        restArg = PatternParser.parsePattern(parserContext);
-                    } else {
-                        restArg = parserContext.parseIdentifier();
-                    }
+                    Pattern restArg = parserContext.patterns.parsePattern();
                     restParameter = new RestParameter(restArg, location);
 
                     // Rest parameter must be last
@@ -552,33 +512,18 @@ final class FunctionClassParser {
                 // Regular parameter or destructuring pattern
                 // Following QuickJS js_parse_function_decl2: accept identifiers,
                 // object patterns ({a, b}), and array patterns ([a, b])
-                if (tokens.match(TokenType.LBRACE) || tokens.match(TokenType.LBRACKET)) {
-                    params.add(PatternParser.parsePattern(parserContext));
-                } else {
-                    params.add(parserContext.parseIdentifier());
-                }
+                params.add(parserContext.patterns.parsePattern());
 
                 // Check for default value: param = defaultExpr
                 // Following QuickJS js_parse_function_decl2 pattern
                 if (tokens.consumeIf(TokenType.ASSIGN)) {
-                    defaults.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
+                    defaults.add(parserContext.expressions.parseAssignmentExpression());
                 } else {
                     defaults.add(null);
                 }
 
-                // Check for comma (more parameters)
-                if (!tokens.match(TokenType.COMMA)) {
+                if (!tokens.consumeIf(TokenType.COMMA) || tokens.match(TokenType.RPAREN)) {
                     break;
-                }
-                tokens.advance(); // consume comma
-
-                // Handle trailing comma before closing paren
-                if (tokens.match(TokenType.RPAREN)) {
-                    break;
-                }
-                // Handle trailing comma before rest parameter
-                if (tokens.match(TokenType.ELLIPSIS)) {
-                    continue;
                 }
             }
         }
@@ -591,16 +536,16 @@ final class FunctionClassParser {
      * Parse a method (constructor, method, getter, or setter). Uses the current token position as the method start for
      * source extraction.
      */
-    static FunctionExpression parseMethod(ParserContext parserContext, String kind) {
-        return parseMethod(parserContext, kind, parserContext.tokens.getLocation(), false, false);
+    FunctionExpression parseMethod(String kind) {
+        return parseMethod(kind, tokens.getLocation(), false, false);
     }
 
     /**
      * Parse a method with explicit start location and async/generator flags. The methodStartLocation determines where
      * the source code begins (e.g., at 'get', 'set', 'async', '*', or the method name).
      */
-    static FunctionExpression parseMethod(ParserContext parserContext, String kind, SourceLocation methodStartLocation,
-            boolean isAsync, boolean isGenerator) {
+    FunctionExpression parseMethod(String kind, SourceLocation methodStartLocation, boolean isAsync,
+            boolean isGenerator) {
         parserContext.enterFunctionContext(isAsync, isGenerator);
         boolean savedInFunctionBody = parserContext.inFunctionBody;
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
@@ -616,8 +561,8 @@ final class FunctionClassParser {
                 parserContext.inFunctionBody = false;
             }
 
-            parserContext.tokens.expect(TokenType.LPAREN);
-            funcParams = parseFunctionParameters(parserContext);
+            tokens.expect(TokenType.LPAREN);
+            funcParams = parseFunctionParameters();
             int formalParameterCount = funcParams.params().size() + (funcParams.restParameter() != null ? 1 : 0);
             if (JSKeyword.GET.equals(kind)) {
                 if (formalParameterCount != 0) {
@@ -633,7 +578,7 @@ final class FunctionClassParser {
 
             // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
             ParameterEarlyErrors.rejectDuplicates(funcParams);
-            body = parseFunctionBody(parserContext, funcParams, null);
+            body = parseFunctionBody(funcParams, null);
             needsArguments = parserContext.needsArguments;
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
@@ -649,7 +594,7 @@ final class FunctionClassParser {
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }
 
-        SourceLocation fullLocation = methodStartLocation.withEndOffset(parserContext.tokens.previousEnd());
+        SourceLocation fullLocation = methodStartLocation.withEndOffset(tokens.previousEnd());
 
         return new FunctionExpression(null, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
     }
@@ -657,36 +602,34 @@ final class FunctionClassParser {
     /**
      * Parse method or field after the property name.
      */
-    static ClassElement parseMethodOrField(ParserContext parserContext, Expression key, boolean isStatic,
-            boolean isPrivate, boolean computed, SourceLocation location) {
+    ClassElement parseMethodOrField(Expression key, boolean isStatic, boolean isPrivate, boolean computed,
+            SourceLocation location) {
         // If next token is LPAREN, it's a method; otherwise it's a field
-        if (!parserContext.tokens.match(TokenType.LPAREN)) {
+        if (!tokens.match(TokenType.LPAREN)) {
             validateClassFieldName(key, computed, isPrivate);
-            Expression value = parseClassFieldInitializer(parserContext);
+            Expression value = parseClassFieldInitializer();
             parserContext.consumeSemicolon();
             return new PropertyDefinition(key, value, computed, isStatic, isPrivate);
         }
 
         // It's a method
-        FunctionExpression method = parseClassMethod(parserContext, "method", location, false, false, isStatic,
-                computed, key);
+        FunctionExpression method = parseClassMethod("method", location, false, false, isStatic, computed, key);
         return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 
-    private static MethodDefinition parseNamedClassMethod(ParserContext parserContext, String kind,
-            SourceLocation location, boolean async, boolean generator, boolean isStatic) {
-        boolean computed = parserContext.tokens.match(TokenType.LBRACKET);
-        boolean isPrivate = parserContext.tokens.match(TokenType.PRIVATE_NAME);
-        Expression key = parseClassElementName(parserContext);
-        FunctionExpression method = parseClassMethod(parserContext, kind, location, async, generator, isStatic,
-                computed, key);
+    private MethodDefinition parseNamedClassMethod(String kind, SourceLocation location, boolean async,
+            boolean generator, boolean isStatic) {
+        boolean computed = tokens.match(TokenType.LBRACKET);
+        boolean isPrivate = tokens.match(TokenType.PRIVATE_NAME);
+        Expression key = parseClassElementName();
+        FunctionExpression method = parseClassMethod(kind, location, async, generator, isStatic, computed, key);
         return new MethodDefinition(key, method, kind, computed, isStatic, isPrivate);
     }
 
     /**
      * Parse a static initialization block: static { statements }
      */
-    static StaticBlock parseStaticBlock(ParserContext parserContext) {
+    StaticBlock parseStaticBlock() {
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
         int savedAsyncFunctionNesting = parserContext.asyncFunctionNesting;
@@ -697,7 +640,7 @@ final class FunctionClassParser {
         parserContext.generatorFunctionNesting = 0;
         Deque<Set<String>> enclosingLabels = parserContext.enterFunctionLabelScope();
         try {
-            BlockStatement blockStatement = StatementParser.parseBlockStatement(parserContext, true);
+            BlockStatement blockStatement = parserContext.statements.parseBlockStatement(true);
             return new StaticBlock(blockStatement.getBody());
         } finally {
             parserContext.exitFunctionLabelScope(enclosingLabels);
@@ -706,6 +649,26 @@ final class FunctionClassParser {
             parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
             parserContext.inClassStaticInit = savedInClassStaticInit;
         }
+    }
+
+    private static String getSimpleClassElementName(Expression key) {
+        if (key instanceof Identifier identifier) {
+            return identifier.getName();
+        }
+        if (key instanceof Literal literal && literal.getValue() instanceof String literalString) {
+            return literalString;
+        }
+        return null;
+    }
+
+    private static boolean isPrivateConstructorName(Expression key, boolean isPrivate) {
+        if (!isPrivate) {
+            return false;
+        }
+        if (key instanceof PrivateIdentifier privateIdentifier) {
+            return JSKeyword.CONSTRUCTOR.equals(privateIdentifier.getName());
+        }
+        return false;
     }
 
     /**

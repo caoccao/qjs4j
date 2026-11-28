@@ -24,17 +24,26 @@ import com.caoccao.qjs4j.unicode.UnicodeStringUtils;
 import java.util.*;
 
 /** Parses module declarations and records their imported bindings and exported names. */
-final class ModuleDeclarationParser {
+final class ModuleDeclarationParser extends GrammarProduction {
     private final List<ExportSpecifier> exportSpecifiers = new ArrayList<>();
-    private final ParserContext parserContext;
+
+    private final Set<String> moduleExportedNames = new HashSet<>();
+    private final Set<String> moduleLexicalNames = new HashSet<>();
+    private final List<String> pendingExportBindings = new ArrayList<>();
 
     ModuleDeclarationParser(ParserContext parserContext) {
-        this.parserContext = parserContext;
+        super(parserContext);
     }
 
     private void addModuleExportedName(String name) {
-        if (parserContext.moduleMode && !parserContext.moduleExportedNames.add(name)) {
+        if (parserContext.moduleMode && !moduleExportedNames.add(name)) {
             throw new JSSyntaxErrorException("Duplicate export of '" + name + "'");
+        }
+    }
+
+    void addModuleLexicalName(String name) {
+        if (parserContext.moduleMode && parserContext.functionNesting == 0 && !moduleLexicalNames.add(name)) {
+            throw DeclarationEarlyErrors.duplicate(name);
         }
     }
 
@@ -61,7 +70,6 @@ final class ModuleDeclarationParser {
     }
 
     private void expectContextualKeyword(TokenType type, String keyword) {
-        TokenCursor tokens = parserContext.tokens;
         if (!tokens.match(type) || tokens.current().escaped()) {
             throw new JSSyntaxErrorException("Expected '" + keyword + "' but got '" + tokens.current().value()
                     + "' at line " + tokens.current().line() + ", column " + tokens.current().column());
@@ -70,7 +78,6 @@ final class ModuleDeclarationParser {
     }
 
     Statement parseExportDeclaration() {
-        TokenCursor tokens = parserContext.tokens;
         SourceLocation location = tokens.getLocation();
         tokens.expect(TokenType.EXPORT);
 
@@ -81,7 +88,7 @@ final class ModuleDeclarationParser {
 
             if (tokens.match(TokenType.CLASS)) {
                 // export default class { ... } — infer name "default" per spec
-                ClassExpression classExpr = FunctionClassParser.parseClassExpression(parserContext);
+                ClassExpression classExpr = parserContext.functions.parseClassExpression();
                 String className = classExpr.getId() != null ? classExpr.getId().getName() : null;
                 if (classExpr.getId() == null) {
                     classExpr = new ClassExpression(new Identifier(JSKeyword.DEFAULT, classExpr.getLocation()),
@@ -89,24 +96,24 @@ final class ModuleDeclarationParser {
                 }
                 // Named class in export default creates a lexical binding
                 if (className != null) {
-                    parserContext.declarations.addModuleLexicalName(className);
+                    addModuleLexicalName(className);
                 }
                 return new ExpressionStatement(classExpr, location);
             } else if (tokens.match(TokenType.FUNCTION)) {
-                Statement funcDecl = FunctionClassParser.parseExportDefaultFunctionDeclaration(parserContext, false);
+                Statement funcDecl = parserContext.functions.parseExportDefaultFunctionDeclaration(false);
                 if (tokens.match(TokenType.LPAREN)) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 return funcDecl;
             } else if (tokens.match(TokenType.ASYNC) && tokens.nextOnSameLine(TokenType.FUNCTION)) {
-                Statement asyncDecl = FunctionClassParser.parseExportDefaultAsyncFunctionDeclaration(parserContext);
+                Statement asyncDecl = parserContext.functions.parseExportDefaultAsyncFunctionDeclaration();
                 if (tokens.match(TokenType.LPAREN)) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 return asyncDecl;
             } else {
                 // export default <expression>;
-                Expression expr = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                Expression expr = parserContext.expressions.parseAssignmentExpression();
                 parserContext.consumeSemicolon();
                 return new ExpressionStatement(expr, location);
             }
@@ -131,23 +138,23 @@ final class ModuleDeclarationParser {
 
         // export var/let/const/function/class ...
         if (tokens.match(TokenType.VAR) || tokens.match(TokenType.LET) || tokens.match(TokenType.CONST)) {
-            Statement decl = StatementParser.parseVariableDeclaration(parserContext);
+            Statement decl = parserContext.statements.parseVariableDeclaration();
             // Track exported names from declaration
             collectDeclaredNames(decl);
             return decl;
         }
         if (tokens.match(TokenType.FUNCTION)) {
-            Statement decl = FunctionClassParser.parseFunctionDeclaration(parserContext, false, false);
+            Statement decl = parserContext.functions.parseFunctionDeclaration(false, false);
             collectDeclaredNames(decl);
             return decl;
         }
         if (tokens.match(TokenType.ASYNC) && tokens.nextOnSameLine(TokenType.FUNCTION)) {
-            Statement decl = StatementParser.parseAsyncDeclaration(parserContext);
+            Statement decl = parserContext.statements.parseAsyncDeclaration();
             collectDeclaredNames(decl);
             return decl;
         }
         if (tokens.match(TokenType.CLASS)) {
-            Statement decl = FunctionClassParser.parseClassDeclaration(parserContext);
+            Statement decl = parserContext.functions.parseClassDeclaration();
             collectDeclaredNames(decl);
             return decl;
         }
@@ -165,7 +172,6 @@ final class ModuleDeclarationParser {
      * ModuleExportName.
      */
     private void parseExportNamedSpecifiers() {
-        TokenCursor tokens = parserContext.tokens;
         tokens.advance(); // consume '{'
         boolean hasStringLocalName = false;
         exportSpecifiers.clear();
@@ -208,17 +214,17 @@ final class ModuleDeclarationParser {
             addModuleExportedName(spec.exportedName());
             if (!hasFrom) {
                 // Without 'from', the local names must be bound locally
-                parserContext.pendingExportBindings.add(spec.localName());
+                pendingExportBindings.add(spec.localName());
             }
         }
     }
 
     private void parseImportBindings() {
-        if (parserContext.tokens.consumeIf(TokenType.MUL)) {
+        if (tokens.consumeIf(TokenType.MUL)) {
             expectContextualKeyword(TokenType.AS, "as");
             String name = parserContext.parseBindingIdentifierName();
-            parserContext.declarations.addModuleLexicalName(name);
-        } else if (parserContext.tokens.match(TokenType.LBRACE)) {
+            addModuleLexicalName(name);
+        } else if (tokens.match(TokenType.LBRACE)) {
             parseNamedImportSpecifiers();
         } else {
             throw new JSSyntaxErrorException("Unsupported import declaration");
@@ -226,7 +232,6 @@ final class ModuleDeclarationParser {
     }
 
     Statement parseImportDeclarationStatement() {
-        TokenCursor tokens = parserContext.tokens;
         if (!parserContext.moduleMode || parserContext.functionNesting != 0) {
             throw new JSSyntaxErrorException("Cannot use import statement outside a module");
         }
@@ -246,7 +251,7 @@ final class ModuleDeclarationParser {
         }
         if (tokens.match(TokenType.IDENTIFIER)) {
             String name = parserContext.parseBindingIdentifierName();
-            parserContext.declarations.addModuleLexicalName(name);
+            addModuleLexicalName(name);
             if (tokens.consumeIf(TokenType.COMMA)) {
                 parseImportBindings();
             }
@@ -260,7 +265,6 @@ final class ModuleDeclarationParser {
     }
 
     private String parseModuleExportName() {
-        TokenCursor tokens = parserContext.tokens;
         TokenType type = tokens.current().type();
         if (type == TokenType.STRING) {
             String name = tokens.current().value();
@@ -281,7 +285,6 @@ final class ModuleDeclarationParser {
     }
 
     private void parseNamedImportSpecifiers() {
-        TokenCursor tokens = parserContext.tokens;
         tokens.expect(TokenType.LBRACE);
         if (!tokens.match(TokenType.RBRACE)) {
             while (true) {
@@ -298,7 +301,7 @@ final class ModuleDeclarationParser {
                         && (JSKeyword.EVAL.equals(localName) || JSKeyword.ARGUMENTS.equals(localName))) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
-                parserContext.declarations.addModuleLexicalName(localName);
+                addModuleLexicalName(localName);
                 if (!tokens.match(TokenType.COMMA)) {
                     break;
                 }
@@ -312,12 +315,11 @@ final class ModuleDeclarationParser {
     }
 
     private void parseSourceAndAttributes() {
-        parserContext.tokens.expect(TokenType.STRING);
+        tokens.expect(TokenType.STRING);
         parseWithClause();
     }
 
     private void parseWithClause() {
-        TokenCursor tokens = parserContext.tokens;
         if (tokens.identifier("with")) {
             tokens.advance(); // consume 'with'
             tokens.expect(TokenType.LBRACE);
@@ -350,6 +352,48 @@ final class ModuleDeclarationParser {
         }
     }
 
+    /**
+     * Validate module-level early errors per ES2024 16.2.1.1. In modules, top-level function declarations are lexical
+     * (not var-hoisted), so duplicate function names are errors. Also checks for lex/var conflicts, duplicate lexical
+     * declarations, and unresolvable export bindings.
+     */
+    void validateModuleEarlyErrors(List<Statement> body) {
+        Set<String> lexicalNames = new HashSet<>();
+        Set<String> varNames = new HashSet<>();
+        for (Statement stmt : body) {
+            if (stmt instanceof VariableDeclaration declaration) {
+                for (VariableDeclarator declarator : declaration.getDeclarations()) {
+                    for (String name : declarator.getId().getBoundNames()) {
+                        if (declaration.getKind() == VariableKind.VAR) {
+                            if (lexicalNames.contains(name)) {
+                                throw DeclarationEarlyErrors.duplicate(name);
+                            }
+                            varNames.add(name);
+                        } else {
+                            DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, name);
+                        }
+                    }
+                }
+            } else if (stmt instanceof FunctionDeclaration declaration && declaration.getId() != null) {
+                DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, declaration.getId().getName());
+            } else if (stmt instanceof ClassDeclaration declaration && declaration.getId() != null) {
+                DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, declaration.getId().getName());
+            } else if (stmt instanceof ExpressionStatement expression
+                    && expression.getExpression() instanceof ClassExpression cls && cls.getId() != null
+                    && !"default".equals(cls.getId().getName())) {
+                DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, cls.getId().getName());
+            }
+        }
+
+        // ES2024 16.2.1.1: For each name in ExportedBindings,
+        // it must be in the module's BoundNames.
+        for (String exportBinding : pendingExportBindings) {
+            if (!moduleLexicalNames.contains(exportBinding) && !lexicalNames.contains(exportBinding)
+                    && !varNames.contains(exportBinding)) {
+                throw new JSSyntaxErrorException("Export '" + exportBinding + "' is not defined in module");
+            }
+        }
+    }
     private record ExportSpecifier(String localName, String exportedName) {
     }
 }

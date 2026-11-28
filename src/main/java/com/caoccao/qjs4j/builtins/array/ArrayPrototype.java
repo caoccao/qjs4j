@@ -84,7 +84,7 @@ public final class ArrayPrototype {
      * Array.prototype.every(callbackFn[, thisArg]) Tests whether all elements pass the test.
      */
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        return iterate(context, thisArg, args, ArrayIteration.EVERY);
+        return ArrayIteration.EVERY.onArray(context, thisArg, args);
     }
 
     /**
@@ -106,14 +106,14 @@ public final class ArrayPrototype {
      * Array.prototype.find(callbackFn[, thisArg]) Returns the first element that satisfies the test.
      */
     public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findMatchingElement(context, thisArg, args, "find", false, false);
+        return ArrayIteration.FIND.onArray(context, thisArg, args);
     }
 
     /**
      * Array.prototype.findIndex(callbackFn[, thisArg]) Returns the index of the first element that satisfies the test.
      */
     public static JSValue findIndex(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findMatchingElement(context, thisArg, args, "findIndex", false, true);
+        return ArrayIteration.FIND_INDEX.onArray(context, thisArg, args);
     }
 
     /**
@@ -121,7 +121,7 @@ public final class ArrayPrototype {
      * (iterates backwards).
      */
     public static JSValue findLast(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findMatchingElement(context, thisArg, args, "findLast", true, false);
+        return ArrayIteration.FIND_LAST.onArray(context, thisArg, args);
     }
 
     /**
@@ -129,13 +129,7 @@ public final class ArrayPrototype {
      * satisfies the test (iterates backwards).
      */
     public static JSValue findLastIndex(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findMatchingElement(context, thisArg, args, "findLastIndex", true, true);
-    }
-
-    private static JSValue findMatchingElement(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
-            boolean fromEnd, boolean returnIndex) {
-        ArrayLikeElements elements = ArrayLikeElements.arrayCallback(context, thisArg, args, methodName);
-        return elements == null ? context.getPendingException() : elements.find(args, fromEnd, returnIndex);
+        return ArrayIteration.FIND_LAST_INDEX.onArray(context, thisArg, args);
     }
 
     /**
@@ -157,7 +151,7 @@ public final class ArrayPrototype {
      * Array.prototype.forEach(callbackFn[, thisArg]) Executes a function for each array element.
      */
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
-        return iterate(context, thisArg, args, ArrayIteration.FOR_EACH);
+        return ArrayIteration.FOR_EACH.onArray(context, thisArg, args);
     }
 
     /**
@@ -195,11 +189,6 @@ public final class ArrayPrototype {
      */
     public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
         return searchIndex(context, thisArg, args, false);
-    }
-
-    private static JSValue iterate(JSContext context, JSValue thisArg, JSValue[] args, ArrayIteration iteration) {
-        ArrayLikeElements elements = ArrayLikeElements.arrayCallback(context, thisArg, args, iteration.methodName);
-        return elements == null ? context.getPendingException() : elements.iterate(args, iteration);
     }
 
     /**
@@ -319,7 +308,7 @@ public final class ArrayPrototype {
      * Array.prototype.some(callbackFn[, thisArg]) Tests whether at least one element passes the test.
      */
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        return iterate(context, thisArg, args, ArrayIteration.SOME);
+        return ArrayIteration.SOME.onArray(context, thisArg, args);
     }
 
     /**

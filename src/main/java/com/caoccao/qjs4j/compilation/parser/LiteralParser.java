@@ -30,28 +30,12 @@ import java.util.List;
  * Delegate parser for literal expressions: arrays, objects, and template literals. Also contains template scanning
  * utility methods for finding expression boundaries and processing escape sequences within template strings.
  */
-final class LiteralParser {
-    private LiteralParser() {
+final class LiteralParser extends GrammarProduction {
+    LiteralParser(ParserContext parserContext) {
+        super(parserContext);
     }
 
-    private static String normalizeTemplateLineTerminators(String str) {
-        StringBuilder normalized = new StringBuilder(str.length());
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-            if (c == '\r') {
-                if (i + 1 < str.length() && str.charAt(i + 1) == '\n') {
-                    i++;
-                }
-                normalized.append('\n');
-            } else {
-                normalized.append(c);
-            }
-        }
-        return normalized.toString();
-    }
-
-    static Expression parseArrayExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parseArrayExpression() {
         SourceLocation location = tokens.getLocation();
         tokens.expect(TokenType.LBRACKET);
 
@@ -64,7 +48,7 @@ final class LiteralParser {
                 } else if (tokens.match(TokenType.ELLIPSIS)) {
                     // Spread element: ...expr
                     SourceLocation spreadLocation = tokens.consumeLocation(); // consume ELLIPSIS
-                    Expression argument = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                    Expression argument = parserContext.expressions.parseAssignmentExpression();
                     elements.add(new SpreadElement(argument, spreadLocation));
                     if (tokens.consumeIf(TokenType.COMMA)) {
                     } else if (!tokens.match(TokenType.RBRACKET)) {
@@ -72,7 +56,7 @@ final class LiteralParser {
                         tokens.expect(TokenType.RBRACKET);
                     }
                 } else {
-                    elements.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
+                    elements.add(parserContext.expressions.parseAssignmentExpression());
                     if (tokens.consumeIf(TokenType.COMMA)) {
                     } else if (!tokens.match(TokenType.RBRACKET)) {
                         // After an element, expect comma or closing bracket
@@ -87,8 +71,7 @@ final class LiteralParser {
         return new ArrayExpression(elements, location);
     }
 
-    static Expression parseObjectExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parseObjectExpression() {
         SourceLocation location = tokens.getLocation();
         tokens.expect(TokenType.LBRACE);
 
@@ -98,7 +81,7 @@ final class LiteralParser {
             // Spread property: {...expr}
             if (tokens.match(TokenType.ELLIPSIS)) {
                 SourceLocation spreadLocation = tokens.consumeLocation(); // consume ELLIPSIS
-                Expression argument = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                Expression argument = parserContext.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpressionProperty(null, argument, "spread", false, false, false));
                 if (tokens.consumeIf(TokenType.COMMA)) {
                 } else {
@@ -150,13 +133,13 @@ final class LiteralParser {
 
                     // Parse property name after get/set (may be computed)
                     boolean computed = tokens.match(TokenType.LBRACKET);
-                    Expression key = ExpressionPrimaryParser.parsePropertyName(parserContext);
+                    Expression key = parserContext.primary.parsePropertyName();
 
                     boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
                     parserContext.superPropertyAllowed = true;
                     FunctionExpression value;
                     try {
-                        value = FunctionClassParser.parseMethod(parserContext, kind, methodStartLocation, false, false);
+                        value = parserContext.functions.parseMethod(kind, methodStartLocation, false, false);
                     } finally {
                         parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
                     }
@@ -177,7 +160,7 @@ final class LiteralParser {
 
             // Parse property name (can be identifier, string, number, or computed [expr])
             boolean computed = tokens.match(TokenType.LBRACKET);
-            Expression key = ExpressionPrimaryParser.parsePropertyName(parserContext);
+            Expression key = parserContext.primary.parsePropertyName();
 
             // Determine if this is a method or regular property
             if ((isAsync || isGenerator) && !tokens.match(TokenType.LPAREN)) {
@@ -189,8 +172,7 @@ final class LiteralParser {
                 parserContext.superPropertyAllowed = true;
                 FunctionExpression value;
                 try {
-                    value = FunctionClassParser.parseMethod(parserContext, "method", methodStartLocation, isAsync,
-                            isGenerator);
+                    value = parserContext.functions.parseMethod("method", methodStartLocation, isAsync, isGenerator);
                 } finally {
                     parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
                 }
@@ -198,7 +180,7 @@ final class LiteralParser {
             } else if (tokens.match(TokenType.COLON)) {
                 // Regular property: key: value
                 tokens.advance();
-                Expression value = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                Expression value = parserContext.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
             } else if (!computed && key instanceof Identifier keyId && (tokens.match(TokenType.COMMA)
                     || tokens.match(TokenType.RBRACE) || tokens.match(TokenType.ASSIGN))) {
@@ -227,7 +209,7 @@ final class LiteralParser {
                 }
                 Expression value;
                 if (tokens.consumeIf(TokenType.ASSIGN)) {
-                    Expression defaultValue = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                    Expression defaultValue = parserContext.expressions.parseAssignmentExpression();
                     value = new AssignmentExpression(keyId, AssignmentOperator.ASSIGN, defaultValue,
                             keyId.getLocation());
                 } else {
@@ -237,7 +219,7 @@ final class LiteralParser {
             } else {
                 // Fallback: expect colon
                 tokens.expect(TokenType.COLON);
-                Expression value = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                Expression value = parserContext.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
             }
 
@@ -251,7 +233,7 @@ final class LiteralParser {
         return new ObjectExpression(properties, location);
     }
 
-    static Expression parseTemplateExpression(ParserContext parserContext, String expressionSource) {
+    Expression parseTemplateExpression(String expressionSource) {
         if (expressionSource.isBlank()) {
             throw new JSSyntaxErrorException("Empty template expression");
         }
@@ -270,9 +252,9 @@ final class LiteralParser {
         return expression;
     }
 
-    static TemplateLiteral parseTemplateLiteral(ParserContext parserContext, boolean tagged) {
-        SourceLocation location = parserContext.tokens.getLocation();
-        String templateStr = parserContext.tokens.consumeValue();
+    TemplateLiteral parseTemplateLiteral(boolean tagged) {
+        SourceLocation location = tokens.getLocation();
+        String templateStr = tokens.consumeValue();
 
         List<String> quasis = new ArrayList<>();
         List<String> rawQuasis = new ArrayList<>();
@@ -289,10 +271,26 @@ final class LiteralParser {
             }
             int expressionStart = delimiter + 2;
             int end = LexerTemplateScanner.expressionEnd(templateStr, expressionStart);
-            expressions.add(parseTemplateExpression(parserContext, templateStr.substring(expressionStart, end)));
+            expressions.add(parseTemplateExpression(templateStr.substring(expressionStart, end)));
             start = end + 1;
         }
         return new TemplateLiteral(quasis, rawQuasis, expressions, location);
+    }
+
+    private static String normalizeTemplateLineTerminators(String str) {
+        StringBuilder normalized = new StringBuilder(str.length());
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (c == '\r') {
+                if (i + 1 < str.length() && str.charAt(i + 1) == '\n') {
+                    i++;
+                }
+                normalized.append('\n');
+            } else {
+                normalized.append(c);
+            }
+        }
+        return normalized.toString();
     }
 
     private static String processTemplateEscapeSequences(String str, boolean tagged) {

@@ -41,9 +41,11 @@ final class ParserContext {
 
     int classBodyNesting;
 
-    final DeclarationEarlyErrors declarations = new DeclarationEarlyErrors(this);
+    final DeclarationEarlyErrors declarations;
     final Set<String> evalPrivateNames;
+    final ExpressionParser expressions;
     int functionNesting;
+    final FunctionClassParser functions;
     int generatorFunctionNesting;
     boolean inClassFieldInitializer;
     boolean inClassStaticInit;
@@ -53,19 +55,18 @@ final class ParserContext {
     boolean inOperatorAllowed;
     final boolean isEval;
     Deque<Set<String>> labelStack = new ArrayDeque<>();
-    // Module-level early error tracking (ES2024 16.2.1.1)
-    final Set<String> moduleExportedNames = new HashSet<>();
-    final Set<String> moduleLexicalNames = new HashSet<>();
+    final LiteralParser literals;
     final boolean moduleMode;
     private ModuleDeclarationParser modules;
-    final Set<String> moduleVarNames = new HashSet<>();
     boolean needsArguments;
     int newTargetNesting;
-    final Set<Expression> parenthesizedExpressions;
+    private Set<Expression> parenthesizedExpressions;
     boolean parsingClassWithSuper;
-    final List<String> pendingExportBindings = new ArrayList<>();
+    final PatternParser patterns;
+    final ExpressionPrimaryParser primary;
     final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
     int statementNesting;
+    final StatementParser statements;
     boolean strictMode;
     boolean superPropertyAllowed;
     final TokenCursor tokens;
@@ -84,8 +85,14 @@ final class ParserContext {
         this.newTargetNesting = newTargetNesting;
         this.superPropertyAllowed = initialSuperPropertyAllowed;
         this.evalPrivateNames = evalPrivateNames != null ? Set.copyOf(evalPrivateNames) : Set.of();
-        this.parenthesizedExpressions = Collections.newSetFromMap(new IdentityHashMap<>());
         tokens = new TokenCursor(lexer, moduleMode);
+        declarations = new DeclarationEarlyErrors(this);
+        statements = new StatementParser(this);
+        patterns = new PatternParser(this);
+        functions = new FunctionClassParser(this);
+        expressions = new ExpressionParser(this);
+        primary = new ExpressionPrimaryParser(this);
+        literals = new LiteralParser(this);
     }
 
     PrivateIdentifier consumePrivateName() {
@@ -237,7 +244,7 @@ final class ParserContext {
     }
 
     boolean isParenthesizedExpression(Expression expression) {
-        return expression != null && parenthesizedExpressions.contains(expression);
+        return parenthesizedExpressions != null && parenthesizedExpressions.contains(expression);
     }
 
     boolean isPrivateNameAccessible(String privateName) {
@@ -270,6 +277,9 @@ final class ParserContext {
 
     void markParenthesizedExpression(Expression expression) {
         if (expression != null) {
+            if (parenthesizedExpressions == null) {
+                parenthesizedExpressions = Collections.newSetFromMap(new IdentityHashMap<>());
+            }
             parenthesizedExpressions.add(expression);
         }
     }

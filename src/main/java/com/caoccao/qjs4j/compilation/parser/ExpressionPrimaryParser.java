@@ -28,34 +28,29 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
-final class ExpressionPrimaryParser {
+final class ExpressionPrimaryParser extends GrammarProduction {
 
-    private ExpressionPrimaryParser() {
+    ExpressionPrimaryParser(ParserContext parserContext) {
+        super(parserContext);
     }
 
-    private static CallExpression createCallExpression(ParserContext parserContext, Expression callee,
-            List<Expression> arguments, boolean optional, SourceLocation location) {
-        boolean partOfOptionalChain = optional
-                || (callee.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(callee));
+    private boolean continuesOptionalChain(Expression base) {
+        return base.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(base);
+    }
+
+    private CallExpression createCallExpression(Expression callee, List<Expression> arguments, boolean optional,
+            SourceLocation location) {
+        boolean partOfOptionalChain = optional || continuesOptionalChain(callee);
         return new CallExpression(callee, arguments, optional, partOfOptionalChain, location);
     }
 
-    private static MemberExpression createMemberExpression(ParserContext parserContext, Expression object,
-            Expression property, boolean computed, boolean optional, SourceLocation location) {
-        boolean partOfOptionalChain = optional
-                || (object.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(object));
+    private MemberExpression createMemberExpression(Expression object, Expression property, boolean computed,
+            boolean optional, SourceLocation location) {
+        boolean partOfOptionalChain = optional || continuesOptionalChain(object);
         return new MemberExpression(object, property, computed, optional, partOfOptionalChain, location);
     }
 
-    private static boolean isPrivateDeleteTarget(Expression expression) {
-        if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.getProperty() instanceof PrivateIdentifier;
-        }
-        return false;
-    }
-
-    private static List<Expression> parseCallArguments(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    private List<Expression> parseCallArguments() {
         tokens.advance();
         List<Expression> args = new ArrayList<>();
 
@@ -68,10 +63,10 @@ final class ExpressionPrimaryParser {
                 }
                 if (tokens.match(TokenType.ELLIPSIS)) {
                     SourceLocation spreadLocation = tokens.consumeLocation();
-                    Expression argument = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                    Expression argument = parserContext.expressions.parseAssignmentExpression();
                     args.add(new SpreadElement(argument, spreadLocation));
                 } else {
-                    args.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
+                    args.add(parserContext.expressions.parseAssignmentExpression());
                 }
             } while (tokens.match(TokenType.COMMA));
         }
@@ -80,94 +75,69 @@ final class ExpressionPrimaryParser {
         return args;
     }
 
-    static Expression parseCallExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
-        Expression expr = ExpressionPrimaryParser.parseMemberExpression(parserContext);
-
+    /** The cover grammar after an async function parses computed keys as assignment expressions. */
+    private Expression parseCallChain(Expression expr, boolean afterAsyncFunction) {
         while (true) {
-            if (tokens.match(TokenType.TEMPLATE)) {
-                // Parentheses end an optional chain, so `(a?.b)`x`` is an ordinary tagged template.
-                if (expr.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(expr)) {
-                    throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
+            switch (tokens.current().type()) {
+                case TEMPLATE -> {
+                    if (expr.isPartOfOptionalChain()
+                            && (afterAsyncFunction || !parserContext.isParenthesizedExpression(expr))) {
+                        throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
+                    }
+                    expr = parseTaggedTemplate(expr);
                 }
-                expr = parseTaggedTemplate(parserContext, expr);
-            } else if (tokens.match(TokenType.LPAREN)) {
-                if (expr instanceof Identifier identifier && JSKeyword.IMPORT.equals(identifier.getName())) {
-                    throw new JSSyntaxErrorException("Unexpected token '('");
+                case LPAREN -> {
+                    if (!afterAsyncFunction && expr instanceof Identifier identifier
+                            && JSKeyword.IMPORT.equals(identifier.getName())) {
+                        throw new JSSyntaxErrorException("Unexpected token '('");
+                    }
+                    expr = parseCallSuffix(expr);
                 }
-                expr = parseCallSuffix(parserContext, expr);
-            } else if (tokens.match(TokenType.OPTIONAL_CHAINING)) {
-                expr = parseOptionalLink(parserContext, expr);
-            } else if (tokens.match(TokenType.DOT)) {
-                validateNoCoverInitializedName(expr);
-                SourceLocation location = tokens.consumeLocation();
-                Expression property = parseMemberPropertyName(parserContext);
-                expr = createMemberExpression(parserContext, expr, property, false, false, location);
-            } else if (tokens.match(TokenType.LBRACKET)) {
-                validateNoCoverInitializedName(expr);
-                expr = parseComputedMember(parserContext, expr, false);
-            } else {
-                break;
+                case OPTIONAL_CHAINING -> expr = parseOptionalLink(expr);
+                case DOT, LBRACKET -> {
+                    if (!afterAsyncFunction) {
+                        validateNoCoverInitializedName(expr);
+                    }
+                    expr = tokens.match(TokenType.DOT)
+                            ? parseNamedMember(expr, tokens.consumeLocation())
+                            : parseComputedMember(expr, afterAsyncFunction);
+                }
+                default -> {
+                    return expr;
+                }
             }
         }
-
-        return expr;
     }
 
-    private static Expression parseCallSuffix(ParserContext parserContext, Expression callee) {
-        SourceLocation location = parserContext.tokens.getLocation();
-        return createCallExpression(parserContext, callee, parseCallArguments(parserContext), false, location);
+    Expression parseCallExpression() {
+        return parseCallChain(parseMemberExpression(), false);
     }
 
-    private static Expression parseComputedMember(ParserContext parserContext, Expression object,
-            boolean assignmentOnly) {
-        SourceLocation location = parserContext.tokens.consumeLocation();
+    private Expression parseCallSuffix(Expression callee) {
+        SourceLocation location = tokens.getLocation();
+        return createCallExpression(callee, parseCallArguments(), false, location);
+    }
+
+    private Expression parseComputedMember(Expression object, boolean assignmentOnly) {
+        SourceLocation location = tokens.consumeLocation();
         Expression property = assignmentOnly
-                ? ExpressionAssignmentParser.parseAssignmentExpression(parserContext)
-                : ExpressionAssignmentParser.parseExpression(parserContext);
-        parserContext.tokens.expect(TokenType.RBRACKET);
-        return createMemberExpression(parserContext, object, property, true, false, location);
+                ? parserContext.expressions.parseAssignmentExpression()
+                : parserContext.expressions.parseExpression();
+        tokens.expect(TokenType.RBRACKET);
+        return createMemberExpression(object, property, true, false, location);
     }
 
-    private static SpreadElement parseCoverRestElement(ParserContext parserContext) {
-        SourceLocation location = parserContext.tokens.consumeLocation();
-        Expression argument = switch (parserContext.tokens.current().type()) {
-            case LBRACKET -> LiteralParser.parseArrayExpression(parserContext);
-            case LBRACE -> LiteralParser.parseObjectExpression(parserContext);
+    private SpreadElement parseCoverRestElement() {
+        SourceLocation location = tokens.consumeLocation();
+        Expression argument = switch (tokens.current().type()) {
+            case LBRACKET -> parserContext.literals.parseArrayExpression();
+            case LBRACE -> parserContext.literals.parseObjectExpression();
             default -> parserContext.parseIdentifier();
         };
         return new SpreadElement(argument, location);
     }
 
-    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
-        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
-        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0' && normalizedValue.charAt(1) >= '0'
-                && normalizedValue.charAt(1) <= '9' && normalizedValue.indexOf('.') == -1
-                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
-            boolean allOctalDigits = true;
-            for (int i = 1; i < normalizedValue.length(); i++) {
-                if (normalizedValue.charAt(i) > '7') {
-                    allOctalDigits = false;
-                    break;
-                }
-            }
-            if (allOctalDigits) {
-                long longVal = Long.parseLong(normalizedValue, 8);
-                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                        ? (int) longVal
-                        : (double) longVal;
-            }
-        }
-        double doubleVal = Double.parseDouble(normalizedValue);
-        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal) && doubleVal >= Integer.MIN_VALUE
-                && doubleVal <= Integer.MAX_VALUE) {
-            return (int) doubleVal;
-        }
-        return doubleVal;
-    }
-
-    static Expression parseMemberExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parseMemberExpression() {
         if (tokens.match(TokenType.NEW)) {
             SourceLocation location = tokens.getLocation();
             tokens.requireUnescapedToken("Unexpected token NEW");
@@ -199,23 +169,21 @@ final class ExpressionPrimaryParser {
                 throw new JSSyntaxErrorException("Unexpected import call in constructor position");
             }
 
-            Expression callee = parseMemberExpression(parserContext);
+            Expression callee = parseMemberExpression();
             if (startsWithImport && callee instanceof ImportExpression) {
                 throw new JSSyntaxErrorException("Unexpected import call in constructor position");
             }
 
             while (true) {
                 if (tokens.consumeIf(TokenType.DOT)) {
-                    SourceLocation memberLocation = tokens.getLocation();
-                    Expression property = parseMemberPropertyName(parserContext);
-                    callee = createMemberExpression(parserContext, callee, property, false, false, memberLocation);
+                    callee = parseNamedMember(callee, tokens.getLocation());
                 } else if (tokens.match(TokenType.LBRACKET)) {
                     // A computed member is located at its `[`, as in the call loop and as V8 reports it.
-                    callee = parseComputedMember(parserContext, callee, false);
+                    callee = parseComputedMember(callee, false);
                 } else if (tokens.match(TokenType.TEMPLATE)) {
                     // No optional chain can reach here: `new a?.b` is rejected, and a parenthesized
                     // chain such as `new (a?.b)`x`` is an ordinary tag.
-                    callee = parseTaggedTemplate(parserContext, callee);
+                    callee = parseTaggedTemplate(callee);
                 } else {
                     break;
                 }
@@ -224,24 +192,20 @@ final class ExpressionPrimaryParser {
                 throw new JSSyntaxErrorException("Invalid optional chain from new expression");
             }
 
-            List<Expression> args = tokens.match(TokenType.LPAREN)
-                    ? parseCallArguments(parserContext)
-                    : new ArrayList<>();
+            List<Expression> args = tokens.match(TokenType.LPAREN) ? parseCallArguments() : new ArrayList<>();
             return new NewExpression(callee, args, location);
         }
 
-        Expression expr = ExpressionPrimaryParser.parsePrimaryExpression(parserContext);
+        Expression expr = parsePrimaryExpression();
         while (true) {
             if (tokens.match(TokenType.DOT)) {
                 validateNoCoverInitializedName(expr);
                 tokens.advance();
-                SourceLocation memberLocation = tokens.getLocation();
-                Expression property = parseMemberPropertyName(parserContext);
-                expr = createMemberExpression(parserContext, expr, property, false, false, memberLocation);
+                expr = parseNamedMember(expr, tokens.getLocation());
             } else if (tokens.match(TokenType.LBRACKET)) {
                 validateNoCoverInitializedName(expr);
                 // A computed member is located at its `[`, as in the call loop and as V8 reports it.
-                expr = parseComputedMember(parserContext, expr, false);
+                expr = parseComputedMember(expr, false);
             } else {
                 break;
             }
@@ -249,8 +213,7 @@ final class ExpressionPrimaryParser {
         return expr;
     }
 
-    static Expression parseMemberPropertyName(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parseMemberPropertyName() {
         TokenType type = tokens.current().type();
         if (type.isIdentifierName()) {
             return tokens.consumeIdentifierName();
@@ -264,47 +227,25 @@ final class ExpressionPrimaryParser {
         throw tokens.unexpectedToken();
     }
 
-    private static Literal parseNumericLiteral(String token, SourceLocation location, boolean bigInt) {
-        String digits = token.replace("_", "");
-        int radix = 10;
-        if (digits.length() > 1 && digits.charAt(0) == '0') {
-            radix = switch (digits.charAt(1)) {
-                case 'x', 'X' -> 16;
-                case 'o', 'O' -> 8;
-                case 'b', 'B' -> 2;
-                default -> 10;
-            };
-        }
-        if (radix != 10) {
-            digits = digits.substring(2);
-        }
-        if (bigInt) {
-            return new Literal(new BigInteger(digits, radix), location);
-        }
-        if (radix == 10) {
-            return new Literal(parseDecimalOrLegacyOctal(digits), location);
-        }
-        return new Literal((double) Long.parseLong(digits, radix), location);
+    private Expression parseNamedMember(Expression base, SourceLocation location) {
+        return createMemberExpression(base, parseMemberPropertyName(), false, false, location);
     }
 
-    private static Expression parseOptionalLink(ParserContext parserContext, Expression base) {
-        TokenCursor tokens = parserContext.tokens;
+    private Expression parseOptionalLink(Expression base) {
         SourceLocation location = tokens.consumeLocation();
         if (tokens.match(TokenType.LPAREN)) {
-            return createCallExpression(parserContext, base, parseCallArguments(parserContext), true, location);
+            return createCallExpression(base, parseCallArguments(), true, location);
         }
         if (tokens.consumeIf(TokenType.LBRACKET)) {
-            Expression property = ExpressionAssignmentParser.parseExpression(parserContext);
+            Expression property = parserContext.expressions.parseExpression();
             tokens.expect(TokenType.RBRACKET);
-            return createMemberExpression(parserContext, base, property, true, true, location);
+            return createMemberExpression(base, property, true, true, location);
         }
-        return createMemberExpression(parserContext, base, parseMemberPropertyName(parserContext), false, true,
-                location);
+        return createMemberExpression(base, parseMemberPropertyName(), false, true, location);
     }
 
-    static Expression parsePostfixExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
-        Expression expr = ExpressionPrimaryParser.parseCallExpression(parserContext);
+    Expression parsePostfixExpression() {
+        Expression expr = parseCallExpression();
 
         if (!tokens.hasNewlineBefore() && (tokens.match(TokenType.INC) || tokens.match(TokenType.DEC))) {
             if (expr instanceof Identifier identifier) {
@@ -333,29 +274,8 @@ final class ExpressionPrimaryParser {
         return expr;
     }
 
-    static Expression parsePostPrimaryExpression(ParserContext parserContext, Expression expr,
-            SourceLocation location) {
-        TokenCursor tokens = parserContext.tokens;
-        while (true) {
-            if (tokens.match(TokenType.TEMPLATE)) {
-                if (expr.isPartOfOptionalChain()) {
-                    throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
-                }
-                expr = parseTaggedTemplate(parserContext, expr);
-            } else if (tokens.match(TokenType.LPAREN)) {
-                expr = parseCallSuffix(parserContext, expr);
-            } else if (tokens.match(TokenType.OPTIONAL_CHAINING)) {
-                expr = parseOptionalLink(parserContext, expr);
-            } else if (tokens.match(TokenType.DOT)) {
-                SourceLocation loc = tokens.consumeLocation();
-                Expression property = parseMemberPropertyName(parserContext);
-                expr = createMemberExpression(parserContext, expr, property, false, false, loc);
-            } else if (tokens.match(TokenType.LBRACKET)) {
-                expr = parseComputedMember(parserContext, expr, true);
-            } else {
-                break;
-            }
-        }
+    Expression parsePostPrimaryExpression(Expression expr) {
+        expr = parseCallChain(expr, true);
 
         AssignmentOperator operator = AssignmentOperator.fromToken(tokens.current().type());
         if (operator != null) {
@@ -372,15 +292,14 @@ final class ExpressionPrimaryParser {
                 }
             }
             tokens.advance();
-            Expression right = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+            Expression right = parserContext.expressions.parseAssignmentExpression();
             return new AssignmentExpression(expr, operator, right, loc);
         }
 
         return expr;
     }
 
-    static Expression parsePrimaryExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parsePrimaryExpression() {
         SourceLocation location = tokens.getLocation();
 
         return switch (tokens.current().type()) {
@@ -403,7 +322,7 @@ final class ExpressionPrimaryParser {
                 String value = tokens.consumeValue();
                 yield new Literal(new RegExpLiteralValue(value), location);
             }
-            case TEMPLATE -> LiteralParser.parseTemplateLiteral(parserContext, false);
+            case TEMPLATE -> parserContext.literals.parseTemplateLiteral(false);
             case TRUE -> {
                 tokens.requireUnescapedToken("Keyword must not contain escaped characters");
                 tokens.advance();
@@ -440,22 +359,22 @@ final class ExpressionPrimaryParser {
                 if (tokens.consumeIf(TokenType.RPAREN)) {
                     // `()` is only an arrow function's empty parameter list; as an expression it is an error. It
                     // used to evaluate to an empty array.
-                    requireArrowAfterCoverParameters(parserContext, "Unexpected token ')'");
+                    requireArrowAfterCoverParameters("Unexpected token ')'");
                     yield new ArrayExpression(new ArrayList<>(), location);
                 }
 
                 if (tokens.match(TokenType.IDENTIFIER) || tokens.match(TokenType.ELLIPSIS)) {
                     if (tokens.match(TokenType.ELLIPSIS)) {
-                        SpreadElement rest = parseCoverRestElement(parserContext);
+                        SpreadElement rest = parseCoverRestElement();
                         tokens.expect(TokenType.RPAREN);
-                        requireArrowAfterCoverParameters(parserContext, "Unexpected token '...'");
+                        requireArrowAfterCoverParameters("Unexpected token '...'");
                         yield new ArrayExpression(List.of(rest), location);
                     }
 
                     {
                         boolean savedIn = parserContext.inOperatorAllowed;
                         parserContext.inOperatorAllowed = true;
-                        Expression firstExpr = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                        Expression firstExpr = parserContext.expressions.parseAssignmentExpression();
 
                         if (!tokens.match(TokenType.COMMA)) {
                             // Single expression in parens
@@ -482,12 +401,12 @@ final class ExpressionPrimaryParser {
 
                             if (tokens.match(TokenType.ELLIPSIS)) {
                                 // Rest/spread: (expr, ...rest) for arrow params
-                                SpreadElement rest = parseCoverRestElement(parserContext);
+                                SpreadElement rest = parseCoverRestElement();
                                 elements.add(rest);
                                 break;
                             }
 
-                            elements.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
+                            elements.add(parserContext.expressions.parseAssignmentExpression());
                         }
 
                         parserContext.inOperatorAllowed = savedIn;
@@ -496,9 +415,9 @@ final class ExpressionPrimaryParser {
                         // A rest element or a trailing comma makes this an arrow parameter list and nothing else.
                         boolean hasSpread = elements.get(elements.size() - 1) instanceof SpreadElement;
                         if (hasSpread) {
-                            requireArrowAfterCoverParameters(parserContext, "Unexpected token '...'");
+                            requireArrowAfterCoverParameters("Unexpected token '...'");
                         } else if (trailingComma) {
-                            requireArrowAfterCoverParameters(parserContext, "Unexpected token ')'");
+                            requireArrowAfterCoverParameters("Unexpected token ')'");
                         }
 
                         if (elements.size() == 1) {
@@ -515,7 +434,7 @@ final class ExpressionPrimaryParser {
                 } else {
                     boolean savedIn = parserContext.inOperatorAllowed;
                     parserContext.inOperatorAllowed = true;
-                    Expression expr = ExpressionAssignmentParser.parseExpression(parserContext);
+                    Expression expr = parserContext.expressions.parseExpression();
                     parserContext.inOperatorAllowed = savedIn;
                     tokens.expect(TokenType.RPAREN);
                     if (parserContext.isParenthesizedExpression(expr) && tokens.match(TokenType.ARROW)) {
@@ -535,17 +454,17 @@ final class ExpressionPrimaryParser {
                 tokens.advance();
                 yield new Literal(new RegExpLiteralValue(value), location);
             }
-            case LBRACKET -> LiteralParser.parseArrayExpression(parserContext);
-            case LBRACE -> LiteralParser.parseObjectExpression(parserContext);
-            case FUNCTION -> FunctionClassParser.parseFunctionExpression(parserContext);
-            case CLASS -> FunctionClassParser.parseClassExpression(parserContext);
+            case LBRACKET -> parserContext.literals.parseArrayExpression();
+            case LBRACE -> parserContext.literals.parseObjectExpression();
+            case FUNCTION -> parserContext.functions.parseFunctionExpression();
+            case CLASS -> parserContext.functions.parseClassExpression();
             case AT -> {
-                FunctionClassParser.parseDecoratorList(parserContext);
+                parserContext.functions.parseDecoratorList();
                 // After decorators, must be a class expression
                 if (!tokens.match(TokenType.CLASS)) {
                     throw new JSSyntaxErrorException("Decorators are not valid here");
                 }
-                yield FunctionClassParser.parseClassExpression(parserContext);
+                yield parserContext.functions.parseClassExpression();
             }
             case IMPORT -> {
                 tokens.requireUnescapedToken("Unexpected token IMPORT");
@@ -566,7 +485,7 @@ final class ExpressionPrimaryParser {
                         tokens.advance(); // consume '.'
                         tokens.advance(); // consume 'defer'
                         tokens.expect(TokenType.LPAREN);
-                        Expression source = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                        Expression source = parserContext.expressions.parseAssignmentExpression();
                         tokens.expect(TokenType.RPAREN);
                         yield new ImportExpression(source, null, true, location);
                     } else {
@@ -576,11 +495,11 @@ final class ExpressionPrimaryParser {
                     boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                     parserContext.inOperatorAllowed = true;
                     try {
-                        Expression source = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                        Expression source = parserContext.expressions.parseAssignmentExpression();
                         Expression options = null;
                         if (tokens.consumeIf(TokenType.COMMA)) {
                             if (!tokens.match(TokenType.RPAREN)) {
-                                options = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                                options = parserContext.expressions.parseAssignmentExpression();
                                 if (tokens.consumeIf(TokenType.COMMA)) {
                                 }
                             }
@@ -612,8 +531,7 @@ final class ExpressionPrimaryParser {
         };
     }
 
-    static Expression parsePropertyName(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parsePropertyName() {
         TokenType type = tokens.current().type();
         if (type != TokenType.NULL && type.isIdentifierName()) {
             return tokens.consumeIdentifierName();
@@ -629,7 +547,7 @@ final class ExpressionPrimaryParser {
                 // Allow 'in' operator inside computed property names
                 boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                 parserContext.inOperatorAllowed = true;
-                Expression expr = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
+                Expression expr = parserContext.expressions.parseAssignmentExpression();
                 parserContext.inOperatorAllowed = savedInOperatorAllowed;
                 tokens.expect(TokenType.RBRACKET);
                 yield expr;
@@ -642,20 +560,17 @@ final class ExpressionPrimaryParser {
         };
     }
 
-    private static Expression parseTaggedTemplate(ParserContext parserContext, Expression tag) {
-        SourceLocation location = parserContext.tokens.getLocation();
-        return new TaggedTemplateExpression(tag, LiteralParser.parseTemplateLiteral(parserContext, true), location);
+    private Expression parseTaggedTemplate(Expression tag) {
+        SourceLocation location = tokens.getLocation();
+        return new TaggedTemplateExpression(tag, parserContext.literals.parseTemplateLiteral(true), location);
     }
 
-    static Expression parseUnaryExpression(ParserContext parserContext) {
-        TokenCursor tokens = parserContext.tokens;
+    Expression parseUnaryExpression() {
         if (tokens.match(TokenType.ASYNC) && tokens.nextOnSameLine(TokenType.FUNCTION)) {
             tokens.requireUnescapedToken("Keyword must not contain escaped characters");
             SourceLocation asyncLocation = tokens.consumeLocation();
-            Expression asyncFunctionExpression = FunctionClassParser.parseFunctionExpression(parserContext, true,
-                    asyncLocation);
-            return ExpressionPrimaryParser.parsePostPrimaryExpression(parserContext, asyncFunctionExpression,
-                    asyncLocation);
+            Expression asyncFunctionExpression = parserContext.functions.parseFunctionExpression(true, asyncLocation);
+            return parsePostPrimaryExpression(asyncFunctionExpression);
         }
 
         if (tokens.match(TokenType.AWAIT)) {
@@ -667,19 +582,19 @@ final class ExpressionPrimaryParser {
             }
             if (!parserContext.isAwaitExpressionAllowed()) {
                 if (parserContext.isAwaitIdentifierAllowed()) {
-                    return parsePostfixExpression(parserContext);
+                    return parsePostfixExpression();
                 }
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
             SourceLocation location = tokens.consumeLocation();
-            Expression argument = parseUnaryExpression(parserContext);
+            Expression argument = parseUnaryExpression();
             return new AwaitExpression(argument, location);
         }
 
         if (tokens.match(TokenType.YIELD)) {
             // In non-strict, non-generator contexts, yield is a valid identifier
             if (parserContext.isYieldIdentifierAllowed()) {
-                return parsePostfixExpression(parserContext);
+                return parsePostfixExpression();
             }
             // In strict mode outside a generator, yield is a reserved word
             if (parserContext.generatorFunctionNesting == 0) {
@@ -693,7 +608,7 @@ final class ExpressionPrimaryParser {
         if (tokens.match(TokenType.INC) || tokens.match(TokenType.DEC)) {
             UnaryOperator op = tokens.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
             SourceLocation location = tokens.consumeLocation();
-            Expression operand = parseUnaryExpression(parserContext);
+            Expression operand = parseUnaryExpression();
             if (operand instanceof Identifier identifier) {
                 String identifierName = identifier.getName();
                 if ("import.meta".equals(identifierName) || "new.target".equals(identifierName)
@@ -718,7 +633,7 @@ final class ExpressionPrimaryParser {
         UnaryOperator op = UnaryOperator.prefixOperator(tokens.current().type());
         if (op != null) {
             SourceLocation location = tokens.consumeLocation();
-            Expression operand = parseUnaryExpression(parserContext);
+            Expression operand = parseUnaryExpression();
             if (op == UnaryOperator.DELETE) {
                 // The early error is stated over IdentifierReference. `this` and `new.target` are
                 // parsed as Identifier nodes but are a PrimaryExpression and a MetaProperty, so
@@ -734,7 +649,7 @@ final class ExpressionPrimaryParser {
             return new UnaryExpression(op, operand, true, location);
         }
 
-        return parsePostfixExpression(parserContext);
+        return parsePostfixExpression();
     }
 
     /**
@@ -744,13 +659,70 @@ final class ExpressionPrimaryParser {
      * @param message
      *            V8's message for the token that makes it a parameter list
      */
-    private static void requireArrowAfterCoverParameters(ParserContext parserContext, String message) {
-        if (!parserContext.tokens.match(TokenType.ARROW)) {
+    private void requireArrowAfterCoverParameters(String message) {
+        if (!tokens.match(TokenType.ARROW)) {
             throw new JSSyntaxErrorException(message);
         }
-        if (parserContext.tokens.hasNewlineBefore()) {
+        if (tokens.hasNewlineBefore()) {
             throw new JSSyntaxErrorException("Unexpected token '=>'");
         }
+    }
+
+    private static boolean isPrivateDeleteTarget(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.getProperty() instanceof PrivateIdentifier;
+        }
+        return false;
+    }
+
+    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
+        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
+        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0' && normalizedValue.charAt(1) >= '0'
+                && normalizedValue.charAt(1) <= '9' && normalizedValue.indexOf('.') == -1
+                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
+            boolean allOctalDigits = true;
+            for (int i = 1; i < normalizedValue.length(); i++) {
+                if (normalizedValue.charAt(i) > '7') {
+                    allOctalDigits = false;
+                    break;
+                }
+            }
+            if (allOctalDigits) {
+                long longVal = Long.parseLong(normalizedValue, 8);
+                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
+                        ? (int) longVal
+                        : (double) longVal;
+            }
+        }
+        double doubleVal = Double.parseDouble(normalizedValue);
+        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal) && doubleVal >= Integer.MIN_VALUE
+                && doubleVal <= Integer.MAX_VALUE) {
+            return (int) doubleVal;
+        }
+        return doubleVal;
+    }
+
+    private static Literal parseNumericLiteral(String token, SourceLocation location, boolean bigInt) {
+        String digits = token.replace("_", "");
+        int radix = 10;
+        if (digits.length() > 1 && digits.charAt(0) == '0') {
+            radix = switch (digits.charAt(1)) {
+                case 'x', 'X' -> 16;
+                case 'o', 'O' -> 8;
+                case 'b', 'B' -> 2;
+                default -> 10;
+            };
+        }
+        if (radix != 10) {
+            digits = digits.substring(2);
+        }
+        if (bigInt) {
+            return new Literal(new BigInteger(digits, radix), location);
+        }
+        if (radix == 10) {
+            return new Literal(parseDecimalOrLegacyOctal(digits), location);
+        }
+        return new Literal((double) Long.parseLong(digits, radix), location);
     }
 
     /**

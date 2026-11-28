@@ -26,7 +26,7 @@ final class RegExpEscapes {
     private RegExpEscapes() {
     }
 
-    private static int combineTrailingLowSurrogateEscapeIfPresent(CompileContext context, int codePoint) {
+    private static int combineTrailingLowSurrogateEscapeIfPresent(RegExpCompilation context, int codePoint) {
         if (!context.isUnicodeMode()) {
             return codePoint;
         }
@@ -71,7 +71,7 @@ final class RegExpEscapes {
                 || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '|' || ch == '/';
     }
 
-    private static int parseBracedUnicodeEscape(CompileContext context) {
+    private static int parseBracedUnicodeEscape(RegExpCompilation context) {
         int firstDigit = ++context.pos;
         int value = 0;
         while (context.hasMore() && context.peek() != '}') {
@@ -96,7 +96,7 @@ final class RegExpEscapes {
         return value;
     }
 
-    static int parseLegacyOctalEscape(CompileContext context, int firstDigit) {
+    static int parseLegacyOctalEscape(RegExpCompilation context, int firstDigit) {
         int value = firstDigit;
         if (context.hasMore()) {
             int next = context.peek();
@@ -115,7 +115,7 @@ final class RegExpEscapes {
         return value;
     }
 
-    static int parseUnicodeEscape(CompileContext context) {
+    static int parseUnicodeEscape(RegExpCompilation context) {
         if (context.isUnicodeMode() && context.at('{')) {
             return parseBracedUnicodeEscape(context);
         }
@@ -123,7 +123,7 @@ final class RegExpEscapes {
         return combineTrailingLowSurrogateEscapeIfPresent(context, value);
     }
 
-    static int readCharacterEscape(CompileContext context, int escape) {
+    static int readCharacterEscape(RegExpCompilation context, int escape) {
         return switch (escape) {
             case 'f' -> '\f';
             case 'n' -> '\n';
@@ -145,7 +145,7 @@ final class RegExpEscapes {
         };
     }
 
-    static int readControlLetter(CompileContext context, boolean inClass) {
+    static int readControlLetter(RegExpCompilation context, boolean inClass) {
         if (context.hasMore()) {
             int next = context.peek();
             boolean annexB = inClass && !context.isUnicodeMode() && ((next >= '0' && next <= '9') || next == '_');
@@ -161,7 +161,7 @@ final class RegExpEscapes {
     }
 
     /** Leave the cursor on the first following character for an Annex B identity escape. */
-    static int readFixedHexEscape(CompileContext context, int escape, int digits) {
+    static int readFixedHexEscape(RegExpCompilation context, int escape, int digits) {
         int value = fixedHexValue(context.codePoints, context.pos, digits);
         if (value >= 0) {
             context.pos += digits;

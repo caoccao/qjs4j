@@ -41,28 +41,6 @@ final class ArrayLikeElements {
         return index < 0 || index >= length ? JSUndefined.INSTANCE : getProperty(index);
     }
 
-    JSValue find(JSValue[] args, boolean reverse, boolean returnIndex) {
-        JSValue callback = args[0];
-        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
-        long step = reverse ? -1 : 1;
-        long end = reverse ? -1 : length;
-        for (long i = reverse ? length - 1 : 0; i != end; i += step) {
-            context.checkExecutionInterrupt();
-            JSValue element = get(i);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue result = callElement(context, callback, callbackThis, element, i, object);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return returnIndex ? JSNumber.of(i) : element;
-            }
-        }
-        return returnIndex ? JSNumber.of(-1) : JSUndefined.INSTANCE;
-    }
-
     JSValue get(long index) {
         return typedArray == null
                 ? ArrayPrototype.getElement(context, object, index)
@@ -81,28 +59,6 @@ final class ArrayLikeElements {
         return typedArray == null
                 ? object.get(PropertyKey.fromIndexString(index))
                 : typedArray.getElementOrUndefined(index);
-    }
-
-    JSValue iterate(JSValue[] args, ArrayIteration iteration) {
-        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
-        for (long i = 0; i < length; i++) {
-            context.checkExecutionInterrupt();
-            JSValue element = getPresent(i);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (element == null) {
-                continue;
-            }
-            JSValue result = callElement(context, args[0], callbackThis, element, i, object);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (iteration.stopsAt(result)) {
-                return iteration.stopResult;
-            }
-        }
-        return iteration.completion;
     }
 
     JSValue reduce(JSValue[] args, boolean reverse) {
@@ -166,11 +122,18 @@ final class ArrayLikeElements {
     }
 
     static ArrayLikeElements arrayCallback(JSContext context, JSValue receiver, JSValue[] args, String method) {
-        ArrayLikeElements elements = ordinary(context, receiver, method);
-        if (elements != null && (args.length == 0 || !JSTypeChecking.isCallable(args[0]))) {
-            return context.rejectTypeError("Callback must be a function");
+        JSObject object = ArrayPrototype.requireArrayLike(context, receiver, method);
+        long length = callbackLength(context, object, args);
+        return length < 0 ? null : new ArrayLikeElements(context, object, length, null);
+    }
+
+    static long callbackLength(JSContext context, JSObject object, JSValue[] args) {
+        long length = ArrayPrototype.checkedLength(context, object);
+        if (length >= 0 && (args.length == 0 || !JSTypeChecking.isCallable(args[0]))) {
+            context.throwTypeError("Callback must be a function");
+            return -1;
         }
-        return elements;
+        return length;
     }
 
     static JSValue callElement(JSContext context, JSValue callback, JSValue thisArg, JSValue element, long index,

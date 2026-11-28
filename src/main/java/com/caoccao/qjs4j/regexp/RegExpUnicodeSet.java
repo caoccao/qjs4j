@@ -28,7 +28,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         return ch == '(' || ch == ')' || ch == '[' || ch == '{' || ch == '}' || ch == '/' || ch == '-' || ch == '|';
     }
 
-    private static boolean isInvalidUnicodeSetsDoublePunctuator(CompileContext context, int ch) {
+    private static boolean isInvalidUnicodeSetsDoublePunctuator(RegExpCompilation context, int ch) {
         if (!isUnicodeSetsReservedDoublePunctuator(ch)) {
             return false;
         }
@@ -36,11 +36,11 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         return nextPos < context.codePoints.length && context.codePoints[nextPos] == ch;
     }
 
-    private static boolean isUnicodeSetsClassEnd(CompileContext context) {
+    private static boolean isUnicodeSetsClassEnd(RegExpCompilation context) {
         return !context.hasMore() || context.peek() == ']';
     }
 
-    private static boolean isUnicodeSetsOperatorAt(CompileContext context, String operator) {
+    private static boolean isUnicodeSetsOperatorAt(RegExpCompilation context, String operator) {
         if (context.pos + operator.length() > context.codePoints.length) {
             return false;
         }
@@ -58,7 +58,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
                 || ch == '^' || ch == '`' || ch == '~';
     }
 
-    private static RegExpUnicodeSet parseUnicodeSetsElement(CompileContext context) {
+    private static RegExpUnicodeSet parseUnicodeSetsElement(RegExpCompilation context) {
         if (!context.hasMore()) {
             throw new RegExpSyntaxException("Unterminated character class");
         }
@@ -81,7 +81,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         return single(currentChar);
     }
 
-    private static RegExpUnicodeSet parseUnicodeSetsEscapeElement(CompileContext context) {
+    private static RegExpUnicodeSet parseUnicodeSetsEscapeElement(RegExpCompilation context) {
         if (!context.hasMore()) {
             throw new RegExpSyntaxException("Incomplete escape in character class");
         }
@@ -111,7 +111,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
      * ({@code --}), whose operands are nested classes, escapes or single characters but not ranges. The operators used
      * to be accepted in any mix, as in {@code [a&&b--c]} and {@code [ab&&c]}, and {@code [a&&&b]} was accepted.
      */
-    private static RegExpUnicodeSet parseUnicodeSetsExpression(CompileContext context) {
+    private static RegExpUnicodeSet parseUnicodeSetsExpression(RegExpCompilation context) {
         if (isUnicodeSetsClassEnd(context)) {
             return new RegExpUnicodeSet(new int[0], List.of(), null);
         }
@@ -163,7 +163,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         return union.finish(null);
     }
 
-    private static RegExpUnicodeSet parseUnicodeSetsOperand(CompileContext context) {
+    private static RegExpUnicodeSet parseUnicodeSetsOperand(RegExpCompilation context) {
         if (!context.hasMore()) {
             throw new RegExpSyntaxException("Unterminated character class");
         }
@@ -198,7 +198,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         return firstElement;
     }
 
-    private static RegExpUnicodeSet parseUnicodeSetsPropertyEscapeSet(CompileContext context, boolean inverted) {
+    private static RegExpUnicodeSet parseUnicodeSetsPropertyEscapeSet(RegExpCompilation context, boolean inverted) {
         RegExpUnicodeSet set = readProperty(context, !inverted);
         if (inverted) {
             return new RegExpUnicodeSet(UnicodePropertyResolver.invertRanges(set.ranges()), List.of(), null);
@@ -206,7 +206,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         return set.sequences().isEmpty() ? set : set.normalized();
     }
 
-    private static RegExpUnicodeSet parseUnicodeSetsStringLiteralSet(CompileContext context) {
+    private static RegExpUnicodeSet parseUnicodeSetsStringLiteralSet(RegExpCompilation context) {
         context.pos++; // Skip 'q'
         if (!context.consume('{')) {
             throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
@@ -256,7 +256,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         return result.normalized();
     }
 
-    static RegExpUnicodeSet read(CompileContext context) {
+    static RegExpUnicodeSet read(RegExpCompilation context) {
         context.pos++; // Skip '['
 
         boolean inverted = context.consume('^');

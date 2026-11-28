@@ -77,14 +77,17 @@ final class ParameterEarlyErrors {
         }
     }
 
-    static void validateFormalsBodyDuplicate(FunctionParams params, List<Statement> body) {
+    static void validateFormalsBodyDuplicate(FunctionParams params, Set<String> lexicalNames) {
+        if (lexicalNames.isEmpty()) {
+            return;
+        }
         Set<String> paramNames = new HashSet<>();
         params.forEachBoundName(paramNames::add);
         // Every lexical declaration counts — class and using as well as let and const — and the message is
         // V8's.
-        for (String declaredName : DeclarationEarlyErrors.collectFunctionBodyLexicalNames(body)) {
+        for (String declaredName : lexicalNames) {
             if (paramNames.contains(declaredName)) {
-                throw new JSSyntaxErrorException("Identifier '" + declaredName + "' has already been declared");
+                throw DeclarationEarlyErrors.duplicate(declaredName);
             }
         }
     }

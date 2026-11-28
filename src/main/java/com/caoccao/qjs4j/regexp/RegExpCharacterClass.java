@@ -53,7 +53,7 @@ final class RegExpCharacterClass {
     private RegExpCharacterClass() {
     }
 
-    static int[] characterClassRanges(CompileContext context, int escape) {
+    static int[] characterClassRanges(RegExpCompilation context, int escape) {
         boolean folded = context.isUnicodeMode() && context.isIgnoreCase();
         return switch (escape) {
             case 'd' -> DIGITS;
@@ -66,21 +66,17 @@ final class RegExpCharacterClass {
         };
     }
 
-    static void compileCharacterClass(CompileContext context, boolean isBackwardDirection) {
-        if (isBackwardDirection) {
-            context.emit(RegExpOpcode.PREV);
-        }
+    static void compileCharacterClass(RegExpCompilation context, boolean isBackwardDirection) {
+        context.emitPreviousIfBackward(isBackwardDirection);
         if (context.isUnicodeSetsMode()) {
             emitClassSet(context, RegExpUnicodeSet.read(context));
         } else {
             compileRangeClass(context);
         }
-        if (isBackwardDirection) {
-            context.emit(RegExpOpcode.PREV);
-        }
+        context.emitPreviousIfBackward(isBackwardDirection);
     }
 
-    private static void compileRangeClass(CompileContext context) {
+    private static void compileRangeClass(RegExpCompilation context) {
         context.pos++;
         boolean inverted = context.consume('^');
         UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
@@ -120,7 +116,8 @@ final class RegExpCharacterClass {
      * Compile a \p{} or \P{} Unicode property escape. Handles both regular properties and sequence properties (v flag).
      * Based on QuickJS parse_unicode_property + re_emit_string_list.
      */
-    static void compileUnicodePropertyEscape(CompileContext context, boolean isInverted, boolean isBackwardDirection) {
+    static void compileUnicodePropertyEscape(RegExpCompilation context, boolean isInverted,
+            boolean isBackwardDirection) {
         RegExpUnicodeSet property = readProperty(context, context.isUnicodeSetsMode() && !isInverted);
         if (!property.sequences().isEmpty()) {
             emitClassSet(context, property);
@@ -128,21 +125,17 @@ final class RegExpCharacterClass {
         }
         int[] propertyRanges = property.ranges();
         // Regular property resolved successfully
-        if (isBackwardDirection) {
-            context.emit(RegExpOpcode.PREV);
-        }
+        context.emitPreviousIfBackward(isBackwardDirection);
         boolean emitInvertedRanges = isInverted;
         if (isInverted && context.isUnicodeMode() && context.isIgnoreCase()) {
             propertyRanges = UnicodePropertyResolver.invertRanges(propertyRanges);
             emitInvertedRanges = false;
         }
         emitRanges(context, propertyRanges, emitInvertedRanges);
-        if (isBackwardDirection) {
-            context.emit(RegExpOpcode.PREV);
-        }
+        context.emitPreviousIfBackward(isBackwardDirection);
     }
 
-    private static void emitClassSet(CompileContext context, RegExpUnicodeSet extendedClassSet) {
+    private static void emitClassSet(RegExpCompilation context, RegExpUnicodeSet extendedClassSet) {
         emitStringList(context, extendedClassSet.ranges(), extendedClassSet.sequences());
     }
 
@@ -160,7 +153,7 @@ final class RegExpCharacterClass {
      * @param ranges
      *            inclusive code point pairs, {@code [start0, end0, start1, end1, ...]}
      */
-    static void emitRangePayload(CompileContext context, int[] ranges) {
+    static void emitRangePayload(RegExpCompilation context, int[] ranges) {
         int numRanges = ranges.length / 2;
         // Four bytes for the count field, eight per range.
         long dataSize = 4L + (long) numRanges * 8L;
@@ -171,7 +164,7 @@ final class RegExpCharacterClass {
         }
     }
 
-    private static void emitRanges(CompileContext context, int[] ranges, boolean inverted) {
+    private static void emitRanges(RegExpCompilation context, int[] ranges, boolean inverted) {
         context.emit(inverted
                 ? (context.isIgnoreCase() ? RegExpOpcode.NOT_RANGE_I : RegExpOpcode.NOT_RANGE)
                 : (context.isIgnoreCase() ? RegExpOpcode.RANGE_I : RegExpOpcode.RANGE));
@@ -186,7 +179,7 @@ final class RegExpCharacterClass {
      * Emits alternatives: try longest sequences first, then shorter ones, then code point ranges. Uses
      * SPLIT_NEXT_FIRST/GOTO to create a chain of alternatives.
      */
-    private static void emitStringList(CompileContext context, int[] ranges, List<int[]> sequences) {
+    private static void emitStringList(RegExpCompilation context, int[] ranges, List<int[]> sequences) {
         if (sequences.isEmpty()) {
             emitRanges(context, ranges, false);
             return;
@@ -203,7 +196,7 @@ final class RegExpCharacterClass {
             boolean last = i + 1 == sorted.size() && ranges.length == 0;
             int next = last ? -1 : context.emitForwardJump(RegExpOpcode.SPLIT_NEXT_FIRST);
             for (int codePoint : sequence) {
-                compileLiteralChar(context, codePoint);
+                context.compileLiteralChar(codePoint);
             }
             if (!last) {
                 exits.add(context.emitForwardJump(RegExpOpcode.GOTO));
@@ -226,7 +219,7 @@ final class RegExpCharacterClass {
         return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_';
     }
 
-    static int parseClassEscape(CompileContext context, UnicodeRangeBuilder ranges) {
+    static int parseClassEscape(RegExpCompilation context, UnicodeRangeBuilder ranges) {
         int ch = context.read();
 
         return switch (ch) {
@@ -270,7 +263,7 @@ final class RegExpCharacterClass {
         };
     }
 
-    static RegExpUnicodeSet readProperty(CompileContext context, boolean allowSequences) {
+    static RegExpUnicodeSet readProperty(RegExpCompilation context, boolean allowSequences) {
         if (!context.consume('{')) {
             throw new RegExpSyntaxException("expecting '{' after \\p");
         }
@@ -293,7 +286,7 @@ final class RegExpCharacterClass {
         throw new RegExpSyntaxException("unknown unicode property name");
     }
 
-    private static String readPropertyIdentifier(CompileContext context) {
+    private static String readPropertyIdentifier(RegExpCompilation context) {
         int start = context.pos;
         while (context.hasMore() && isUnicodePropertyChar(context.peek())) {
             context.pos++;
@@ -301,7 +294,7 @@ final class RegExpCharacterClass {
         return new String(context.codePoints, start, context.pos - start);
     }
 
-    private static int readRangeAtom(CompileContext context, UnicodeRangeBuilder ranges) {
+    private static int readRangeAtom(RegExpCompilation context, UnicodeRangeBuilder ranges) {
         if (context.pos == context.codePoints.length) {
             throw new RegExpSyntaxException("Unterminated character class");
         }

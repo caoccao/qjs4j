@@ -23,12 +23,6 @@ import java.util.*;
 
 /** ECMAScript declaration-name and scope conflict checks for statements. */
 record DeclarationEarlyErrors(ParserContext parserContext) {
-    void addModuleLexicalName(String name) {
-        if (parserContext.moduleMode && parserContext.functionNesting == 0) {
-            addLexicalName(parserContext.moduleLexicalNames, parserContext.moduleVarNames, name);
-        }
-    }
-
     static void addLexicalName(Set<String> lexicalNames, Set<String> varNames, String name) {
         if (varNames.contains(name) || !lexicalNames.add(name)) {
             throw duplicate(name);
@@ -94,9 +88,9 @@ record DeclarationEarlyErrors(ParserContext parserContext) {
         }
     }
 
-    private static boolean hasBlockLexicalDeclaration(List<Statement> statements) {
+    private static boolean hasLexicalDeclaration(List<Statement> statements, boolean includeFunctions) {
         for (Statement statement : statements) {
-            if (statement instanceof Declaration
+            if (statement instanceof ClassDeclaration || includeFunctions && statement instanceof FunctionDeclaration
                     || statement instanceof VariableDeclaration variable && variable.getKind() != VariableKind.VAR) {
                 return true;
             }
@@ -107,7 +101,7 @@ record DeclarationEarlyErrors(ParserContext parserContext) {
     void validateBlockEarlyErrors(List<Statement> statements) {
         // Without a direct lexical declaration there can be no lexical/var conflict.
         // Static initializers still need to inspect var patterns for a forbidden "await".
-        if (!parserContext.inClassStaticInit && !hasBlockLexicalDeclaration(statements)) {
+        if (!parserContext.inClassStaticInit && !hasLexicalDeclaration(statements, true)) {
             return;
         }
         BlockBindings bindings = new BlockBindings();
@@ -128,10 +122,10 @@ record DeclarationEarlyErrors(ParserContext parserContext) {
      * @param statements
      *            the body's statements
      */
-    void validateFunctionBodyEarlyErrors(List<Statement> statements) {
+    Set<String> validateFunctionBodyEarlyErrors(List<Statement> statements) {
         Set<String> lexicalNames = collectFunctionBodyLexicalNames(statements);
         if (lexicalNames.isEmpty() && !parserContext.inClassStaticInit) {
-            return;
+            return lexicalNames;
         }
         Set<String> varNames = new HashSet<>();
         for (Statement statement : statements) {
@@ -142,6 +136,7 @@ record DeclarationEarlyErrors(ParserContext parserContext) {
             }
         }
         checkConflicts(lexicalNames, varNames);
+        return lexicalNames;
     }
 
     void validateCatchClauseEarlyErrors(Pattern catchParameter, BlockStatement catchBody) {
@@ -206,6 +201,10 @@ record DeclarationEarlyErrors(ParserContext parserContext) {
     }
 
     void validateProgramEarlyErrors(List<Statement> statements) {
+        // Script-level functions are var-scoped. Without lexicals there can be no redeclaration conflict.
+        if (!parserContext.inClassStaticInit && !hasLexicalDeclaration(statements, false)) {
+            return;
+        }
         Set<String> lexicalNames = new HashSet<>();
         Set<String> varNames = new HashSet<>();
 
@@ -311,7 +310,7 @@ record DeclarationEarlyErrors(ParserContext parserContext) {
         }
     }
 
-    private static JSSyntaxErrorException duplicate(String name) {
+    static JSSyntaxErrorException duplicate(String name) {
         return new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
     }
 

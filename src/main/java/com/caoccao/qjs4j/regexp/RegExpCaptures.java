@@ -144,7 +144,7 @@ final class RegExpCaptures {
         return null;
     }
 
-    static String readName(CompileContext context) {
+    static String readName(RegExpCompilation context) {
         GroupNameParseResult result = requireName(context.codePoints, context.pos);
         context.pos = result.nextPos();
         return result.name();

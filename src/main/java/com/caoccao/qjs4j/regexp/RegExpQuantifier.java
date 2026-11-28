@@ -26,7 +26,7 @@ record RegExpQuantifier(int min, int max) {
     private static final int MAX_UNROLLED_QUANTIFIER_REPETITIONS = 4096;
 
     /** Consume a complete quantifier. Leave an incomplete brace expression at its opening brace. */
-    static RegExpQuantifier read(CompileContext context) {
+    static RegExpQuantifier read(RegExpCompilation context) {
         int start = context.pos;
         switch (context.codePoints[start]) {
             case '*' :
@@ -61,7 +61,7 @@ record RegExpQuantifier(int min, int max) {
         return null;
     }
 
-    private static int readDecimal(CompileContext context) {
+    private static int readDecimal(RegExpCompilation context) {
         int start = context.pos;
         long value = 0;
         while (context.hasMore()) {
@@ -117,7 +117,7 @@ record RegExpQuantifier(int min, int max) {
         }
     }
 
-    void emit(CompileContext context, int atomStart, int captureCountBeforeAtom, int captureCount) {
+    void emit(RegExpCompilation context, int atomStart, int captureCountBeforeAtom, int captureCount) {
         if (max < min) {
             throw new RegExpSyntaxException("numbers out of order in {} quantifier");
         }
@@ -239,7 +239,7 @@ record RegExpQuantifier(int min, int max) {
      * term is complete, so sibling quantifiers share them and only nesting depth consumes new ones. Backtracking
      * restores a sibling's registers along with the captures, so reuse cannot corrupt a loop that is resumed.
      */
-    private int allocateRegister(CompileContext context) {
+    private int allocateRegister(RegExpCompilation context) {
         if (context.nextRegister >= RegExpBytecode.ExecutionLimits.MAX_REGISTERS) {
             throw new RegExpSyntaxException("Regular expression requires too many registers");
         }
@@ -249,17 +249,17 @@ record RegExpQuantifier(int min, int max) {
         return register;
     }
 
-    private void emitCounter(CompileContext context, int register, int count) {
+    private void emitCounter(RegExpCompilation context, int register, int count) {
         context.emitU8(RegExpOpcode.SET_I32, register);
         context.buffer.appendU32(count);
     }
 
-    private void emitLoop(CompileContext context, int register, int target) {
+    private void emitLoop(RegExpCompilation context, int register, int target) {
         context.emitU8(RegExpOpcode.LOOP, register);
         context.buffer.appendU32(target - (context.buffer.size() + 4));
     }
 
-    private static void emitRepeatedAtom(CompileContext context, byte[] atomCode, boolean addZeroAdvanceCheck,
+    private static void emitRepeatedAtom(RegExpCompilation context, byte[] atomCode, boolean addZeroAdvanceCheck,
             int advReg) {
         if (addZeroAdvanceCheck) {
             context.emitU8(RegExpOpcode.SET_CHAR_POS, advReg);
@@ -270,7 +270,7 @@ record RegExpQuantifier(int min, int max) {
         }
     }
 
-    private static void emitUnboundedRepeat(CompileContext context, byte[] atomCode, boolean greedy,
+    private static void emitUnboundedRepeat(RegExpCompilation context, byte[] atomCode, boolean greedy,
             boolean addZeroAdvanceCheck, int advReg) {
         int advCheckSize = addZeroAdvanceCheck ? 4 : 0; // SET_CHAR_POS(2) + CHECK_ADVANCE(2)
         int loopStart = context.buffer.size();

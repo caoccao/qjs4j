@@ -97,7 +97,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        return iterate(context, thisArg, args, ArrayIteration.EVERY);
+        return ArrayIteration.EVERY.onTypedArray(context, thisArg, args);
     }
 
     public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -144,29 +144,23 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.find", false, false);
+        return ArrayIteration.FIND.onTypedArray(context, thisArg, args);
     }
 
     public static JSValue findIndex(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.findIndex", false, true);
+        return ArrayIteration.FIND_INDEX.onTypedArray(context, thisArg, args);
     }
 
     public static JSValue findLast(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.findLast", true, false);
+        return ArrayIteration.FIND_LAST.onTypedArray(context, thisArg, args);
     }
 
     public static JSValue findLastIndex(JSContext context, JSValue thisArg, JSValue[] args) {
-        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.findLastIndex", true, true);
-    }
-
-    private static JSValue findViaPredicate(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
-            boolean reverse, boolean returnIndex) {
-        ArrayLikeElements elements = ArrayLikeElements.typedCallback(context, thisArg, args, methodName);
-        return elements == null ? context.getPendingException() : elements.find(args, reverse, returnIndex);
+        return ArrayIteration.FIND_LAST_INDEX.onTypedArray(context, thisArg, args);
     }
 
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
-        return iterate(context, thisArg, args, ArrayIteration.FOR_EACH);
+        return ArrayIteration.FOR_EACH.onTypedArray(context, thisArg, args);
     }
 
     public static JSValue getBuffer(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -231,12 +225,6 @@ public final class TypedArrayPrototype {
 
     static boolean isBigIntTypedArray(JSTypedArray typedArray) {
         return typedArray instanceof JSBigInt64Array || typedArray instanceof JSBigUint64Array;
-    }
-
-    private static JSValue iterate(JSContext context, JSValue thisArg, JSValue[] args, ArrayIteration iteration) {
-        ArrayLikeElements elements = ArrayLikeElements.typedCallback(context, thisArg, args,
-                iteration.typedArrayMethod);
-        return elements == null ? context.getPendingException() : elements.iterate(args, iteration);
     }
 
     public static JSValue join(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -318,7 +306,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        return iterate(context, thisArg, args, ArrayIteration.SOME);
+        return ArrayIteration.SOME.onTypedArray(context, thisArg, args);
     }
 
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
