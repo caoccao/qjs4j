@@ -27,15 +27,11 @@ public record TemporalDurationToStringOptions(TemporalUnit smallestUnit, Tempora
             TemporalUnit.NANOSECOND, TemporalRoundingMode.TRUNC, 1L, true, -1);
 
     public static TemporalDurationToStringOptions read(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
-                "Temporal error: Options must be an object.");
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionsObject == null) {
-            return TemporalDurationToStringOptions.DEFAULT;
-        }
+        return TemporalTimeStringOptions.readOptions(context, optionsValue,
+                "Temporal error: Options must be an object.", DEFAULT, TemporalDurationToStringOptions::readFields);
+    }
 
+    private static TemporalDurationToStringOptions readFields(JSContext context, JSObject optionsObject) {
         TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.read(context, optionsObject,
                 TemporalUnit.SECOND, "Temporal error: Invalid smallestUnit.");
         if (time == null) {

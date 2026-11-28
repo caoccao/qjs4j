@@ -31,18 +31,16 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Intl.Collator instance object.
  */
-public final class JSIntlCollator extends JSObject {
+public final class JSIntlCollator extends IntlBoundFunctionObject {
     /** Forward French collators by their rules; every French locale shares one rule set, so this holds one entry. */
     static final Map<String, Collator> FORWARD_FRENCH_COLLATORS = new ConcurrentHashMap<>();
     public static final String NAME = "Intl.Collator";
     private final Collator accentCollator;
     private final boolean backwardSecondary;
-    private JSFunction boundCompareFunction;
     private final String caseFirst;
     private final String collation;
     private final Collator collator;
     private final boolean ignorePunctuation;
-    private final Locale locale;
     private final boolean numeric;
     private final boolean phonebookMode;
     private final Collator primaryCollator;
@@ -54,8 +52,7 @@ public final class JSIntlCollator extends JSObject {
 
     public JSIntlCollator(JSContext context, Locale locale, String sensitivity, String usage, String collation,
             boolean numeric, String caseFirst, boolean ignorePunctuation, String resolvedLocaleTag) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.sensitivity = sensitivity;
         this.usage = usage;
         this.collation = collation;
@@ -264,7 +261,7 @@ public final class JSIntlCollator extends JSObject {
     }
 
     public JSFunction getBoundCompareFunction() {
-        return boundCompareFunction;
+        return boundFunction;
     }
 
     public String getCaseFirst() {
@@ -277,10 +274,6 @@ public final class JSIntlCollator extends JSObject {
 
     public boolean getIgnorePunctuation() {
         return ignorePunctuation;
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public boolean getNumeric() {
@@ -300,7 +293,7 @@ public final class JSIntlCollator extends JSObject {
     }
 
     public void setBoundCompareFunction(JSFunction boundCompareFunction) {
-        this.boundCompareFunction = boundCompareFunction;
+        boundFunction = boundCompareFunction;
     }
 
     /**

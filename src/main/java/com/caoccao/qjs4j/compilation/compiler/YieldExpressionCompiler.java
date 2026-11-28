@@ -25,7 +25,7 @@ final class YieldExpressionCompiler {
 
     static void compile(CompilerContext compilerContext, YieldExpression yieldExpr) {
         if (yieldExpr.getArgument() != null) {
-            compilerContext.expressionCompiler.compile(yieldExpr.getArgument());
+            compilerContext.compileExpression(yieldExpr.getArgument());
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }

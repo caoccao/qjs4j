@@ -24,14 +24,13 @@ import java.util.ArrayDeque;
 /**
  * Compiles ObjectPattern destructuring into bytecode.
  */
-final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
+final class ObjectPatternCompiler {
 
-    ObjectPatternCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private ObjectPatternCompiler() {
     }
 
-    @Override
-    void compile(ObjectPattern objPattern) {
+    static void compile(CompilerContext compilerContext, ObjectPattern objPattern) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // Object destructuring: { proxy, revoke } = value
         // Stack: [object]
         boolean hasRest = objPattern.getRestElement() != null;
@@ -49,10 +48,11 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         for (ObjectPatternProperty prop : objPattern.getProperties()) {
             emitter.emitOpcode(Opcode.DUP);
             String atom = ObjectDestructuringCompiler.prepareRead(compilerContext, prop, -1);
-            maybePreResolveBindingIdentifierReference(getBindingIdentifierForPreResolve(prop.getValue()));
+            maybePreResolveBindingIdentifierReference(compilerContext,
+                    getBindingIdentifierForPreResolve(prop.getValue()));
             ObjectDestructuringCompiler.read(emitter, atom);
             // Assign to the pattern (could be nested)
-            compilerContext.patternCompiler.compile(prop.getValue());
+            compilerContext.compilePattern(prop.getValue());
 
             if (hasRest) {
                 // Add the property key to the exclude list
@@ -70,7 +70,7 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
                 } else {
                     // Computed property key: re-evaluate expression to get the key name
                     emitter.emitOpcode(Opcode.DROP); // drop null
-                    compilerContext.expressionCompiler.compile(prop.getKey());
+                    compilerContext.compileExpression(prop.getKey());
                     emitter.emitOpcode(Opcode.NULL);
                     emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     emitter.emitOpcode(Opcode.DROP); // drop null value
@@ -85,7 +85,7 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         if (hasRest) {
             boolean hasExclusions = !objPattern.getProperties().isEmpty();
             ObjectDestructuringCompiler.copyRest(emitter, hasExclusions);
-            compilerContext.patternCompiler.compile(objPattern.getRestElement().getArgument());
+            compilerContext.compilePattern(objPattern.getRestElement().getArgument());
             ObjectDestructuringCompiler.finishRest(emitter, hasExclusions);
         } else {
             // Drop the original object
@@ -93,7 +93,7 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         }
     }
 
-    private Identifier getBindingIdentifierForPreResolve(Pattern pattern) {
+    private static Identifier getBindingIdentifierForPreResolve(Pattern pattern) {
         if (pattern instanceof Identifier identifier) {
             return identifier;
         }
@@ -104,19 +104,20 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         return null;
     }
 
-    private void maybePreResolveBindingIdentifierReference(Identifier bindingIdentifier) {
+    private static void maybePreResolveBindingIdentifierReference(CompilerContext compilerContext,
+            Identifier bindingIdentifier) {
         if (!compilerContext.useExistingBindingInParentScopes || bindingIdentifier == null) {
             return;
         }
 
         if (!compilerContext.withObjectManager.hasActiveWithObject()) {
-            compilerContext.identifierCompiler.compile(bindingIdentifier);
-            emitter.emitOpcode(Opcode.DROP);
+            IdentifierCompiler.compile(compilerContext, bindingIdentifier);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
             return;
         }
 
         String bindingName = bindingIdentifier.getName();
-        compilerContext.assignmentExpressionCompiler.emitIdentifierReference(bindingName);
+        AssignmentExpressionCompiler.emitIdentifierReference(compilerContext, bindingName);
 
         int propertyLocalIndex = compilerContext.storeTemporary("#preResolvedRefProp");
 

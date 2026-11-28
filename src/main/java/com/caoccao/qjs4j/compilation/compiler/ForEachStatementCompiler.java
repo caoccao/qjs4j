@@ -23,16 +23,14 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /** Compiles the common binding scope and the distinct enumeration and iterator loops of for-in and for-of. */
-final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
-    ForEachStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ForEachStatementCompiler {
+    private ForEachStatementCompiler() {
     }
 
-    @Override
-    void compile(ForEachStatement statement) {
-        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+    static void compile(CompilerContext compilerContext, ForEachStatement statement) {
+        StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
         if (statement instanceof ForOfStatement of && of.getLeft() instanceof CallExpression call) {
-            compileForOfWithCallExpressionTarget(of, call);
+            compileForOfWithCallExpressionTarget(compilerContext, of, call);
             return;
         }
 
@@ -45,75 +43,79 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             }
             pattern = declaration.getDeclarations().get(0).getId();
             if (declaration.getKind() == VariableKind.VAR && !compilerContext.inGlobalScope) {
-                compilerContext.patternCompiler.declarePatternVariables(pattern);
+                PatternCompiler.declarePatternVariables(compilerContext, pattern);
             }
         }
         boolean lexical = declaration != null && declaration.getKind() != VariableKind.VAR;
         if (lexical) {
             // The RHS sees the loop names in their temporal dead zone.
             compilerContext.scopeManager.enterScope();
-            compilerContext.patternCompiler.declarePatternVariables(pattern);
+            PatternCompiler.declarePatternVariables(compilerContext, pattern);
             for (String name : pattern.getBoundNames()) {
                 Integer local = compilerContext.scopeManager.currentScope().getLocal(name);
                 if (local != null) {
-                    emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, local);
+                    compilerContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, local);
                     compilerContext.tdzLocals.add(name);
                 }
             }
-            startIteration(statement);
+            startIteration(compilerContext, statement);
             compilerContext.scopeManager.exitScope();
         }
         compilerContext.scopeManager.enterScope();
         if (lexical) {
-            compilerContext.patternCompiler.declarePatternVariables(pattern);
+            PatternCompiler.declarePatternVariables(compilerContext, pattern);
             boolean immutable = statement instanceof ForInStatement
                     ? declaration.getKind() == VariableKind.CONST
                     : declaration.getKind().isImmutable();
             if (immutable) {
-                compilerContext.patternCompiler.markPatternConstBindings(pattern);
+                PatternCompiler.markPatternConstBindings(compilerContext, pattern);
             }
         }
         if (statement instanceof ForInStatement && declaration != null) {
-            compileForInInitializer(pattern, declaration.getDeclarations().get(0).getInit());
+            compileForInInitializer(compilerContext, pattern, declaration.getDeclarations().get(0).getInit());
         }
         if (!lexical) {
-            startIteration(statement);
+            startIteration(compilerContext, statement);
         }
         if (statement instanceof ForOfStatement of) {
-            compileForOfLoop(of, declaration, pattern, lexical);
+            compileForOfLoop(compilerContext, of, declaration, pattern, lexical);
         } else {
-            compileForInLoop(statement, pattern, lexical);
+            compileForInLoop(compilerContext, statement, pattern, lexical);
         }
     }
 
-    private void compileBody(ForEachStatement statement, Pattern pattern, boolean lexical) {
+    private static void compileBody(CompilerContext compilerContext, ForEachStatement statement, Pattern pattern,
+            boolean lexical) {
         if (statement.getLeft() instanceof Expression expression) {
-            compilerContext.expressionDestructuringAssignmentCompiler.compileIterationTarget(expression);
+            ExpressionDestructuringAssignmentCompiler.compileIterationTarget(compilerContext, expression);
         } else if (pattern != null) {
-            compilerContext.patternCompiler.compileForOfValueAssignment(pattern, !lexical);
+            PatternCompiler.compileForOfValueAssignment(compilerContext, pattern, !lexical);
         }
-        compilerContext.statementCompiler.compileNestedStatement(statement.getBody());
+        StatementCompiler.compileNestedStatement(compilerContext, statement.getBody());
         if (lexical) {
-            compilerContext.emitHelpers.emitCloseLocForPattern(pattern);
+            EmitHelpers.emitCloseLocForPattern(compilerContext, pattern);
         }
     }
 
-    private void compileForInInitializer(Pattern pattern, Expression initializer) {
+    private static void compileForInInitializer(CompilerContext compilerContext, Pattern pattern,
+            Expression initializer) {
         if (initializer == null || pattern == null) {
             return;
         }
         if (pattern instanceof Identifier id && initializer instanceof ClassExpression cls && cls.getId() == null) {
             compilerContext.inferredClassName = id.getName();
         }
-        compilerContext.expressionCompiler.compile(initializer);
+        compilerContext.compileExpression(initializer);
         if (pattern instanceof Identifier id && initializer.isAnonymousFunction()) {
-            emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
         }
         compilerContext.inferredClassName = null;
-        compilerContext.patternCompiler.compileForOfValueAssignment(pattern, true);
+        PatternCompiler.compileForOfValueAssignment(compilerContext, pattern, true);
     }
 
-    private void compileForInLoop(ForEachStatement forInStmt, Pattern pattern, boolean lexical) {
+    private static void compileForInLoop(CompilerContext compilerContext, ForEachStatement forInStmt, Pattern pattern,
+            boolean lexical) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         int loopStart = emitter.currentOffset();
         LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
                 compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
@@ -123,9 +125,9 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         emitter.emitOpcode(Opcode.DUP);
         emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
         int jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
-        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+        StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
 
-        compileBody(forInStmt, pattern, lexical);
+        compileBody(compilerContext, forInStmt, pattern, lexical);
 
         emitter.emitGoto(loopStart);
 
@@ -140,12 +142,13 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         emitter.emitOpcode(Opcode.DROP);
 
         compilerContext.loopManager.popLoop();
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
     }
 
-    private void compileForOfLoop(ForOfStatement forOfStmt, VariableDeclaration varDecl, Pattern pattern,
-            boolean lexical) {
+    private static void compileForOfLoop(CompilerContext compilerContext, ForOfStatement forOfStmt,
+            VariableDeclaration varDecl, Pattern pattern, boolean lexical) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         boolean isUsingForOf = varDecl != null && varDecl.getKind().isUsing();
         boolean isAwaitUsingForOf = varDecl != null && varDecl.getKind() == VariableKind.AWAIT_USING;
         // Declare a local for the per-iteration DisposableStack if needed
@@ -199,11 +202,11 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             emitter.emitOpcode(Opcode.NIP_CATCH);
             jumpToEnd = emitter.emitJump(Opcode.GOTO);
             emitter.patchJumpToHere(bodyJump);
-            compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+            StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
         } else {
             emitter.emitIntOperand(Opcode.FOR_OF_NEXT, 0);
             jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
-            compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+            StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
         }
 
         if (isUsingForOf) {
@@ -215,14 +218,14 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             emitter.emitPutLocal(forOfUsingStackLocal);
 
             // Call stack.use(value) - value is on the stack
-            compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(forOfUsingStackLocal, "use");
+            EmitHelpers.emitMethodCallWithSingleArgOnLocalObject(compilerContext, forOfUsingStackLocal, "use");
         }
 
-        compileBody(forOfStmt, pattern, lexical);
+        compileBody(compilerContext, forOfStmt, pattern, lexical);
 
         // Per-iteration disposal for using/await-using
         if (isUsingForOf) {
-            compilerContext.emitHelpers.emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
+            EmitHelpers.emitScopeUsingDisposal(compilerContext, compilerContext.scopeManager.currentScope());
         }
 
         emitter.emitGoto(loopStart);
@@ -240,7 +243,7 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             jumpOverBreakTarget = emitter.emitJump(Opcode.GOTO);
         }
         int breakTarget = emitter.currentOffset();
-        compilerContext.emitHelpers.emitLoopIteratorClose(loop);
+        EmitHelpers.emitLoopIteratorClose(compilerContext, loop);
         if (jumpOverBreakTarget >= 0) {
             emitter.patchJumpToHere(jumpOverBreakTarget);
         }
@@ -251,16 +254,18 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         compilerContext.loopManager.popLoop();
 
         if (!isUsingForOf) {
-            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+            EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
         }
         compilerContext.scopeManager.exitScope();
     }
 
-    private void compileForOfWithCallExpressionTarget(ForOfStatement forOfStmt, CallExpression callExpr) {
+    private static void compileForOfWithCallExpressionTarget(CompilerContext compilerContext, ForOfStatement forOfStmt,
+            CallExpression callExpr) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         compilerContext.scopeManager.enterScope();
 
         // Compile the iterable expression
-        compilerContext.expressionCompiler.compile(forOfStmt.getRight());
+        compilerContext.compileExpression(forOfStmt.getRight());
 
         // FOR_OF_START to get iterator
         if (forOfStmt.isAsync()) {
@@ -292,7 +297,7 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         // Drop the value - we can't assign it
         emitter.emitOpcode(Opcode.DROP);
         // Evaluate the call expression (f() is called at runtime)
-        compilerContext.expressionCompiler.compile(callExpr);
+        compilerContext.compileExpression(callExpr);
         emitter.emitOpcode(Opcode.DROP);
         // Throw ReferenceError
         emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
@@ -306,12 +311,13 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         // Clean up iterator: drop catch_offset, next, iter
         emitter.emitDrops(3);
 
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
     }
 
-    private void startIteration(ForEachStatement statement) {
-        compilerContext.expressionCompiler.compile(statement.getRight());
+    private static void startIteration(CompilerContext compilerContext, ForEachStatement statement) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        compilerContext.compileExpression(statement.getRight());
         if (statement instanceof ForInStatement) {
             emitter.emitOpcode(Opcode.FOR_IN_START);
         } else {

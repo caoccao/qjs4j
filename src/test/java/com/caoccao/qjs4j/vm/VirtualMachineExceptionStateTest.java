@@ -47,7 +47,7 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
         context.throwTypeError("outer");
         Throwable nestedFailure = null;
         try {
-            failing.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+            failing.call(context, JSUndefined.INSTANCE);
         } catch (RuntimeException e) {
             nestedFailure = e;
         }
@@ -77,7 +77,7 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
         // A native callee that raises an error and then invokes a bytecode function re-enters
         // VirtualMachine.execute(). The error it raised must still be pending afterwards.
         context.throwTypeError("set before the nested call");
-        inner.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        inner.call(context, JSUndefined.INSTANCE);
 
         assertThat(readGlobal("ran")).as("the nested bytecode function must still run").isEqualTo(JSBoolean.TRUE);
         assertThat(context.hasPendingException()).as("the exception set before the nested call must survive it")

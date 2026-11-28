@@ -626,7 +626,7 @@ public sealed abstract class JSTypedArray extends JSObject
             if (!receiverObj.isExtensible()) {
                 return false;
             }
-            return receiverObj.defineProperty(key, value, PropertyDescriptor.DataState.All);
+            return receiverObj.createDataProperty(key, value);
         }
         return false;
     }

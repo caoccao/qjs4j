@@ -107,10 +107,9 @@ final class JSONParser {
         JSValue nameValue = new JSString(name);
         JSObject contextObj = context.createJSObject();
         if (sourceText != null) {
-            contextObj.defineProperty(PropertyKey.fromString("source"), new JSString(sourceText),
-                    PropertyDescriptor.DataState.All);
+            contextObj.createDataProperty(PropertyKey.fromString("source"), new JSString(sourceText));
         }
-        return JSCall.call(context, reviver, holder, new JSValue[]{nameValue, val, contextObj});
+        return JSCall.call(context, reviver, holder, nameValue, val, contextObj);
     }
 
     boolean isCompleteValue() {
@@ -127,7 +126,7 @@ final class JSONParser {
             return result.value;
         }
         JSObject root = context.createJSObject();
-        root.defineProperty(PropertyKey.fromString(""), result.value, PropertyDescriptor.DataState.All);
+        root.createDataProperty(PropertyKey.fromString(""), result.value);
         recordElementSource(root, "", result);
         JSValue revived = internalizeJSONProperty(root, "");
         return revived == null || context.hasPendingException() ? JSUndefined.INSTANCE : revived;
@@ -357,8 +356,7 @@ final class JSONParser {
                     }
                 } else {
                     // CreateDataProperty, not [[Set]], so __proto__ is an ordinary property.
-                    frame.container.defineProperty(PropertyKey.fromString(frame.key), completed.value,
-                            PropertyDescriptor.DataState.All);
+                    frame.container.createDataProperty(PropertyKey.fromString(frame.key), completed.value);
                     recordElementSource(frame.container, frame.key, completed);
                 }
                 frame.count++;
@@ -425,7 +423,7 @@ final class JSONParser {
         if (result instanceof JSUndefined) {
             holder.delete(key, false);
         } else {
-            holder.defineProperty(key, result, PropertyDescriptor.DataState.All);
+            holder.createDataProperty(key, result);
         }
         return !context.hasPendingException();
     }

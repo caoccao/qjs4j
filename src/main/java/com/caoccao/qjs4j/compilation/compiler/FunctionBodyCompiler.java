@@ -35,14 +35,14 @@ enum FunctionBodyCompiler {
     void compile(CompilerContext context, FunctionNode function, BlockStatement block, boolean async) {
         List<Statement> statements = block.getBody();
         // Declare all var slots before compiling the functions that may capture them.
-        context.compilerAnalysis.hoistAllDeclarationsAsLocals(statements);
+        CompilerAnalysis.hoistAllDeclarationsAsLocals(context, statements);
         for (Statement statement : statements) {
             if (statement instanceof FunctionDeclaration declaration) {
                 FunctionDeclarationCompiler.compile(context, declaration);
             }
         }
         if (this != METHOD) {
-            context.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(statements, function.getParameterNames());
+            CompilerAnalysis.hoistFunctionBodyAnnexBDeclarations(context, statements, function.getParameterNames());
         }
 
         int usingCatch = -1;
@@ -52,7 +52,7 @@ enum FunctionBodyCompiler {
         }
         for (Statement statement : statements) {
             if (!(statement instanceof FunctionDeclaration)) {
-                context.statementCompiler.compile(statement);
+                context.compileStatement(statement);
             }
         }
         if (statements.isEmpty() || !(statements.get(statements.size() - 1) instanceof ReturnStatement)) {
@@ -67,7 +67,7 @@ enum FunctionBodyCompiler {
         if (usingCatch >= 0) {
             int end = context.emitter.emitJump(Opcode.GOTO);
             context.emitter.patchJumpToHere(usingCatch);
-            context.emitHelpers.emitScopeUsingDisposalWithException(context.scopeManager.currentScope());
+            EmitHelpers.emitScopeUsingDisposalWithException(context, context.scopeManager.currentScope());
             context.emitter.patchJumpToHere(end);
         }
     }
@@ -76,7 +76,7 @@ enum FunctionBodyCompiler {
         int result = context.scopeManager.currentScope()
                 .declareLocal(returnLocalPrefix + context.emitter.currentOffset());
         context.emitter.emitPutLocal(result);
-        context.emitHelpers.emitCurrentScopeUsingDisposal();
+        EmitHelpers.emitCurrentScopeUsingDisposal(context);
         context.emitter.emitGetLocal(result);
         context.emitter.emitOpcode(async ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }

@@ -46,7 +46,7 @@ final class EvalGlobalOverlay {
                 // A global var keeps its descriptor when a nested eval overlays its value.
                 global.set(key, overlayValue);
             } else {
-                global.defineProperty(key, overlayValue, PropertyDescriptor.DataState.All);
+                global.createDataProperty(key, overlayValue);
             }
         } else {
             global.set(key, overlayValue);

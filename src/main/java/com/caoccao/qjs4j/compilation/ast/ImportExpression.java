@@ -38,7 +38,7 @@ public final class ImportExpression extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(source) || kind.in(options);
     }
 

@@ -29,7 +29,7 @@ public final class RestParameter extends ASTNode {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(argument);
     }
 

@@ -21,25 +21,24 @@ import com.caoccao.qjs4j.compilation.ast.JumpStatement;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class JumpStatementCompiler extends AstNodeCompiler<JumpStatement> {
-    JumpStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class JumpStatementCompiler {
+    private JumpStatementCompiler() {
     }
 
-    @Override
-    void compile(JumpStatement statement) {
+    static void compile(CompilerContext compilerContext, JumpStatement statement) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (compilerContext.finallySubroutineDepth > 0) {
             emitter.emitDrops(2);
         }
         boolean continuing = statement instanceof ContinueStatement;
         String label = statement.getLabel() == null ? null : statement.getLabel().getName();
-        LoopContext target = findTarget(statement, label, continuing);
+        LoopContext target = findTarget(compilerContext, statement, label, continuing);
         if (label != null) {
-            compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
+            EmitHelpers.emitIteratorCloseForLoopsUntil(compilerContext, target);
         }
         int scopeDepth = continuing ? target.continueTargetScopeDepth : target.breakTargetScopeDepth;
-        compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(scopeDepth);
-        compilerContext.emitHelpers.emitActiveFinallyGosubs();
+        EmitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, scopeDepth);
+        EmitHelpers.emitActiveFinallyGosubs(compilerContext);
         int jump = emitter.emitJump(Opcode.GOTO);
         if (continuing) {
             target.continuePositions.add(jump);
@@ -48,7 +47,8 @@ final class JumpStatementCompiler extends AstNodeCompiler<JumpStatement> {
         }
     }
 
-    private LoopContext findTarget(JumpStatement statement, String label, boolean continuing) {
+    private static LoopContext findTarget(CompilerContext compilerContext, JumpStatement statement, String label,
+            boolean continuing) {
         boolean labelExists = false;
         for (LoopContext loop : compilerContext.loopManager) {
             if (label != null && !label.equals(loop.label)) {

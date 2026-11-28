@@ -32,11 +32,11 @@ final class SequenceExpressionCompiler {
             if (i < expressions.size() - 1) {
                 compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
-                compilerContext.expressionCompiler.compile(expressions.get(i));
+                compilerContext.compileExpression(expressions.get(i));
                 compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
-                compilerContext.expressionCompiler.compile(expressions.get(i));
+                compilerContext.compileExpression(expressions.get(i));
             }
         }
     }

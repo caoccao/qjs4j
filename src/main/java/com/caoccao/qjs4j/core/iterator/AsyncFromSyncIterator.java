@@ -47,7 +47,7 @@ final class AsyncFromSyncIterator {
                 context.clearPendingException();
                 return JSAsyncIterator.createRejectedPromise(context, error);
             }
-            result = returnFunction.call(context, syncIterator, JSValue.NO_ARGS);
+            result = returnFunction.call(context, syncIterator);
         } catch (JSException e) {
             context.clearPendingException();
             return JSAsyncIterator.createRejectedPromise(context, e.getErrorValue());
@@ -84,7 +84,7 @@ final class AsyncFromSyncIterator {
         try {
             JSValue method = iterator.get(PropertyKey.RETURN);
             if (!context.hasPendingException() && !method.isNullOrUndefined()) {
-                JSCall.call(context, method, iterator, JSValue.NO_ARGS);
+                JSCall.call(context, method, iterator);
             }
         } catch (JSException | JSVirtualMachineException ignored) {
             // IteratorClose with a throw completion preserves the original rejection.
@@ -145,7 +145,7 @@ final class AsyncFromSyncIterator {
     static JSPromise next(JSContext context, JSObject iterator, JSValue next) {
         JSValue result;
         try {
-            result = JSCall.call(context, next, iterator, JSValue.NO_ARGS);
+            result = JSCall.call(context, next, iterator);
         } catch (JSException e) {
             if (context.hasPendingException()) {
                 context.clearAllPendingExceptions();

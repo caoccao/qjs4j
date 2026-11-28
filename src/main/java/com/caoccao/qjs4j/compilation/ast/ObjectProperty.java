@@ -33,7 +33,7 @@ public abstract sealed class ObjectProperty<V extends Pattern> extends ASTNode
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(key) || kind.in(value);
     }
 

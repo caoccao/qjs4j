@@ -28,7 +28,7 @@ import java.util.*;
  */
 public final class JSSet extends JSObject {
     public static final String NAME = "Set";
-    private final OrderedHashTable<EntryRecord> data;
+    private final OrderedHashTable<JSMap.KeyWrapper> data;
 
     /**
      * Create an empty Set.
@@ -43,27 +43,16 @@ public final class JSSet extends JSObject {
     }
 
     public JSValue nextIterationValue(IterationCursor cursor) {
-        EntryRecord record = cursor.cursor.next();
-        return record == null ? null : record.keyWrapper.value();
-    }
-
-    private JSValue normalizeValue(JSValue value) {
-        if (value instanceof JSNumber number && number.value() == 0.0) {
-            return JSNumber.of(0.0);
-        }
-        return value;
+        JSMap.KeyWrapper key = cursor.cursor.next();
+        return key == null ? null : key.value();
     }
 
     /**
      * Add a value to the Set.
      */
     public void setAdd(JSValue value) {
-        JSMap.KeyWrapper keyWrapper = new JSMap.KeyWrapper(normalizeValue(value));
-        if (data.containsKey(keyWrapper)) {
-            return;
-        }
-        EntryRecord record = new EntryRecord(keyWrapper);
-        data.put(keyWrapper, record);
+        JSMap.KeyWrapper key = JSMap.KeyWrapper.forCollection(value);
+        data.putIfAbsent(key, key);
     }
 
     /**
@@ -77,18 +66,14 @@ public final class JSSet extends JSObject {
      * Delete a value from the Set.
      */
     public boolean setDelete(JSValue value) {
-        EntryRecord removedRecord = data.remove(new JSMap.KeyWrapper(normalizeValue(value)));
-        if (removedRecord == null) {
-            return false;
-        }
-        return true;
+        return data.remove(value);
     }
 
     /**
      * Check if the Set has a value.
      */
     public boolean setHas(JSValue value) {
-        return data.containsKey(new JSMap.KeyWrapper(normalizeValue(value)));
+        return data.containsKey(value);
     }
 
     /**
@@ -107,11 +92,7 @@ public final class JSSet extends JSObject {
      * Get all values as an iterable.
      */
     public Iterable<JSMap.KeyWrapper> values() {
-        List<JSMap.KeyWrapper> values = new ArrayList<>(data.size());
-        for (EntryRecord entryRecord : data.values()) {
-            values.add(entryRecord.keyWrapper);
-        }
-        return values;
+        return data.keys();
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -123,13 +104,10 @@ public final class JSSet extends JSObject {
         return CollectionInitializer.initializeFromIterable(context, setObj, args, false);
     }
 
-    private record EntryRecord(JSMap.KeyWrapper keyWrapper) {
-    }
-
     public static final class IterationCursor {
-        private final OrderedHashTable.Cursor<EntryRecord> cursor;
+        private final OrderedHashTable.Cursor<JSMap.KeyWrapper> cursor;
 
-        private IterationCursor(OrderedHashTable.Cursor<EntryRecord> cursor) {
+        private IterationCursor(OrderedHashTable.Cursor<JSMap.KeyWrapper> cursor) {
             this.cursor = cursor;
         }
     }

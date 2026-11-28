@@ -26,20 +26,11 @@ import java.util.List;
 
 final class ExpressionAssignmentParser {
 
-    private final ParserDelegates delegates;
-    private final ExpressionParser expressions;
-    private final ParserContext parserContext;
-    private final AssignmentPatterns patterns;
-
-    ExpressionAssignmentParser(ParserContext parserContext, ParserDelegates delegates, ExpressionParser expressions) {
-        this.parserContext = parserContext;
-        this.delegates = delegates;
-        this.patterns = new AssignmentPatterns(parserContext);
-        this.expressions = expressions;
+    private ExpressionAssignmentParser() {
     }
 
-    private ArrowFunctionExpression finishArrow(FunctionParams params, ASTNode body, boolean async,
-            SourceLocation location) {
+    private static ArrowFunctionExpression finishArrow(ParserContext parserContext, FunctionParams params, ASTNode body,
+            boolean async, SourceLocation location) {
         ParameterEarlyErrors.validateArrow(parserContext, params, body);
         if (body instanceof BlockStatement block) {
             ParameterEarlyErrors.validateFormalsBodyDuplicate(params, block.getBody());
@@ -48,21 +39,22 @@ final class ExpressionAssignmentParser {
                 location.withEndOffset(parserContext.previousTokenEndOffset));
     }
 
-    private ArrowFunctionExpression parseArrowBody(FunctionParams params, boolean async, SourceLocation location) {
+    private static ArrowFunctionExpression parseArrowBody(ParserContext parserContext, FunctionParams params,
+            boolean async, SourceLocation location) {
         parserContext.enterLexicalFunction(async);
         boolean enclosingStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         ASTNode body;
         try {
-            body = readArrowBody();
+            body = readArrowBody(parserContext);
         } finally {
             parserContext.inClassStaticInit = enclosingStaticInit;
             parserContext.exitLexicalFunction(async);
         }
-        return finishArrow(params, body, async, location);
+        return finishArrow(parserContext, params, body, async, location);
     }
 
-    Expression parseAssignmentExpression() {
+    static Expression parseAssignmentExpression(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         // Save whether the current token is a direct identifier for fn-name inference (spec 13.15.2 step 1.c)
         TokenType startTokenType = parserContext.currentToken.type();
@@ -87,8 +79,9 @@ final class ExpressionAssignmentParser {
 
             if (!parserContext.hasNewlineBefore()) {
                 if (parserContext.match(TokenType.FUNCTION)) {
-                    Expression asyncFunc = delegates.functions.parseFunctionExpression(true, asyncLocation);
-                    return expressions.parsePostPrimaryExpression(asyncFunc, location);
+                    Expression asyncFunc = FunctionClassParser.parseFunctionExpression(parserContext, true,
+                            asyncLocation);
+                    return ExpressionPrimaryParser.parsePostPrimaryExpression(parserContext, asyncFunc, location);
                 }
 
                 if (parserContext.currentToken.type().isIdentifierCandidate()
@@ -101,19 +94,20 @@ final class ExpressionAssignmentParser {
                     }
                     parserContext.expect(TokenType.ARROW);
 
-                    return parseArrowBody(new FunctionParams(List.of(param), null, null), true, asyncLocation);
+                    return parseArrowBody(parserContext, new FunctionParams(List.of(param), null, null), true,
+                            asyncLocation);
                 }
 
-                if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow()) {
+                if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow(parserContext)) {
                     parserContext.enterLexicalFunction(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
                         parserContext.advance();
-                        FunctionParams funcParams = delegates.functions.parseFunctionParameters();
+                        FunctionParams funcParams = FunctionClassParser.parseFunctionParameters(parserContext);
                         parserContext.advance();
 
-                        return finishArrow(funcParams, readArrowBody(), true, location);
+                        return finishArrow(parserContext, funcParams, readArrowBody(parserContext), true, location);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
                         parserContext.exitLexicalFunction(true);
@@ -144,13 +138,13 @@ final class ExpressionAssignmentParser {
                 Expression argument = null;
                 if (delegate) {
                     // yield* requires an AssignmentExpression (no line terminator restriction)
-                    argument = parseAssignmentExpression();
+                    argument = parseAssignmentExpression(parserContext);
                 } else if (!parserContext.hasNewlineBefore() && !parserContext.match(TokenType.SEMICOLON)
                         && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.RBRACKET)
                         && !parserContext.match(TokenType.RPAREN) && !parserContext.match(TokenType.TEMPLATE)
                         && !parserContext.match(TokenType.COLON) && !parserContext.match(TokenType.COMMA)
                         && !parserContext.match(TokenType.EOF)) {
-                    argument = parseAssignmentExpression();
+                    argument = parseAssignmentExpression(parserContext);
                 }
 
                 return new YieldExpression(argument, delegate, yieldLocation);
@@ -159,7 +153,7 @@ final class ExpressionAssignmentParser {
             // to parseConditionalExpression which will error when it hits yield
         }
 
-        Expression left = expressions.parseConditionalExpression();
+        Expression left = ExpressionBinaryParser.parseConditionalExpression(parserContext);
 
         if (parserContext.match(TokenType.ARROW) && !parserContext.hasNewlineBefore()) {
             List<Pattern> params = new ArrayList<>();
@@ -179,19 +173,19 @@ final class ExpressionAssignmentParser {
                     && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN
                     && (assignmentExpression.getLeft() instanceof ObjectExpression
                             || assignmentExpression.getLeft() instanceof ArrayExpression))) {
-                patterns.parseDestructuringArrowParameter(left, params, defaults);
+                AssignmentPatterns.parseDestructuringArrowParameter(parserContext, left, params, defaults);
             } else if (left instanceof SequenceExpression seqExpr) {
                 for (Expression expr : seqExpr.getExpressions()) {
                     if (parserContext.isParenthesizedExpression(expr)) {
                         // ((a), b) => 1: a parameter cannot be parenthesized.
                         throw new JSSyntaxErrorException("Invalid destructuring assignment target");
                     }
-                    patterns.parseArrowParameterExpression(expr, params, defaults);
+                    AssignmentPatterns.parseArrowParameterExpression(parserContext, expr, params, defaults);
                 }
             } else if (left instanceof ArrayExpression arrayExpr) {
                 boolean isParenthesizedParameterList = arrayExpr.getLocation().offset() == location.offset();
                 if (!isParenthesizedParameterList) {
-                    patterns.parseDestructuringArrowParameter(left, params, defaults);
+                    AssignmentPatterns.parseDestructuringArrowParameter(parserContext, left, params, defaults);
                 } else if (!arrayExpr.getElements().isEmpty()) {
                     for (int i = 0; i < arrayExpr.getElements().size(); i++) {
                         Expression expr = arrayExpr.getElements().get(i);
@@ -200,10 +194,11 @@ final class ExpressionAssignmentParser {
                             if (i != arrayExpr.getElements().size() - 1) {
                                 throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                             }
-                            Pattern restArgPattern = patterns.convertArrowExpressionToPattern(spreadElem.getArgument());
+                            Pattern restArgPattern = AssignmentPatterns.convertArrowExpressionToPattern(parserContext,
+                                    spreadElem.getArgument());
                             restParameter = new RestParameter(restArgPattern, spreadElem.getLocation());
                         } else {
-                            patterns.parseArrowParameterExpression(expr, params, defaults);
+                            AssignmentPatterns.parseArrowParameterExpression(parserContext, expr, params, defaults);
                         }
                     }
                 }
@@ -214,10 +209,10 @@ final class ExpressionAssignmentParser {
 
             parserContext.advance();
 
-            return parseArrowBody(new FunctionParams(params, defaults, restParameter), false, location);
+            return parseArrowBody(parserContext, new FunctionParams(params, defaults, restParameter), false, location);
         }
 
-        AssignmentOperator operator = ParserContext.assignmentOperator(parserContext.currentToken.type());
+        AssignmentOperator operator = AssignmentOperator.fromToken(parserContext.currentToken.type());
         if (operator != null) {
             if (!(left instanceof Identifier) && !(left instanceof MemberExpression)
                     && !(left instanceof ArrayExpression) && !(left instanceof ObjectExpression)
@@ -258,11 +253,11 @@ final class ExpressionAssignmentParser {
             location = parserContext.getLocation();
             int assignmentOperatorOffset = location.offset();
             parserContext.advance();
-            Expression right = parseAssignmentExpression();
+            Expression right = parseAssignmentExpression(parserContext);
 
             if (operator == AssignmentOperator.ASSIGN
                     && (left instanceof ArrayExpression || left instanceof ObjectExpression)) {
-                patterns.validateAssignmentPatternTarget(left, assignmentOperatorOffset);
+                AssignmentPatterns.validateAssignmentPatternTarget(parserContext, left, assignmentOperatorOffset);
             }
 
             boolean isIdentifierRef = lhsStartsWithIdentifier && left instanceof Identifier;
@@ -272,14 +267,14 @@ final class ExpressionAssignmentParser {
         return left;
     }
 
-    Expression parseExpression() {
+    static Expression parseExpression(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         List<Expression> expressionsList = new ArrayList<>();
 
-        expressionsList.add(parseAssignmentExpression());
+        expressionsList.add(parseAssignmentExpression(parserContext));
 
         while (parserContext.consumeIf(TokenType.COMMA)) {
-            expressionsList.add(parseAssignmentExpression());
+            expressionsList.add(parseAssignmentExpression(parserContext));
         }
 
         if (expressionsList.size() == 1) {
@@ -289,7 +284,7 @@ final class ExpressionAssignmentParser {
         return new SequenceExpression(expressionsList, location);
     }
 
-    private boolean peekPastParensIsArrow() {
+    private static boolean peekPastParensIsArrow(ParserContext parserContext) {
         ParserContext.TokenPosition start = parserContext.saveTokenPosition();
         try {
             parserContext.advance();
@@ -315,13 +310,14 @@ final class ExpressionAssignmentParser {
         }
     }
 
-    private ASTNode readArrowBody() {
+    private static ASTNode readArrowBody(ParserContext parserContext) {
         return parserContext.match(TokenType.LBRACE)
-                ? delegates.statements.parseBlockStatementAsBody()
-                : parseAssignmentExpression();
+                ? StatementParser.parseBlockStatementAsBody(parserContext)
+                : parseAssignmentExpression(parserContext);
     }
 
-    void validateForInOfAssignmentTarget(Expression expression, int assignmentBoundaryOffset) {
-        patterns.validateForInOfAssignmentTarget(expression, assignmentBoundaryOffset);
+    static void validateForInOfAssignmentTarget(ParserContext parserContext, Expression expression,
+            int assignmentBoundaryOffset) {
+        AssignmentPatterns.validateForInOfAssignmentTarget(parserContext, expression, assignmentBoundaryOffset);
     }
 }

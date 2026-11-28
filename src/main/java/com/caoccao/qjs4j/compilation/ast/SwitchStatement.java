@@ -33,7 +33,22 @@ public final class SwitchStatement extends Statement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+        if (cases != null) {
+            for (SwitchCase switchCase : cases) {
+                if (switchCase != null && switchCase.getConsequent() != null) {
+                    for (Statement statement : switchCase.getConsequent()) {
+                        appendVarDeclarators(collectedVarDeclarators, statement);
+                    }
+                }
+            }
+        }
+        return collectedVarDeclarators;
+    }
+
+    @Override
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(discriminant) || kind.in(cases);
     }
 
@@ -43,26 +58,6 @@ public final class SwitchStatement extends Statement {
 
     public Expression getDiscriminant() {
         return discriminant;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (cases != null) {
-                for (SwitchCase switchCase : cases) {
-                    if (switchCase != null && switchCase.getConsequent() != null) {
-                        for (Statement statement : switchCase.getConsequent()) {
-                            if (statement != null) {
-                                collectedVarDeclarators.addAll(statement.getVarDeclarators());
-                            }
-                        }
-                    }
-                }
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
     }
 
     public static final class SwitchCase extends ASTNode {
@@ -76,7 +71,7 @@ public final class SwitchStatement extends Statement {
         }
 
         @Override
-        boolean containsSuspension(Suspension kind) {
+        boolean containsSuspension(SyntaxQuery kind) {
             return kind.in(test) || kind.in(consequent);
         }
 

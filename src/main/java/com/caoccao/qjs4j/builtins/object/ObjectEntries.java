@@ -73,7 +73,7 @@ final class ObjectEntries {
         // Call callback - errors close iterator
         JSValue keyValue;
         try {
-            keyValue = JSCall.call(context, callback, JSUndefined.INSTANCE, new JSValue[]{element, JSNumber.of(index)});
+            keyValue = JSCall.call(context, callback, JSUndefined.INSTANCE, element, JSNumber.of(index));
             if (context.hasPendingException()) {
                 closeIteratorPreserveError(context, iterator);
                 return false;

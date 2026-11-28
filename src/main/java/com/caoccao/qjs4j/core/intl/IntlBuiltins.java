@@ -112,14 +112,6 @@ public abstract class IntlBuiltins {
     }
 
     /**
-     * CreateDataProperty(O, P, V) — creates an own data property directly, bypassing [[Set]] so prototype chain
-     * accessors are not triggered. Per ECMA-402 resolvedOptions() steps which use CreateDataPropertyOrThrow.
-     */
-    static void createDataProperty(JSObject obj, PropertyKey key, JSValue value) {
-        obj.defineProperty(key, value, PropertyDescriptor.DataState.All);
-    }
-
-    /**
      * Default entry: uses required="any", defaults="date" per Intl.DateTimeFormat constructor spec.
      */
     public static JSValue createDateTimeFormat(JSContext context, JSObject prototype, JSValue[] args) {
@@ -345,7 +337,7 @@ public abstract class IntlBuiltins {
 
     static void defineStringOption(JSObject options, String key, String value) {
         if (value != null) {
-            createDataProperty(options, PropertyKey.fromString(key), new JSString(value));
+            options.createDataProperty(PropertyKey.fromString(key), new JSString(value));
         }
     }
 
@@ -685,11 +677,11 @@ public abstract class IntlBuiltins {
                     "Intl.RelativeTimeFormat.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, PropertyKey.LOCALE,
+        resolvedOptions.createDataProperty(PropertyKey.LOCALE,
                 new JSString(relativeTimeFormat.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, PropertyKey.STYLE, new JSString(relativeTimeFormat.getStyle()));
-        createDataProperty(resolvedOptions, PropertyKey.NUMERIC, new JSString(relativeTimeFormat.getNumeric()));
-        createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM,
+        resolvedOptions.createDataProperty(PropertyKey.STYLE, new JSString(relativeTimeFormat.getStyle()));
+        resolvedOptions.createDataProperty(PropertyKey.NUMERIC, new JSString(relativeTimeFormat.getNumeric()));
+        resolvedOptions.createDataProperty(PropertyKey.NUMBERING_SYSTEM,
                 new JSString(relativeTimeFormat.getNumberingSystem()));
         return resolvedOptions;
     }
@@ -703,8 +695,8 @@ public abstract class IntlBuiltins {
             return context.throwTypeError("Intl.Segmenter.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, PropertyKey.LOCALE, new JSString(segmenter.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, PropertyKey.GRANULARITY, new JSString(segmenter.getGranularity()));
+        resolvedOptions.createDataProperty(PropertyKey.LOCALE, new JSString(segmenter.getLocale().toLanguageTag()));
+        resolvedOptions.createDataProperty(PropertyKey.GRANULARITY, new JSString(segmenter.getGranularity()));
         return resolvedOptions;
     }
 

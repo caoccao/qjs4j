@@ -33,27 +33,24 @@ public final class ObjectPattern extends Pattern {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
-        return kind.in(properties) || kind.in(restElement);
+    protected List<String> computeBoundNames() {
+        List<String> collectedBoundNames = new ArrayList<>();
+        if (properties != null) {
+            for (ObjectPatternProperty property : properties) {
+                if (property != null && property.getValue() != null) {
+                    collectedBoundNames.addAll(property.getValue().getBoundNames());
+                }
+            }
+        }
+        if (restElement != null && restElement.getArgument() != null) {
+            collectedBoundNames.addAll(restElement.getArgument().getBoundNames());
+        }
+        return List.copyOf(collectedBoundNames);
     }
 
     @Override
-    public List<String> getBoundNames() {
-        if (boundNames == null) {
-            List<String> collectedBoundNames = new ArrayList<>();
-            if (properties != null) {
-                for (ObjectPatternProperty property : properties) {
-                    if (property != null && property.getValue() != null) {
-                        collectedBoundNames.addAll(property.getValue().getBoundNames());
-                    }
-                }
-            }
-            if (restElement != null && restElement.getArgument() != null) {
-                collectedBoundNames.addAll(restElement.getArgument().getBoundNames());
-            }
-            boundNames = List.copyOf(collectedBoundNames);
-        }
-        return boundNames;
+    boolean containsSuspension(SyntaxQuery kind) {
+        return kind.in(properties) || kind.in(restElement);
     }
 
     public List<ObjectPatternProperty> getProperties() {

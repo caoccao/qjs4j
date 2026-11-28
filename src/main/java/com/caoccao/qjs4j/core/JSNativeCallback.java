@@ -18,5 +18,9 @@ package com.caoccao.qjs4j.core;
 
 @FunctionalInterface
 public interface JSNativeCallback {
-    JSValue call(JSContext context, JSValue thisArg, JSValue[] args);
+    default JSValue call(JSContext context, JSValue thisArg) {
+        return call(context, thisArg, JSValue.NO_ARGS);
+    }
+
+    JSValue call(JSContext context, JSValue thisArg, JSValue... args);
 }

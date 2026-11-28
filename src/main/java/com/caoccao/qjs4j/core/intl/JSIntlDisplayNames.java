@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 /**
  * Intl.DisplayNames instance object. Stores all resolved options per ECMA-402 §12.
  */
-public final class JSIntlDisplayNames extends JSObject {
+public final class JSIntlDisplayNames extends IntlLocaleObject {
     private static final Pattern CALENDAR_KEY = Pattern.compile("^[a-zA-Z0-9]{3,8}(-[a-zA-Z0-9]{3,8})*$");
     private static final Pattern CURRENCY_CODE = Pattern.compile("^[a-zA-Z]{3}$");
     private static final Set<String> KNOWN_CALENDARS = Set.of("buddhist", "chinese", "coptic", "dangi", "ethioaa",
@@ -41,18 +41,24 @@ public final class JSIntlDisplayNames extends JSObject {
     private static final Pattern VARIANT_SUBTAG = Pattern.compile("^[a-zA-Z0-9]{5,8}$|^[0-9][a-zA-Z0-9]{3}$");
     private final String fallback;
     private final String languageDisplay;
-    private final Locale locale;
     private final String style;
     private final String type;
 
     public JSIntlDisplayNames(JSContext context, Locale locale, String style, String type, String fallback,
             String languageDisplay) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.style = style;
         this.type = type;
         this.fallback = fallback;
         this.languageDisplay = languageDisplay;
+    }
+
+    private JSValue displayNameOrFallback(String name, String canonicalCode, String originalCode) {
+        return name.isEmpty() || name.equals(canonicalCode) ? fallbackName(originalCode) : new JSString(name);
+    }
+
+    private JSValue fallbackName(String code) {
+        return "none".equals(fallback) ? JSUndefined.INSTANCE : new JSString(code);
     }
 
     public String getFallback() {
@@ -61,10 +67,6 @@ public final class JSIntlDisplayNames extends JSObject {
 
     public String getLanguageDisplay() {
         return languageDisplay;
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public String getStyle() {
@@ -110,10 +112,7 @@ public final class JSIntlDisplayNames extends JSObject {
             // Return display name for known calendars (using code as display name)
             return new JSString(code);
         }
-        if ("none".equals(fallback)) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(code);
+        return fallbackName(code);
     }
 
     private JSValue ofCurrency(JSContext context, String code) {
@@ -129,10 +128,7 @@ public final class JSIntlDisplayNames extends JSObject {
             // Valid currency code → always return display name (even if it equals code)
             return new JSString(displayName);
         } catch (IllegalArgumentException e) {
-            if ("none".equals(fallback)) {
-                return JSUndefined.INSTANCE;
-            }
-            return new JSString(code);
+            return fallbackName(code);
         }
     }
 
@@ -141,10 +137,7 @@ public final class JSIntlDisplayNames extends JSObject {
             return context.rejectRangeError("invalid dateTimeField code for DisplayNames: " + code);
         }
         // dateTimeField display names not available via standard Java APIs, use fallback
-        if ("none".equals(fallback)) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(code);
+        return fallbackName(code);
     }
 
     private JSValue ofLanguage(JSContext context, String code) {
@@ -155,20 +148,8 @@ public final class JSIntlDisplayNames extends JSObject {
             return context.rejectRangeError("invalid language code for DisplayNames: " + code);
         }
         Locale codeLocale = Locale.forLanguageTag(code);
-        String displayName;
-        if ("standard".equals(languageDisplay)) {
-            displayName = codeLocale.getDisplayName(locale);
-        } else {
-            // "dialect" mode - default
-            displayName = codeLocale.getDisplayName(locale);
-        }
-        if (displayName.isEmpty() || displayName.equals(code)) {
-            if ("none".equals(fallback)) {
-                return JSUndefined.INSTANCE;
-            }
-            return new JSString(code);
-        }
-        return new JSString(displayName);
+        String displayName = codeLocale.getDisplayName(locale);
+        return displayNameOrFallback(displayName, code, code);
     }
 
     private JSValue ofRegion(JSContext context, String code) {
@@ -178,13 +159,7 @@ public final class JSIntlDisplayNames extends JSObject {
         String upperCode = code.toUpperCase(java.util.Locale.ROOT);
         Locale regionLocale = new Locale.Builder().setRegion(upperCode).build();
         String displayName = regionLocale.getDisplayCountry(locale);
-        if (displayName.isEmpty() || displayName.equals(upperCode)) {
-            if ("none".equals(fallback)) {
-                return JSUndefined.INSTANCE;
-            }
-            return new JSString(code);
-        }
-        return new JSString(displayName);
+        return displayNameOrFallback(displayName, upperCode, code);
     }
 
     private JSValue ofScript(JSContext context, String code) {
@@ -195,13 +170,7 @@ public final class JSIntlDisplayNames extends JSObject {
                 + code.substring(1).toLowerCase(java.util.Locale.ROOT);
         Locale scriptLocale = new Locale.Builder().setScript(titleCode).build();
         String displayName = scriptLocale.getDisplayScript(locale);
-        if (displayName.isEmpty() || displayName.equals(titleCode)) {
-            if ("none".equals(fallback)) {
-                return JSUndefined.INSTANCE;
-            }
-            return new JSString(code);
-        }
-        return new JSString(displayName);
+        return displayNameOrFallback(displayName, titleCode, code);
     }
 
     /**

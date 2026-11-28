@@ -28,13 +28,11 @@ import java.util.Set;
  * extraction, Annex B function hoisting, and global program binding registration.
  */
 final class CompilerAnalysis {
-    private final CompilerContext compilerContext;
 
-    CompilerAnalysis(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+    private CompilerAnalysis() {
     }
 
-    private Set<String> annexBCandidates(List<Statement> body) {
+    private static Set<String> annexBCandidates(List<Statement> body) {
         // Single pass: collect top-level lexical bindings and scan for Annex B candidates.
         // Per B.3.3.3 step ii, if replacing the function declaration with "var F"
         // would produce an early error (conflict with let/const), the extension is skipped.
@@ -65,7 +63,7 @@ final class CompilerAnalysis {
      *            the name to look for
      * @return true when the body declares that name
      */
-    boolean bodyDeclaresBinding(List<Statement> body, String name) {
+    static boolean bodyDeclaresBinding(List<Statement> body, String name) {
         Set<String> declaredNames = new HashSet<>();
         for (Statement statement : body) {
             if (statement instanceof FunctionDeclaration functionDeclaration) {
@@ -100,7 +98,7 @@ final class CompilerAnalysis {
      * hoist into nested blocks but ARE in scope at function level)
      */
 
-    void collectPatternBindingNames(Pattern pattern, Set<String> names) {
+    static void collectPatternBindingNames(Pattern pattern, Set<String> names) {
         if (pattern instanceof Identifier identifier) {
             names.add(identifier.getName());
         } else if (pattern != null) {
@@ -113,7 +111,7 @@ final class CompilerAnalysis {
      * they must be hoisted out of any block nesting (for, try, if, switch, etc.). Does NOT recurse into function
      * declarations/expressions (they have their own scope).
      */
-    void collectVarNamesFromStatement(Statement stmt, Set<String> varNames) {
+    static void collectVarNamesFromStatement(Statement stmt, Set<String> varNames) {
         if (stmt == null) {
             return;
         }
@@ -130,7 +128,7 @@ final class CompilerAnalysis {
      * hoisted functions (e.g. function A capturing function B declared later in the same function body).
      */
 
-    void hoistAllDeclarationsAsLocals(List<Statement> body) {
+    static void hoistAllDeclarationsAsLocals(CompilerContext compilerContext, List<Statement> body) {
         Set<String> varNames = new HashSet<>();
         Set<String> lexicalNames = new HashSet<>();
         Set<String> constLexicalNames = new HashSet<>();
@@ -188,7 +186,8 @@ final class CompilerAnalysis {
      *            the set of parameter names (BoundNames of argumentsList), including "arguments" when the function has
      *            an implicit arguments binding
      */
-    void hoistFunctionBodyAnnexBDeclarations(List<Statement> body, Set<String> parameterNames) {
+    static void hoistFunctionBodyAnnexBDeclarations(CompilerContext compilerContext, List<Statement> body,
+            Set<String> parameterNames) {
         if (compilerContext.strictMode) {
             return; // Annex B does not apply in strict mode
         }
@@ -228,7 +227,8 @@ final class CompilerAnalysis {
         }
     }
 
-    void scanAnnexBFunctions(List<Statement> programBody, Set<String> declaredFuncVarNames) {
+    static void scanAnnexBFunctions(CompilerContext compilerContext, List<Statement> programBody,
+            Set<String> declaredFuncVarNames) {
         if (compilerContext.strictMode) {
             return; // Annex B does not apply in strict mode
         }
@@ -237,7 +237,7 @@ final class CompilerAnalysis {
             if (!declaredFuncVarNames.contains(name)) {
                 // Create initial var binding only if the property doesn't already exist
                 // on the global object (ES2024 CreateGlobalVarBinding semantics).
-                compilerContext.emitHelpers.emitConditionalVarInit(name);
+                EmitHelpers.emitConditionalVarInit(compilerContext, name);
             }
         }
     }

@@ -27,7 +27,7 @@ public final class ExportSpecifier extends ASTNode {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(local) || kind.in(exported);
     }
 

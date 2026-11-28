@@ -79,7 +79,7 @@ public final class WeakMapPrototype {
             return map.weakMapGet(key);
         }
         if (computed) {
-            value = ((JSFunction) value).call(context, JSUndefined.INSTANCE, new JSValue[]{key});
+            value = ((JSFunction) value).call(context, JSUndefined.INSTANCE, key);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

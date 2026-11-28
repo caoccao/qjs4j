@@ -30,7 +30,7 @@ public final class TaggedTemplateExpression extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(tag) || kind.in(quasi);
     }
 

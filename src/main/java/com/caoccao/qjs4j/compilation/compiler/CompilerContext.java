@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.Expression;
+import com.caoccao.qjs4j.compilation.ast.Statement;
+import com.caoccao.qjs4j.compilation.ast.Pattern;
 import com.caoccao.qjs4j.compilation.ast.PrivateIdentifier;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.core.JSContext;
@@ -36,35 +38,19 @@ final class CompilerContext {
     // Annex B
     final Set<String> annexBFunctionNames;
     final Map<String, Integer> annexBFunctionScopeLocals;
-    // Delegate compilers (initialized via initializeDelegates)
-    ArrayExpressionDestructuringAssignmentCompiler arrayExpressionDestructuringAssignmentCompiler;
-    AssignmentExpressionCompiler assignmentExpressionCompiler;
-    BinaryExpressionCompiler binaryExpressionCompiler;
-    CallExpressionCompiler callExpressionCompiler;
     // Services
     final CaptureResolver captureResolver;
-    ClassDeclarationCompiler classDeclarationCompiler;
     // Other flags (not stack-managed)
     boolean classFieldEvalContext;
     String classInnerNameToCapture;
-    CompilerAnalysis compilerAnalysis;
     JSContext context;
-    EmitHelpers emitHelpers;
     // Flags (managed by state stack)
     boolean emitTailCalls;
     final BytecodeEmitter emitter;
     boolean evalMode;
     int evalReturnLocalIndex;
-    ExpressionCompiler expressionCompiler;
-    ExpressionDestructuringAssignmentCompiler expressionDestructuringAssignmentCompiler;
     int finallySubroutineDepth;
-    ForEachStatementCompiler forEachStatementCompiler;
-    FunctionExpressionCompiler functionExpressionCompiler;
     boolean hasEnclosingArgumentsBinding;
-    IdentifierCompiler identifierCompiler;
-    IdentifierDestructuringAssignmentCompiler identifierDestructuringAssignmentCompiler;
-    IdentifierPatternCompiler identifierPatternCompiler;
-    IfStatementCompiler ifStatementCompiler;
     boolean inClassBody;
     boolean inClassFieldInitializer;
     String inferredClassName;
@@ -74,8 +60,6 @@ final class CompilerContext {
     boolean isInAsyncFunction;
     boolean isInGeneratorFunction;
     boolean isLastInProgram;
-    JumpStatementCompiler jumpStatementCompiler;
-    LabeledStatementCompiler labeledStatementCompiler;
     final LoopManager loopManager;
     /**
      * Whether the code being compiled may contain a sloppy direct {@code eval}, which can declare a binding that
@@ -83,10 +67,8 @@ final class CompilerContext {
      * A textual over-approximation: any {@code eval}, or any backslash-u escape that could spell one.
      */
     boolean mayContainDirectEval;
-    MemberExpressionCompiler memberExpressionCompiler;
     // TDZ and global bindings
     final Set<String> nonDeletableGlobalBindings;
-    ObjectPatternCompiler objectPatternCompiler;
     /**
      * The jumps to the end of the optional chain being compiled, or null outside one: QuickJS's
      * {@code optional_chaining_label}. Every {@code ?.} that finds a nullish value jumps there with {@code undefined}
@@ -117,33 +99,26 @@ final class CompilerContext {
      * @see com.caoccao.qjs4j.core.JSBytecodeFunction#getInheritedParameterScopeFunctionNames()
      */
     Set<String> parameterScopeFunctionNames = Set.of();
-    PatternCompiler patternCompiler;
     Runnable pendingPostSuperInitialization;
     boolean predeclareProgramLexicalsAsLocals;
     // Pre-resolved binding references for with-statement var destructuring
     final Map<String, Deque<PreResolvedReference>> preResolvedBindingReferences;
     Map<String, JSSymbol> privateSymbols;
-    ProgramCompiler programCompiler;
     final ScopeManager scopeManager;
     String sourceCode;
-    StatementCompiler statementCompiler;
     // State stack
     private final Deque<CompilerStateFrame> stateStack;
     boolean strictMode;
     boolean suppressAnnexBVarStore;
-    TaggedTemplateExpressionCompiler taggedTemplateExpressionCompiler;
     final Set<String> tdzLocals;
     /**
      * How many try blocks enclose the code being compiled. A call in a try block is not in tail position (ES2024
      * 15.10.2 HasCallInTailPosition): its frame must survive for the catch handler to run.
      */
     int tryBlockDepth;
-    TryStatementCompiler tryStatementCompiler;
-    UnaryExpressionCompiler unaryExpressionCompiler;
     boolean useExistingBindingInParentScopes;
     CompilerScope varDeclarationScopeOverride;
     boolean varInGlobalProgram;
-    WhileStatementCompiler whileStatementCompiler;
     final WithObjectManager withObjectManager;
 
     CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
@@ -179,7 +154,18 @@ final class CompilerContext {
         this.varDeclarationScopeOverride = null;
         this.varInGlobalProgram = false;
         this.withObjectManager = new WithObjectManager();
-        initializeDelegates();
+    }
+
+    void compileExpression(Expression node) {
+        ExpressionCompiler.compile(this, node);
+    }
+
+    void compilePattern(Pattern node) {
+        PatternCompiler.compile(this, node);
+    }
+
+    void compileStatement(Statement node) {
+        StatementCompiler.compile(this, node);
     }
 
     int declareTemporary(String prefix) {
@@ -215,40 +201,11 @@ final class CompilerContext {
         return emitter.build(localCount, localNames);
     }
 
-    private void initializeDelegates() {
-        this.arrayExpressionDestructuringAssignmentCompiler = new ArrayExpressionDestructuringAssignmentCompiler(this);
-        this.assignmentExpressionCompiler = new AssignmentExpressionCompiler(this);
-        this.binaryExpressionCompiler = new BinaryExpressionCompiler(this);
-        this.jumpStatementCompiler = new JumpStatementCompiler(this);
-        this.callExpressionCompiler = new CallExpressionCompiler(this);
-        this.classDeclarationCompiler = new ClassDeclarationCompiler(this);
-        this.compilerAnalysis = new CompilerAnalysis(this);
-        this.emitHelpers = new EmitHelpers(this);
-        this.expressionCompiler = new ExpressionCompiler(this);
-        this.expressionDestructuringAssignmentCompiler = new ExpressionDestructuringAssignmentCompiler(this);
-        this.forEachStatementCompiler = new ForEachStatementCompiler(this);
-        this.functionExpressionCompiler = new FunctionExpressionCompiler(this);
-        this.identifierCompiler = new IdentifierCompiler(this);
-        this.identifierDestructuringAssignmentCompiler = new IdentifierDestructuringAssignmentCompiler(this);
-        this.identifierPatternCompiler = new IdentifierPatternCompiler(this);
-        this.ifStatementCompiler = new IfStatementCompiler(this);
-        this.labeledStatementCompiler = new LabeledStatementCompiler(this);
-        this.memberExpressionCompiler = new MemberExpressionCompiler(this);
-        this.objectPatternCompiler = new ObjectPatternCompiler(this);
-        this.patternCompiler = new PatternCompiler(this);
-        this.programCompiler = new ProgramCompiler(this);
-        this.statementCompiler = new StatementCompiler(this);
-        this.taggedTemplateExpressionCompiler = new TaggedTemplateExpressionCompiler(this);
-        this.tryStatementCompiler = new TryStatementCompiler(this);
-        this.unaryExpressionCompiler = new UnaryExpressionCompiler(this);
-        this.whileStatementCompiler = new WhileStatementCompiler(this);
-    }
-
     BytecodeCompiler newFunctionCompiler(SourceLocation location) {
         BytecodeCompiler nested = newNestedCompiler(strictMode, privateSymbols);
         CompilerContext child = nested.context();
         child.mayContainDirectEval = mayContainDirectEval && sourceMayContainDirectEval(extractSourceCode(location));
-        functionExpressionCompiler.inheritVisibleWithObjectBindings(child);
+        FunctionExpressionCompiler.inheritVisibleWithObjectBindings(this, child);
         return nested;
     }
 

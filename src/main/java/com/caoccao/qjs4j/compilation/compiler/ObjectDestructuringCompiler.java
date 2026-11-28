@@ -65,7 +65,7 @@ final class ObjectDestructuringCompiler {
             if (name != null) {
                 return name;
             }
-            context.expressionCompiler.compilePropertyKey(key);
+            ExpressionCompiler.compilePropertyKey(context, key);
         }
         return null;
     }

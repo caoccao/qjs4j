@@ -37,7 +37,7 @@ final class VariableDeclarationCompiler {
                 && !compilerContext.inGlobalScope && !compilerContext.varInGlobalProgram) {
             for (VariableDeclarator declarator : varDecl.getDeclarations()) {
                 Set<String> bindingNames = new HashSet<>();
-                compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), bindingNames);
+                CompilerAnalysis.collectPatternBindingNames(declarator.getId(), bindingNames);
                 for (String bindingName : bindingNames) {
                     if (varDecl.getKind() == VariableKind.CONST || isUsingDeclaration) {
                         compilerContext.scopeManager.currentScope().declareConstLocal(bindingName);
@@ -55,7 +55,7 @@ final class VariableDeclarationCompiler {
         }
         for (VariableDeclarator declarator : varDecl.getDeclarations()) {
             if ((compilerContext.inGlobalScope || compilerContext.varInGlobalProgram) && !compilerContext.evalMode) {
-                compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
+                CompilerAnalysis.collectPatternBindingNames(declarator.getId(),
                         compilerContext.nonDeletableGlobalBindings);
             }
             if (isUsingDeclaration) {
@@ -65,10 +65,10 @@ final class VariableDeclarationCompiler {
                 }
 
                 compileInitializer(compilerContext, declarator);
-                int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration,
+                int usingStackLocalIndex = EmitHelpers.ensureUsingStackLocal(compilerContext, isAwaitUsingDeclaration,
                         declarator);
-                compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
-                compilerContext.patternCompiler.compile(declarator.getId());
+                EmitHelpers.emitMethodCallWithSingleArgOnLocalObject(compilerContext, usingStackLocalIndex, "use");
+                compilerContext.compilePattern(declarator.getId());
                 continue;
             }
 
@@ -81,7 +81,7 @@ final class VariableDeclarationCompiler {
                     // function-name environment. A same-name `var` declaration in the body
                     // must initialize the function-scope binding to undefined.
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                    compilerContext.patternCompiler.compileVarPatternAssignment(declarator.getId());
+                    PatternCompiler.compileVarPatternAssignment(compilerContext, declarator.getId());
                     continue;
                 }
                 if (!(declarator.getId() instanceof Identifier)) {
@@ -93,11 +93,11 @@ final class VariableDeclarationCompiler {
             if (varDecl.getKind() == VariableKind.VAR && declarator.getId() instanceof Identifier identifier
                     && declarator.getInit() != null && compilerContext.withObjectManager.hasActiveWithObject()) {
                 // Resolve binding before evaluating initializer (ES VariableDeclaration semantics).
-                compilerContext.assignmentExpressionCompiler.emitIdentifierReference(identifier.getName());
+                AssignmentExpressionCompiler.emitIdentifierReference(compilerContext, identifier.getName());
                 int preResolvedPropertyLocalIndex = compilerContext.storeTemporary("#preResolvedVarProperty_");
                 int preResolvedObjectLocalIndex = compilerContext.storeTemporary("#preResolvedVarObject_");
 
-                compilerContext.expressionCompiler.compileNamed(declarator.getInit(), identifier.getName());
+                ExpressionCompiler.compileNamed(compilerContext, declarator.getInit(), identifier.getName());
                 compilerContext.emitter.emitGetLocal(preResolvedObjectLocalIndex);
                 compilerContext.emitter.emitGetLocal(preResolvedPropertyLocalIndex);
                 compilerContext.emitter.emitStoreValueBelowReference();
@@ -112,9 +112,9 @@ final class VariableDeclarationCompiler {
             }
             // Assign to pattern (handles Identifier, ObjectPattern, ArrayPattern)
             if (varDecl.getKind() == VariableKind.VAR) {
-                compilerContext.patternCompiler.compileVarPatternAssignment(declarator.getId());
+                PatternCompiler.compileVarPatternAssignment(compilerContext, declarator.getId());
             } else {
-                compilerContext.patternCompiler.compile(declarator.getId());
+                compilerContext.compilePattern(declarator.getId());
             }
         }
         compilerContext.popState();
@@ -126,7 +126,7 @@ final class VariableDeclarationCompiler {
                 && declarator.getInit() instanceof ClassExpression classExpr && classExpr.getId() == null) {
             compilerContext.inferredClassName = targetId.getName();
         }
-        compilerContext.expressionCompiler.compile(declarator.getInit());
+        compilerContext.compileExpression(declarator.getInit());
         if (declarator.getId() instanceof Identifier targetId && declarator.getInit().isAnonymousFunction()) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
         }

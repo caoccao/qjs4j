@@ -129,16 +129,12 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "with");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
-                TemporalError.MISSING_PARTIAL_FIELDS.message());
-        if (fields == null) {
-            return JSUndefined.INSTANCE;
-        }
+        return RECEIVER.withFields(context, thisArg, args, TemporalError.MISSING_PARTIAL_FIELDS.message(),
+                TemporalPlainMonthDayPrototype::withFields);
+    }
 
+    private static JSValue withFields(JSContext context, JSTemporalPlainMonthDay plainMonthDay, JSObject fields,
+            JSValue[] args) {
         if (plainMonthDay.getCalendarId() != TemporalCalendarId.ISO8601) {
             return withNonIsoCalendar(context, plainMonthDay, fields, JSValue.argumentOrUndefined(args, 1));
         }

@@ -39,7 +39,7 @@ public enum JSErrorType implements JSNativeCallback {
     }
 
     @Override
-    public JSValue call(JSContext context, JSValue receiver, JSValue[] args) {
+    public JSValue call(JSContext context, JSValue receiver, JSValue... args) {
         return constructorType.create(context, args);
     }
 

@@ -21,44 +21,44 @@ import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SpreadElement;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<ArrayExpression> {
-    ArrayExpressionDestructuringAssignmentCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ArrayExpressionDestructuringAssignmentCompiler {
+    private ArrayExpressionDestructuringAssignmentCompiler() {
     }
 
-    @Override
-    void compile(ArrayExpression arrayExpr) {
+    static void compile(CompilerContext compilerContext, ArrayExpression arrayExpr) {
         var elements = arrayExpr.getElements();
         int restIndex = 0;
         while (restIndex < elements.size() && !(elements.get(restIndex) instanceof SpreadElement)) {
             restIndex++;
         }
         boolean hasRest = restIndex < elements.size();
-        int doneLocal = compilerContext.emitHelpers.startArrayDestructuring("#arrayAssignIterDone", hasRest);
+        int doneLocal = EmitHelpers.startArrayDestructuring(compilerContext, "#arrayAssignIterDone", hasRest);
         for (int i = 0; i < restIndex; i++) {
             Expression element = elements.get(i);
             // Evaluate the assignment reference before advancing the iterator.
-            int depth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(element);
-            compilerContext.emitHelpers.emitNextDestructuringValue(depth, doneLocal);
+            int depth = ExpressionCompiler.preEvaluateAssignmentTarget(compilerContext, element);
+            EmitHelpers.emitNextDestructuringValue(compilerContext, depth, doneLocal);
             if (element == null) {
-                emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
-                compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(element, depth);
+                ExpressionDestructuringAssignmentCompiler.compileFromPreEvaluated(compilerContext, element, depth);
             }
         }
         if (!hasRest) {
-            compilerContext.emitHelpers.emitIteratorCloseUnlessDone(doneLocal);
+            EmitHelpers.emitIteratorCloseUnlessDone(compilerContext, doneLocal);
             return;
         }
         Expression restTarget = ((SpreadElement) elements.get(restIndex)).getArgument();
-        int depth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(restTarget);
-        compilerContext.emitHelpers.emitIteratorRestArray(depth);
+        int depth = ExpressionCompiler.preEvaluateAssignmentTarget(compilerContext, restTarget);
+        EmitHelpers.emitIteratorRestArray(compilerContext, depth);
         // A nested assignment can throw. Remove the exhausted iterator before assigning.
-        emitDropIteratorStatePreservingTopValues(depth + 1);
-        compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(restTarget, depth);
+        emitDropIteratorStatePreservingTopValues(compilerContext, depth + 1);
+        ExpressionDestructuringAssignmentCompiler.compileFromPreEvaluated(compilerContext, restTarget, depth);
     }
 
-    private void emitDropIteratorStatePreservingTopValues(int preservedValueCount) {
+    private static void emitDropIteratorStatePreservingTopValues(CompilerContext compilerContext,
+            int preservedValueCount) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         int[] preservedLocalIndexes = new int[preservedValueCount];
         for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
             int localIndex = compilerContext.scopeManager.currentScope()
@@ -67,7 +67,7 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
             preservedLocalIndexes[valueIndex] = localIndex;
         }
 
-        compilerContext.emitHelpers.emitDropIteratorState();
+        EmitHelpers.emitDropIteratorState(compilerContext);
 
         for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
             emitter.emitGetLocal(preservedLocalIndexes[valueIndex]);

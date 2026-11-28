@@ -98,14 +98,13 @@ public final class RegExpPrototype {
                 String groupName = groupNames[i];
                 if (groupName != null) {
                     if (!(pairValue instanceof JSUndefined) || !groupIndices.hasOwnProperty(groupName)) {
-                        groupIndices.defineProperty(PropertyKey.fromString(groupName), pairValue,
-                                PropertyDescriptor.DataState.All);
+                        groupIndices.createDataProperty(PropertyKey.fromString(groupName), pairValue);
                     }
                 }
             }
         }
         JSValue groupsValue = groupNames != null ? groupIndices : JSUndefined.INSTANCE;
-        indicesArray.defineProperty(PropertyKey.GROUPS, groupsValue, PropertyDescriptor.DataState.All);
+        indicesArray.createDataProperty(PropertyKey.GROUPS, groupsValue);
         return indicesArray;
     }
 
@@ -122,11 +121,9 @@ public final class RegExpPrototype {
             String groupName = groupNames[i];
             if (groupName != null) {
                 if (captures[i] != null) {
-                    groups.defineProperty(PropertyKey.fromString(groupName), new JSString(captures[i]),
-                            PropertyDescriptor.DataState.All);
+                    groups.createDataProperty(PropertyKey.fromString(groupName), new JSString(captures[i]));
                 } else if (!groups.hasOwnProperty(groupName)) {
-                    groups.defineProperty(PropertyKey.fromString(groupName), JSUndefined.INSTANCE,
-                            PropertyDescriptor.DataState.All);
+                    groups.createDataProperty(PropertyKey.fromString(groupName), JSUndefined.INSTANCE);
                 }
             }
         }
@@ -236,16 +233,14 @@ public final class RegExpPrototype {
 
             int[][] indices = result.indices();
             if (indices != null && indices.length > 0) {
-                array.defineProperty(PropertyKey.INDEX, JSNumber.of(indices[0][0]), PropertyDescriptor.DataState.All);
+                array.createDataProperty(PropertyKey.INDEX, JSNumber.of(indices[0][0]));
             }
-            array.defineProperty(PropertyKey.INPUT, inputString, PropertyDescriptor.DataState.All);
-            array.defineProperty(PropertyKey.GROUPS,
-                    createNamedGroupsValue(context, captures, regexp.getBytecode().groupNames()),
-                    PropertyDescriptor.DataState.All);
+            array.createDataProperty(PropertyKey.INPUT, inputString);
+            array.createDataProperty(PropertyKey.GROUPS,
+                    createNamedGroupsValue(context, captures, regexp.getBytecode().groupNames()));
             if (regexp.hasIndices()) {
-                array.defineProperty(PropertyKey.INDICES,
-                        createIndicesValue(context, indices, regexp.getBytecode().groupNames()),
-                        PropertyDescriptor.DataState.All);
+                array.createDataProperty(PropertyKey.INDICES,
+                        createIndicesValue(context, indices, regexp.getBytecode().groupNames()));
             }
 
             context.updateRegExpLegacyStatics(str, captures, indices, lastIndex);

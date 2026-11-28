@@ -152,7 +152,7 @@ final class JSONStringifier {
                 return null;
             }
             if (JSTypeChecking.isCallable(toJSON)) {
-                value = JSCall.call(context, toJSON, value, new JSValue[]{key});
+                value = JSCall.call(context, toJSON, value, key);
                 if (value == null) {
                     return null;
                 }
@@ -161,7 +161,7 @@ final class JSONStringifier {
 
         // Apply replacer function
         if (replacerFunc != null) {
-            value = JSCall.call(context, replacerFunc, holder, new JSValue[]{key, value});
+            value = JSCall.call(context, replacerFunc, holder, key, value);
             if (value == null) {
                 return null;
             }
@@ -332,7 +332,7 @@ final class JSONStringifier {
         JSValue holder = JSUndefined.INSTANCE;
         if (replacerFunc != null) {
             JSObject root = context.createJSObject();
-            root.defineProperty(ROOT, value, PropertyDescriptor.DataState.All);
+            root.createDataProperty(ROOT, value);
             holder = root;
         }
         JSValue processedValue = jsonCheck(holder, value, ROOT_NAME);

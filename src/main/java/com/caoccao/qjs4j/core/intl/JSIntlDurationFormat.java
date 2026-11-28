@@ -29,7 +29,7 @@ import java.util.*;
 /**
  * Intl.DurationFormat instance object. Stores all resolved options per the Intl.DurationFormat proposal.
  */
-public final class JSIntlDurationFormat extends JSObject {
+public final class JSIntlDurationFormat extends IntlLocaleObject {
     /**
      * Valid styles per unit category.
      */
@@ -58,7 +58,6 @@ public final class JSIntlDurationFormat extends JSObject {
 
     private final Integer fractionalDigits;
     private JSIntlListFormat listFormat;
-    private final Locale locale;
     private final String numberingSystem;
     private final String style;
     private final String[] unitDisplays;
@@ -67,8 +66,7 @@ public final class JSIntlDurationFormat extends JSObject {
 
     public JSIntlDurationFormat(JSContext context, Locale locale, String numberingSystem, String style,
             String[] unitStyles, String[] unitDisplays, Integer fractionalDigits) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.numberingSystem = numberingSystem;
         this.style = style;
         this.unitStyles = unitStyles.clone();
@@ -150,10 +148,6 @@ public final class JSIntlDurationFormat extends JSObject {
 
     public Integer getFractionalDigits() {
         return fractionalDigits;
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public String getNumberingSystem() {

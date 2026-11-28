@@ -158,7 +158,7 @@ final class EvalOverlayManager {
             PropertyKey key = PropertyKey.fromString(entry.getKey());
             // Use defineProperty to restore data properties, overwriting any accessor
             // properties that were set up for live import bindings.
-            globalObject.defineProperty(key, entry.getValue(), PropertyDescriptor.DataState.All);
+            globalObject.createDataProperty(key, entry.getValue());
         }
         for (String absentKey : frame.absentKeys()) {
             globalObject.delete(PropertyKey.fromString(absentKey));
@@ -208,7 +208,7 @@ final class EvalOverlayManager {
                 PropertyDescriptor currentDescriptor = globalObject.getOwnPropertyDescriptor(overlayKey);
                 if (currentDescriptor != null && currentDescriptor.isDataDescriptor()
                         && !currentDescriptor.isWritable()) {
-                    globalObject.defineProperty(overlayKey, entry.getValue(), PropertyDescriptor.DataState.All);
+                    globalObject.createDataProperty(overlayKey, entry.getValue());
                 } else {
                     globalObject.set(overlayKey, entry.getValue());
                 }

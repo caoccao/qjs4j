@@ -20,7 +20,7 @@ package com.caoccao.qjs4j.core;
  * Abstract base class for JavaScript function types. In JavaScript, functions are objects, so JSFunction extends
  * JSObject.
  */
-public abstract sealed class JSFunction extends JSObject
+public abstract sealed class JSFunction extends JSObject implements JSNativeCallback
         permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction, JSClass {
     public static final String NAME = "Function";
     /**
@@ -42,7 +42,8 @@ public abstract sealed class JSFunction extends JSObject
     /**
      * Call this function with the given context, this value, and arguments.
      */
-    public abstract JSValue call(JSContext context, JSValue thisArg, JSValue[] args);
+    @Override
+    public abstract JSValue call(JSContext context, JSValue thisArg, JSValue... args);
 
     public JSEvalEnvironment getEvalEnvironment() {
         return evalEnvironment;

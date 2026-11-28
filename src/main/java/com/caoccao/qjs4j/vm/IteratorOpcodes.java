@@ -191,7 +191,7 @@ final class IteratorOpcodes {
             executionContext.raiseTypeError("is not a function");
             return;
         }
-        JSValue iterator = JSCall.call(context, method, asyncYieldStarIterable, JSValue.NO_ARGS);
+        JSValue iterator = JSCall.call(context, method, asyncYieldStarIterable);
         if (executionContext.capturePendingException()) {
             return;
         }
@@ -318,7 +318,7 @@ final class IteratorOpcodes {
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             throw new JSVirtualMachineException("Next method must be a function");
         }
-        JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
+        JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator);
         operandStack.pushStackValue(catchOffset);
         operandStack.push(result);
         executionContext.finishStackOpcode(op);
@@ -419,7 +419,7 @@ final class IteratorOpcodes {
 
             JSValue result;
             try {
-                result = JSCall.call(vm.context, nextMethod, iterator, JSValue.NO_ARGS);
+                result = JSCall.call(vm.context, nextMethod, iterator);
             } catch (JSException e) {
                 restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
                         depth);
@@ -542,7 +542,7 @@ final class IteratorOpcodes {
                 return;
             }
             JSValue callResult = (flags & 2) != 0
-                    ? JSCall.call(executionContext.virtualMachine.context, methodValue, iteratorObject, JSValue.NO_ARGS)
+                    ? JSCall.call(executionContext.virtualMachine.context, methodValue, iteratorObject)
                     : JSCall.call(executionContext.virtualMachine.context, methodValue, iteratorObject,
                             executionContext.virtualMachine.singleArg(argumentValue));
             stack[sp - 1] = callResult;
@@ -603,7 +603,7 @@ final class IteratorOpcodes {
                 }
                 if (JSTypeChecking.isCallable(returnMethodValue)) {
                     JSValue closeResult = JSCall.call(executionContext.virtualMachine.context, returnMethodValue,
-                            iteratorObject, JSValue.NO_ARGS);
+                            iteratorObject);
                     if (!captureCloseException(executionContext.virtualMachine, originalPendingException)
                             && !(closeResult instanceof JSObject)) {
                         if (originalPendingException == null) {
@@ -757,7 +757,7 @@ final class IteratorOpcodes {
                 }
 
                 // Call Symbol.iterator to get the iterator
-                JSValue iterator = JSCall.call(vm.context, iteratorMethod, iterable, JSValue.NO_ARGS);
+                JSValue iterator = JSCall.call(vm.context, iteratorMethod, iterable);
                 if (!(iterator instanceof JSObject iteratorObject)) {
                     executionContext.raiseTypeError("Iterator method must return an object");
                     return;
@@ -926,7 +926,7 @@ final class IteratorOpcodes {
                 return false;
             }
             if (JSTypeChecking.isCallable(close)) {
-                JSCall.call(vm.context, close, iterator, JSValue.NO_ARGS);
+                JSCall.call(vm.context, close, iterator);
                 if (synchronous && executionContext.capturePendingException()) {
                     return false;
                 }
@@ -971,7 +971,7 @@ final class IteratorOpcodes {
 
         JSValue result;
         try {
-            result = JSCall.call(context, method, iterable, JSValue.NO_ARGS);
+            result = JSCall.call(context, method, iterable);
         } catch (JSException e) {
             execution.setErrorAsPending(e.getErrorValue());
             return;

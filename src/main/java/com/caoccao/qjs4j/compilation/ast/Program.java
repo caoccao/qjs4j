@@ -36,7 +36,7 @@ public final class Program extends ASTNode {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(body);
     }
 

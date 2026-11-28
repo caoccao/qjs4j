@@ -116,7 +116,7 @@ final class Test262AgentHost implements AutoCloseable {
                         if (broadcastValue == null) {
                             return JSUndefined.INSTANCE;
                         }
-                        JSValue result = callback.call(ctx, JSUndefined.INSTANCE, new JSValue[]{broadcastValue});
+                        JSValue result = callback.call(ctx, JSUndefined.INSTANCE, broadcastValue);
                         if (agent.getRuntime() != null) {
                             synchronized (agent.getRuntime()) {
                                 agent.getRuntime().runJobs();
@@ -172,7 +172,7 @@ final class Test262AgentHost implements AutoCloseable {
                 // because eval() may still be running on the main thread.
                 // The main event loop will process the microtask.
                 ctx.enqueueMicrotask(() -> {
-                    callback.call(ctx, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+                    callback.call(ctx, JSUndefined.INSTANCE);
                     if (ctx.hasPendingException()) {
                         ctx.clearAllPendingExceptions();
                     }

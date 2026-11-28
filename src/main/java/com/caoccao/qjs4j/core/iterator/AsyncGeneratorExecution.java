@@ -240,9 +240,8 @@ public final class AsyncGeneratorExecution implements JSAsyncGenerator.AsyncGene
         if (thenMethod instanceof JSFunction thenFunc) {
             JSPromise resultPromise = context.createJSPromise();
             try {
-                thenFunc.call(context, rawResult,
-                        new JSValue[]{delegatedResultHandler(context, "", delegateIterator, resultPromise),
-                                resultPromise.rejectHandler(context, "")});
+                thenFunc.call(context, rawResult, delegatedResultHandler(context, "", delegateIterator, resultPromise),
+                        resultPromise.rejectHandler(context, ""));
             } catch (Exception e) {
                 JSValue error = context.takeRejectionReason(e);
                 return JSAsyncIterator.createRejectedPromise(context, error);
@@ -277,7 +276,7 @@ public final class AsyncGeneratorExecution implements JSAsyncGenerator.AsyncGene
         if (!(method instanceof JSFunction function)) {
             return JSAsyncIterator.rejectTypeError(context, "iterator " + name + " is not a function");
         }
-        JSValue result = function.call(context, iterator, new JSValue[]{argument});
+        JSValue result = function.call(context, iterator, argument);
         if (context.hasPendingException()) {
             return JSAsyncIterator.rejectPendingException(context);
         }
@@ -352,7 +351,7 @@ public final class AsyncGeneratorExecution implements JSAsyncGenerator.AsyncGene
                 if (!(returnMethodValue instanceof JSFunction returnFunction)) {
                     return JSAsyncIterator.rejectTypeError(context, "iterator return is not a function");
                 }
-                JSValue closeResult = returnFunction.call(context, delegateIterator, JSValue.NO_ARGS);
+                JSValue closeResult = returnFunction.call(context, delegateIterator);
                 if (context.hasPendingException()) {
                     return JSAsyncIterator.rejectPendingException(context);
                 }
@@ -466,8 +465,8 @@ public final class AsyncGeneratorExecution implements JSAsyncGenerator.AsyncGene
             // Thenable: call then() and wait for resolution, per Await spec step 2
             JSPromise thenablePromise = context.createJSPromise();
             try {
-                thenFunc.call(context, iteratorResultObject, new JSValue[]{thenablePromise.fulfillHandler(context, ""),
-                        thenablePromise.rejectHandler(context, "")});
+                thenFunc.call(context, iteratorResultObject, thenablePromise.fulfillHandler(context, ""),
+                        thenablePromise.rejectHandler(context, ""));
             } catch (Exception e) {
                 JSValue error = context.takeRejectionReason(e);
                 promise.reject(error);
@@ -549,7 +548,7 @@ public final class AsyncGeneratorExecution implements JSAsyncGenerator.AsyncGene
                     if (childCtx.hasPendingException()) {
                         childCtx.clearAllPendingExceptions();
                     } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                        returnFunction.call(childCtx, delegateIterator, JSValue.NO_ARGS);
+                        returnFunction.call(childCtx, delegateIterator);
                         if (childCtx.hasPendingException()) {
                             childCtx.clearAllPendingExceptions();
                         }

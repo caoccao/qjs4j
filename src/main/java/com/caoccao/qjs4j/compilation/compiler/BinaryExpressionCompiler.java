@@ -26,9 +26,8 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.ArrayList;
 
-final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
-    BinaryExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class BinaryExpressionCompiler {
+    private BinaryExpressionCompiler() {
     }
 
     /**
@@ -40,8 +39,8 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
      * the spine, a short-circuit node saves the compiler state and disables tail calls for its left operand; ascending
      * it, each node restores that state, then compiles its right operand and emits its operator.
      */
-    @Override
-    void compile(BinaryExpression binExpr) {
+    static void compile(CompilerContext compilerContext, BinaryExpression binExpr) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         ArrayList<BinaryExpression> spine = new ArrayList<>();
         Expression leftmost = binExpr;
         while (leftmost instanceof BinaryExpression binaryExpression && !isPrivateIn(binaryExpression)) {
@@ -53,34 +52,36 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
             leftmost = binaryExpression.getLeft();
         }
         if (leftmost instanceof BinaryExpression privateInExpression) {
-            compilePrivateInExpression((PrivateIdentifier) privateInExpression.getLeft(),
+            compilePrivateInExpression(compilerContext, (PrivateIdentifier) privateInExpression.getLeft(),
                     privateInExpression.getRight());
         } else {
-            compilerContext.expressionCompiler.compile(leftmost);
+            compilerContext.compileExpression(leftmost);
         }
         for (int i = spine.size() - 1; i >= 0; i--) {
             BinaryExpression binaryExpression = spine.get(i);
             if (binaryExpression.getOperator().isEagerOperator()) {
-                compilerContext.expressionCompiler.compile(binaryExpression.getRight());
+                compilerContext.compileExpression(binaryExpression.getRight());
                 // An operator can call valueOf, toString or Symbol.hasInstance; a frame stopped there reports
                 // the operator's position, as V8 does.
                 emitter.emitSourcePosition(binaryExpression.getLocation());
                 emitter.emitOpcode(binaryExpression.getOperator().getOpcode());
             } else {
                 compilerContext.popState();
-                compileShortCircuitTail(binaryExpression);
+                compileShortCircuitTail(compilerContext, binaryExpression);
             }
         }
     }
 
-    private void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
-        compilerContext.expressionCompiler.compile(right);
+    private static void compilePrivateInExpression(CompilerContext compilerContext, PrivateIdentifier privateIdentifier,
+            Expression right) {
+        compilerContext.compileExpression(right);
 
-        compilerContext.emitHelpers.emitPrivateSymbol(privateIdentifier);
-        emitter.emitOpcode(Opcode.PRIVATE_IN);
+        EmitHelpers.emitPrivateSymbol(compilerContext, privateIdentifier);
+        compilerContext.emitter.emitOpcode(Opcode.PRIVATE_IN);
     }
 
-    private void compileShortCircuitTail(BinaryExpression binExpr) {
+    private static void compileShortCircuitTail(CompilerContext compilerContext, BinaryExpression binExpr) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // Stack: left
         emitter.emitOpcode(Opcode.DUP);
         int jumpEnd = switch (binExpr.getOperator()) {
@@ -95,7 +96,7 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
             }
         };
         emitter.emitOpcode(Opcode.DROP);
-        compilerContext.expressionCompiler.compile(binExpr.getRight());
+        compilerContext.compileExpression(binExpr.getRight());
         emitter.patchJumpToHere(jumpEnd);
     }
 

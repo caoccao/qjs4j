@@ -38,13 +38,12 @@ import java.util.Map;
 /**
  * Intl.DateTimeFormat instance object. Stores all resolved options per ECMA-402.
  */
-public final class JSIntlDateTimeFormat extends JSObject {
+public final class JSIntlDateTimeFormat extends IntlBoundFunctionObject {
 
     private static final String[] EARTHLY_BRANCHES = {"子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"};
     private static final String[] HEAVENLY_STEMS = {"甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"};
 
     public static final String NAME = "Intl.DateTimeFormat";
-    private JSFunction boundFormatFunction;
     private final String calendar;
     private final IntlDateFields dateFields;
     private final FormatStyle dateStyle;
@@ -54,7 +53,6 @@ public final class JSIntlDateTimeFormat extends JSObject {
     private final boolean hasDefaultTimeComponents;
     private final String hourCycle;
     private final String hourCycleForInstant;
-    private final Locale locale;
     private final String numberingSystem;
     private volatile List<IntlDateTimePattern.Token> patternTokens;
     private final IntlTimeFields timeFields;
@@ -67,10 +65,9 @@ public final class JSIntlDateTimeFormat extends JSObject {
             String calendar, String numberingSystem, String timeZone, String hourCycle, String hourCycleForInstant,
             IntlDateFields dateFields, IntlTimeFields timeFields, Integer fractionalSecondDigits,
             String timeZoneNameOption, boolean hasDefaultDateComponents, boolean hasDefaultTimeComponents) {
-        super(context);
+        super(context, locale);
         this.dateFields = dateFields;
         this.timeFields = timeFields;
-        this.locale = locale;
         this.dateStyle = dateStyle;
         this.timeStyle = timeStyle;
         this.calendar = calendar;
@@ -252,7 +249,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
     }
 
     public JSFunction getBoundFormatFunction() {
-        return boundFormatFunction;
+        return boundFunction;
     }
 
     public String getCalendar() {
@@ -294,10 +291,6 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
     public String getHourOption() {
         return timeFields.hour();
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public String getMinuteOption() {
@@ -474,7 +467,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
     }
 
     public void setBoundFormatFunction(JSFunction boundFormatFunction) {
-        this.boundFormatFunction = boundFormatFunction;
+        boundFunction = boundFormatFunction;
     }
 
     IntlTimeFields timeFields() {

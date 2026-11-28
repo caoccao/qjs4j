@@ -23,14 +23,13 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles while-statement AST nodes into bytecode.
  */
-final class WhileStatementCompiler extends AstNodeCompiler<WhileLoop> {
-    WhileStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class WhileStatementCompiler {
+    private WhileStatementCompiler() {
     }
 
-    @Override
-    void compile(WhileLoop statement) {
-        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+    static void compile(CompilerContext compilerContext, WhileLoop statement) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
 
         int loopStart = emitter.currentOffset();
         LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
@@ -39,13 +38,13 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileLoop> {
 
         boolean testAfterBody = statement instanceof DoWhileStatement;
         if (testAfterBody) {
-            compileBody(statement);
+            compileBody(compilerContext, statement);
         }
         int testStart = emitter.currentOffset();
-        compilerContext.expressionCompiler.compile(statement.getTest());
+        compilerContext.compileExpression(statement.getTest());
         int jumpToEnd = emitter.emitJump(Opcode.IF_FALSE);
         if (!testAfterBody) {
-            compileBody(statement);
+            compileBody(compilerContext, statement);
         }
 
         emitter.emitGoto(loopStart);
@@ -59,8 +58,8 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileLoop> {
         compilerContext.loopManager.popLoop();
     }
 
-    private void compileBody(WhileLoop statement) {
-        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
-        compilerContext.statementCompiler.compileNestedStatement(statement.getBody());
+    private static void compileBody(CompilerContext compilerContext, WhileLoop statement) {
+        StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
+        StatementCompiler.compileNestedStatement(compilerContext, statement.getBody());
     }
 }

@@ -25,7 +25,7 @@ import java.util.Map;
 /**
  * Intl.RelativeTimeFormat instance object.
  */
-public final class JSIntlRelativeTimeFormat extends JSObject {
+public final class JSIntlRelativeTimeFormat extends IntlLocaleObject {
     private static final Map<String, String> EN_AUTO_MINUS_ONE = Map.of("year", "last year", "quarter", "last quarter",
             "month", "last month", "week", "last week", "day", "yesterday");
     private static final Map<String, String> EN_AUTO_ONE = Map.of("year", "next year", "quarter", "next quarter",
@@ -61,15 +61,13 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
     private static final Map<String, String> PL_SHORT_ONE = Map.of("second", "sek.", "minute", "min", "hour", "godz.",
             "day", "dzień", "week", "tydz.", "month", "mies.", "quarter", "kw.", "year", "rok");
 
-    private final Locale locale;
     private final String numberingSystem;
     private final String numeric;
     private final String style;
 
     public JSIntlRelativeTimeFormat(JSContext context, Locale locale, String style, String numeric,
             String numberingSystem) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.style = style;
         this.numeric = numeric;
         this.numberingSystem = numberingSystem != null ? numberingSystem : "latn";
@@ -186,7 +184,7 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
         for (int index = 0; index < numberParts.getLength(); index++) {
             JSValue numberPartValue = numberParts.get(index);
             if (numberPartValue instanceof JSObject numberPartObject) {
-                IntlBuiltins.createDataProperty(numberPartObject, PropertyKey.UNIT, new JSString(normalizedUnit));
+                numberPartObject.createDataProperty(PropertyKey.UNIT, new JSString(normalizedUnit));
                 result.push(numberPartObject);
             }
         }
@@ -202,10 +200,6 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
         }
         return result;
 
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public String getNumberingSystem() {
@@ -244,8 +238,8 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
 
     private static JSObject createRelativeTimeLiteralPart(JSContext context, String value) {
         JSObject part = context.createJSObject();
-        IntlBuiltins.createDataProperty(part, PropertyKey.TYPE, new JSString("literal"));
-        IntlBuiltins.createDataProperty(part, PropertyKey.VALUE, new JSString(value));
+        part.createDataProperty(PropertyKey.TYPE, new JSString("literal"));
+        part.createDataProperty(PropertyKey.VALUE, new JSString(value));
         return part;
     }
 

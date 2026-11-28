@@ -86,7 +86,7 @@ public final class StringPrototype {
         if (!JSTypeChecking.isCallable(method)) {
             return context.throwTypeError("not a function");
         }
-        return JSCall.call(context, method, object, new JSValue[]{input});
+        return JSCall.call(context, method, object, input);
     }
 
     private static JSValue characterAt(JSContext context, JSValue receiver, JSValue[] args, CharacterResult kind) {
@@ -615,7 +615,7 @@ public final class StringPrototype {
                 if (!JSTypeChecking.isCallable(replacer)) {
                     return context.throwTypeError("not a function");
                 }
-                return JSCall.call(context, replacer, searchValueObject, new JSValue[]{thisArg, replaceValue});
+                return JSCall.call(context, replacer, searchValueObject, thisArg, replaceValue);
             }
         }
 
@@ -789,7 +789,7 @@ public final class StringPrototype {
                 if (!(splitter instanceof JSFunction splitFunction)) {
                     return context.throwTypeError("not a function");
                 }
-                return splitFunction.call(context, separatorObject, new JSValue[]{thisArg, limitArg});
+                return splitFunction.call(context, separatorObject, thisArg, limitArg);
             }
         }
 

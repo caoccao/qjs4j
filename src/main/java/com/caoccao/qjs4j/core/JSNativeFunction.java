@@ -58,7 +58,7 @@ public final class JSNativeFunction extends JSFunction {
     }
 
     @Override
-    public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue call(JSContext context, JSValue thisArg, JSValue... args) {
         if (requiresNew && context.getConstructorNewTarget() == null) {
             String constructorName = name != null ? name : "constructor";
             String errorMessage;

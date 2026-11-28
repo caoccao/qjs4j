@@ -20,7 +20,6 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents an assignment expression.
  */
 public final class AssignmentExpression extends Expression {
-    private Boolean directEvalVarArgumentsInside;
     private final Expression left;
     private final boolean lhsIsIdentifierRef;
     private final AssignmentOperator operator;
@@ -33,7 +32,6 @@ public final class AssignmentExpression extends Expression {
         this.operator = operator;
         this.right = right;
         this.lhsIsIdentifierRef = lhsIsIdentifierRef;
-        directEvalVarArgumentsInside = null;
     }
 
     public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right,
@@ -42,15 +40,12 @@ public final class AssignmentExpression extends Expression {
     }
 
     @Override
-    public boolean containsDirectEvalVarArguments() {
-        if (directEvalVarArgumentsInside == null) {
-            directEvalVarArgumentsInside = right != null && right.containsDirectEvalVarArguments();
-        }
-        return directEvalVarArgumentsInside;
+    boolean computeDirectEvalVarArguments() {
+        return SyntaxQuery.DIRECT_EVAL_VAR_ARGUMENTS.in(right);
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(left) || kind.in(right);
     }
 

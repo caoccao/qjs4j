@@ -62,11 +62,10 @@ final class IntlPluralRulesBuiltins {
             return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.LOCALE,
-                new JSString(pluralRules.getLocale().toLanguageTag()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TYPE, new JSString(pluralRules.getType()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NOTATION, new JSString(pluralRules.getNotation()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.MINIMUM_INTEGER_DIGITS,
+        resolvedOptions.createDataProperty(PropertyKey.LOCALE, new JSString(pluralRules.getLocale().toLanguageTag()));
+        resolvedOptions.createDataProperty(PropertyKey.TYPE, new JSString(pluralRules.getType()));
+        resolvedOptions.createDataProperty(PropertyKey.NOTATION, new JSString(pluralRules.getNotation()));
+        resolvedOptions.createDataProperty(PropertyKey.MINIMUM_INTEGER_DIGITS,
                 JSNumber.of(pluralRules.getMinimumIntegerDigits()));
         if (pluralRules.getMinimumSignificantDigits() != null) {
             defineDigitRange(resolvedOptions, true, pluralRules.getMinimumSignificantDigits(),
@@ -79,7 +78,7 @@ final class IntlPluralRulesBuiltins {
         for (String category : pluralRules.getPluralCategories()) {
             categories.push(new JSString(category));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.PLURAL_CATEGORIES, categories);
+        resolvedOptions.createDataProperty(PropertyKey.PLURAL_CATEGORIES, categories);
         return resolvedOptions;
     }
 

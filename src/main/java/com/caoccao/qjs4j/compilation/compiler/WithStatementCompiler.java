@@ -41,7 +41,7 @@ final class WithStatementCompiler {
         compilerContext.scopeManager.enterScope();
         int withObjectLocalIndex = compilerContext.scopeManager.currentScope()
                 .declareLocal("#withObject" + compilerContext.scopeManager.getScopeDepth());
-        compilerContext.expressionCompiler.compile(withStmt.getObject());
+        compilerContext.compileExpression(withStmt.getObject());
         compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
         compilerContext.emitter.emitPutLocal(withObjectLocalIndex);
 
@@ -50,7 +50,7 @@ final class WithStatementCompiler {
         compilerContext.isLastInProgram = false;
         try {
             if (withStmt.getBody() != null) {
-                compilerContext.statementCompiler.compile(withStmt.getBody());
+                compilerContext.compileStatement(withStmt.getBody());
             }
         } finally {
             compilerContext.isLastInProgram = savedIsLastInProgram;
@@ -60,7 +60,7 @@ final class WithStatementCompiler {
             compilerContext.withObjectManager.popLocal();
         }
 
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
     }
 }

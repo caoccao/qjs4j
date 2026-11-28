@@ -105,7 +105,7 @@ enum SetOperation {
             if (item == null) {
                 return result == null ? JSBoolean.TRUE : result;
             }
-            JSValue has = JSCall.call(context, other.hasFunction, other.objectValue, new JSValue[]{item});
+            JSValue has = JSCall.call(context, other.hasFunction, other.objectValue, item);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -149,7 +149,7 @@ enum SetOperation {
         if (!JSTypeChecking.isCallable(returnMethod)) {
             return;
         }
-        JSCall.call(context, returnMethod, iteratorObject, JSValue.NO_ARGS);
+        JSCall.call(context, returnMethod, iteratorObject);
     }
 
     private static JSSet copySet(JSContext context, JSSet sourceSet) {
@@ -167,7 +167,7 @@ enum SetOperation {
     }
 
     private static IteratorRecord getKeysIteratorRecord(JSContext context, SetRecord setRecord) {
-        JSValue iteratorValue = JSCall.call(context, setRecord.keysFunction, setRecord.objectValue, JSValue.NO_ARGS);
+        JSValue iteratorValue = JSCall.call(context, setRecord.keysFunction, setRecord.objectValue);
         if (context.hasPendingException()) {
             return null;
         }
@@ -251,7 +251,7 @@ enum SetOperation {
 
         boolean advance(JSContext context) {
             context.checkExecutionInterrupt();
-            JSValue next = JSCall.call(context, nextFunction, iteratorObject, JSValue.NO_ARGS);
+            JSValue next = JSCall.call(context, nextFunction, iteratorObject);
             if (context.hasPendingException()) {
                 return false;
             }

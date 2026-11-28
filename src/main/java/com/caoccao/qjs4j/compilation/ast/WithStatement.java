@@ -32,7 +32,7 @@ public final class WithStatement extends Statement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(object) || kind.in(body);
     }
 

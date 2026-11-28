@@ -35,11 +35,11 @@ final class MemberExpressionDestructuringAssignmentCompiler {
             throw new JSSyntaxErrorException("Invalid destructuring assignment target", memberExpr.getLocation());
         }
         if (memberExpr.getObject().isSuperIdentifier()) {
-            compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
+            EmitHelpers.emitSuperPropertyReference(compilerContext, memberExpr);
         } else {
-            compilerContext.expressionCompiler.compile(memberExpr.getObject());
+            compilerContext.compileExpression(memberExpr.getObject());
             if (memberExpr.isComputed()) {
-                compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+                compilerContext.compileExpression(memberExpr.getProperty());
             }
         }
         store(compilerContext, memberExpr, false);
@@ -61,7 +61,7 @@ final class MemberExpressionDestructuringAssignmentCompiler {
             if (!valueOnTop) {
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
             }
-            compilerContext.emitHelpers.emitPrivateSymbol(id);
+            EmitHelpers.emitPrivateSymbol(compilerContext, id);
             compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
         } else if (member.getProperty() instanceof Identifier id) {
             if (valueOnTop) {

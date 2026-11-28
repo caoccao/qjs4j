@@ -35,7 +35,7 @@ public final class ExportDeclaration extends ModuleItem {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(declaration);
     }
 

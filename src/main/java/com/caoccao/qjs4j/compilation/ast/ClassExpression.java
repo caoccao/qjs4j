@@ -35,7 +35,7 @@ public final class ClassExpression extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(superClass) || kind.in(body);
     }
 

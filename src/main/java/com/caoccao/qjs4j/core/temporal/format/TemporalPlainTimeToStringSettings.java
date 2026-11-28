@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core.temporal.format;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.rounding.TemporalRoundingMode;
 
@@ -31,6 +33,11 @@ public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, Tempo
             String smallestUnitText, TemporalFractionalSecondDigitsOption digits) {
         return new TemporalTimeStringOptions(roundingModeText, smallestUnitText).resolve(context, digits,
                 TemporalUnit.MINUTE, "Temporal error: Invalid smallestUnit option.");
+    }
+
+    public static TemporalPlainTimeToStringSettings read(JSContext context, JSValue options) {
+        return TemporalTimeStringOptions.readOptions(context, options, TemporalError.INVALID_OPTIONS.message(), DEFAULT,
+                TemporalPlainTimeToStringSettings::read);
     }
 
     public static TemporalPlainTimeToStringSettings read(JSContext context, JSObject optionsObject) {

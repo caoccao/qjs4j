@@ -28,7 +28,7 @@ public final class SpreadElement extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(argument);
     }
 

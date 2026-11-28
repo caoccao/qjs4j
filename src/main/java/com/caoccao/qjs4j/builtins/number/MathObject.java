@@ -184,7 +184,7 @@ public final class MathObject {
         }
         JSValue returnMethod = iterator.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
-            returnFunction.call(context, iterator, JSValue.NO_ARGS);
+            returnFunction.call(context, iterator);
         }
         if (pendingException != null) {
             context.setPendingException(pendingException);

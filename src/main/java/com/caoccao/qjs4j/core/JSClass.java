@@ -132,7 +132,7 @@ public final class JSClass extends JSFunction {
      * Call the class as a function (throws error - classes must be called with 'new').
      */
     @Override
-    public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue call(JSContext context, JSValue thisArg, JSValue... args) {
         JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
         return executionContext.throwTypeError("Class constructor " + name + " cannot be invoked without 'new'");
     }

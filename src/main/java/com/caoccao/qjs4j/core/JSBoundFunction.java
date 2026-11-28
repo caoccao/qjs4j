@@ -62,7 +62,7 @@ public final class JSBoundFunction extends JSFunction {
     }
 
     @Override
-    public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue call(JSContext context, JSValue thisArg, JSValue... args) {
         // Merge bound args with call args
         return target.call(context, boundThis, prependBoundArgs(args));
     }

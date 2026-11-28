@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
@@ -26,37 +27,50 @@ import com.caoccao.qjs4j.vm.Opcode;
  * on the value of the left one, so they compile to a conditional jump and have no opcode of their own.
  */
 public enum BinaryOperator {
-    ADD(true, Opcode.ADD),
-    BIT_AND(true, Opcode.AND),
-    BIT_OR(true, Opcode.OR),
-    BIT_XOR(true, Opcode.XOR),
-    DIV(true, Opcode.DIV),
-    EQ(true, Opcode.EQ),
-    EXP(true, Opcode.POW),
-    GE(true, Opcode.GTE),
-    GT(true, Opcode.GT),
-    IN(true, Opcode.IN),
-    INSTANCEOF(true, Opcode.INSTANCEOF),
-    LE(true, Opcode.LTE),
-    LOGICAL_AND(false, null),
-    LOGICAL_OR(false, null),
-    LSHIFT(true, Opcode.SHL),
-    LT(true, Opcode.LT),
-    MOD(true, Opcode.MOD),
-    MUL(true, Opcode.MUL),
-    NE(true, Opcode.NEQ),
-    NULLISH_COALESCING(false, null),
-    RSHIFT(true, Opcode.SAR),
-    STRICT_EQ(true, Opcode.STRICT_EQ),
-    STRICT_NE(true, Opcode.STRICT_NEQ),
-    SUB(true, Opcode.SUB),
-    URSHIFT(true, Opcode.SHR);
+    ADD(TokenType.PLUS, Precedence.ADDITIVE, Opcode.ADD),
+    BIT_AND(TokenType.BIT_AND, Precedence.BIT_AND, Opcode.AND),
+    BIT_OR(TokenType.BIT_OR, Precedence.BIT_OR, Opcode.OR),
+    BIT_XOR(TokenType.BIT_XOR, Precedence.BIT_XOR, Opcode.XOR),
+    DIV(TokenType.DIV, Precedence.MULTIPLICATIVE, Opcode.DIV),
+    EQ(TokenType.EQ, Precedence.EQUALITY, Opcode.EQ),
+    EXP(null, null, Opcode.POW),
+    GE(TokenType.GE, Precedence.RELATIONAL, Opcode.GTE),
+    GT(TokenType.GT, Precedence.RELATIONAL, Opcode.GT),
+    IN(TokenType.IN, Precedence.RELATIONAL, Opcode.IN),
+    INSTANCEOF(TokenType.INSTANCEOF, Precedence.RELATIONAL, Opcode.INSTANCEOF),
+    LE(TokenType.LE, Precedence.RELATIONAL, Opcode.LTE),
+    LOGICAL_AND(null, null, null),
+    LOGICAL_OR(null, null, null),
+    LSHIFT(TokenType.LSHIFT, Precedence.SHIFT, Opcode.SHL),
+    LT(TokenType.LT, Precedence.RELATIONAL, Opcode.LT),
+    MOD(TokenType.MOD, Precedence.MULTIPLICATIVE, Opcode.MOD),
+    MUL(TokenType.MUL, Precedence.MULTIPLICATIVE, Opcode.MUL),
+    NE(TokenType.NE, Precedence.EQUALITY, Opcode.NEQ),
+    NULLISH_COALESCING(null, null, null),
+    RSHIFT(TokenType.RSHIFT, Precedence.SHIFT, Opcode.SAR),
+    STRICT_EQ(TokenType.STRICT_EQ, Precedence.EQUALITY, Opcode.STRICT_EQ),
+    STRICT_NE(TokenType.STRICT_NE, Precedence.EQUALITY, Opcode.STRICT_NEQ),
+    SUB(TokenType.MINUS, Precedence.ADDITIVE, Opcode.SUB),
+    URSHIFT(TokenType.URSHIFT, Precedence.SHIFT, Opcode.SHR);
 
-    private final boolean eagerOperator;
+    private static final BinaryOperator[] INFIX_BY_TOKEN = new BinaryOperator[TokenType.values().length];
+
+    static {
+        for (BinaryOperator operator : values()) {
+            if (operator.token != null) {
+                INFIX_BY_TOKEN[operator.token.ordinal()] = operator;
+            }
+        }
+    }
+
     private final Opcode opcode;
+    private final Precedence precedence;
 
-    BinaryOperator(boolean eagerOperator, Opcode opcode) {
-        this.eagerOperator = eagerOperator;
+    private final TokenType token;
+
+    BinaryOperator(TokenType token, Precedence precedence, Opcode opcode) {
+        this.token = token;
+        this.precedence = precedence;
         this.opcode = opcode;
     }
 
@@ -70,6 +84,28 @@ public enum BinaryOperator {
     }
 
     public boolean isEagerOperator() {
-        return eagerOperator;
+        return opcode != null;
+    }
+
+    public Precedence precedence() {
+        return precedence;
+    }
+
+    public static BinaryOperator infixOperator(TokenType token) {
+        return INFIX_BY_TOKEN[token.ordinal()];
+    }
+    public enum Precedence {
+        ADDITIVE(7),
+        BIT_AND(3),
+        BIT_OR(1),
+        BIT_XOR(2),
+        EQUALITY(4),
+        MULTIPLICATIVE(8),
+        RELATIONAL(5),
+        SHIFT(6);
+        public final int level;
+        Precedence(int level) {
+            this.level = level;
+        }
     }
 }

@@ -38,7 +38,7 @@ public final class PromisePrototype {
             boolean rejected) {
         return PromiseConstructor.createBuiltinFunction(context, "", 1, (ctx, thisValue, args) -> {
             JSValue value = JSValue.argumentOrUndefined(args, 0);
-            JSValue result = onFinally.call(ctx, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+            JSValue result = onFinally.call(ctx, JSUndefined.INSTANCE);
             if (ctx.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

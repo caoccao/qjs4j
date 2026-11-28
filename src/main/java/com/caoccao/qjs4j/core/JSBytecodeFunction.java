@@ -140,7 +140,7 @@ public final class JSBytecodeFunction extends JSFunction {
         }
     }
 
-    public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue call(JSContext context, JSValue thisArg, JSValue... args) {
         return callInternal(context, thisArg, args, args.length);
     }
 

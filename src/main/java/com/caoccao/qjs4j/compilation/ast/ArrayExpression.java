@@ -30,7 +30,7 @@ public final class ArrayExpression extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(elements);
     }
 

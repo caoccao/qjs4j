@@ -25,7 +25,7 @@ import java.util.*;
  */
 public final class JSMap extends JSObject {
     public static final String NAME = "Map";
-    private final OrderedHashTable<EntryRecord> data;
+    private final OrderedHashTable<JSValue> data;
 
     /**
      * Create an empty Map.
@@ -44,8 +44,9 @@ public final class JSMap extends JSObject {
      */
     public Iterable<Map.Entry<KeyWrapper, JSValue>> entries() {
         List<Map.Entry<KeyWrapper, JSValue>> entries = new ArrayList<>(data.size());
-        for (EntryRecord entryRecord : data.values()) {
-            entries.add(Map.entry(entryRecord.keyWrapper, entryRecord.value));
+        var cursor = data.cursor();
+        for (var node = cursor.nextEntry(); node != null; node = cursor.nextEntry()) {
+            entries.add(Map.entry(node.key(), node.value()));
         }
         return entries;
     }
@@ -54,11 +55,7 @@ public final class JSMap extends JSObject {
      * Get all keys as an iterable.
      */
     public Iterable<KeyWrapper> keys() {
-        List<KeyWrapper> keys = new ArrayList<>(data.size());
-        for (EntryRecord entryRecord : data.values()) {
-            keys.add(entryRecord.keyWrapper);
-        }
-        return keys;
+        return data.keys();
     }
 
     /**
@@ -72,53 +69,33 @@ public final class JSMap extends JSObject {
      * Delete a key from the Map.
      */
     public boolean mapDelete(JSValue key) {
-        KeyWrapper keyWrapper = new KeyWrapper(normalizeKey(key));
-        EntryRecord removedRecord = data.remove(keyWrapper);
-        if (removedRecord == null) {
-            return false;
-        }
-        return true;
+        return data.remove(key);
     }
 
     /**
      * Get a value from the Map by key.
      */
     public JSValue mapGet(JSValue key) {
-        EntryRecord record = data.get(new KeyWrapper(normalizeKey(key)));
-        return record != null ? record.value : JSUndefined.INSTANCE;
+        return data.getOrDefault(KeyWrapper.forCollection(key), JSUndefined.INSTANCE);
     }
 
     /**
      * Check if the Map has a key.
      */
     public boolean mapHas(JSValue key) {
-        return data.containsKey(new KeyWrapper(normalizeKey(key)));
+        return data.containsKey(key);
     }
 
     /**
      * Set a key-value pair in the Map.
      */
     public void mapSet(JSValue key, JSValue value) {
-        KeyWrapper keyWrapper = new KeyWrapper(normalizeKey(key));
-        EntryRecord existingRecord = data.get(keyWrapper);
-        if (existingRecord != null) {
-            existingRecord.value = value;
-            return;
-        }
-        EntryRecord record = new EntryRecord(keyWrapper, value);
-        data.put(keyWrapper, record);
+        data.put(KeyWrapper.forCollection(key), value);
     }
 
     public IterationEntry nextIterationEntry(IterationCursor cursor) {
-        EntryRecord record = cursor.cursor.next();
-        return record == null ? null : new IterationEntry(record.keyWrapper.value(), record.value);
-    }
-
-    private JSValue normalizeKey(JSValue key) {
-        if (key instanceof JSNumber number && number.value() == 0.0) {
-            return JSNumber.of(0.0);
-        }
-        return key;
+        var node = cursor.cursor.nextEntry();
+        return node == null ? null : new IterationEntry(node.key().value(), node.value());
     }
 
     /**
@@ -138,8 +115,8 @@ public final class JSMap extends JSObject {
      */
     public Iterable<JSValue> values() {
         List<JSValue> values = new ArrayList<>(data.size());
-        for (EntryRecord entryRecord : data.values()) {
-            values.add(entryRecord.value);
+        for (JSValue value : data.values()) {
+            values.add(value);
         }
         return values;
     }
@@ -153,20 +130,10 @@ public final class JSMap extends JSObject {
         return CollectionInitializer.initializeFromIterable(context, mapObj, args, true);
     }
 
-    private static final class EntryRecord {
-        private final KeyWrapper keyWrapper;
-        private JSValue value;
-
-        private EntryRecord(KeyWrapper keyWrapper, JSValue value) {
-            this.keyWrapper = keyWrapper;
-            this.value = value;
-        }
-    }
-
     public static final class IterationCursor {
-        private final OrderedHashTable.Cursor<EntryRecord> cursor;
+        private final OrderedHashTable.Cursor<JSValue> cursor;
 
-        private IterationCursor(OrderedHashTable.Cursor<EntryRecord> cursor) {
+        private IterationCursor(OrderedHashTable.Cursor<JSValue> cursor) {
             this.cursor = cursor;
         }
     }
@@ -179,6 +146,10 @@ public final class JSMap extends JSObject {
      * equals NaN.
      */
     public record KeyWrapper(JSValue value) {
+        /** Canonicalize negative zero when storing or looking up a keyed collection entry. */
+        static KeyWrapper forCollection(JSValue value) {
+            return new KeyWrapper(value instanceof JSNumber number && number.value() == 0.0 ? JSNumber.of(0.0) : value);
+        }
 
         @Override
         public boolean equals(Object obj) {

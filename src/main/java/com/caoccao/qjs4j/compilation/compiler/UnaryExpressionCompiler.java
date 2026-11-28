@@ -29,13 +29,12 @@ import java.util.List;
 /**
  * Handles compilation of unary expressions including delete, typeof, increment/decrement, and standard unary operators.
  */
-final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
-    UnaryExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class UnaryExpressionCompiler {
+    private UnaryExpressionCompiler() {
     }
 
-    @Override
-    void compile(UnaryExpression unaryExpr) {
+    static void compile(CompilerContext compilerContext, UnaryExpression unaryExpr) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // DELETE operator needs special handling - it doesn't evaluate the operand,
         // but instead emits object and property separately
         if (unaryExpr.getOperator() == UnaryExpression.UnaryOperator.DELETE) {
@@ -49,20 +48,20 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     // property key evaluation, then THROW_ERROR instead of GET_SUPER_VALUE.
                     emitter.emitOpcode(Opcode.PUSH_THIS);
                     emitter.emitSuperBase();
-                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    EmitHelpers.emitSuperPropertyKey(compilerContext, memberExpr);
                     emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "");
                     emitter.emitU8(3); // JS_THROW_ERROR_DELETE_SUPER
                 } else {
                     if (memberExpr.isPartOfOptionalChain()) {
-                        compileDeleteOptionalMemberExpression(memberExpr);
+                        compileDeleteOptionalMemberExpression(compilerContext, memberExpr);
                         return;
                     }
                     // delete obj.prop or delete obj[expr]
-                    compilerContext.expressionCompiler.compile(memberExpr.getObject());
+                    compilerContext.compileExpression(memberExpr.getObject());
 
                     if (memberExpr.isComputed()) {
                         // obj[expr]
-                        compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+                        compilerContext.compileExpression(memberExpr.getProperty());
                     } else if (memberExpr.getProperty() instanceof Identifier propId) {
                         // obj.prop
                         emitter.emitPushConstant(new JSString(propId.getName()));
@@ -82,13 +81,13 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                         || compilerContext.nonDeletableGlobalBindings.contains(identifierName);
                 List<Integer> activeWithObjectLocals = compilerContext.withObjectManager.getActiveLocals();
                 if (!activeWithObjectLocals.isEmpty()) {
-                    compilerContext.identifierCompiler.emitWithAwareDeleteIdentifier(identifierName,
+                    IdentifierCompiler.emitWithAwareDeleteIdentifier(compilerContext, identifierName,
                             activeWithObjectLocals, 0, fallsBackToNonDeletableBinding);
                 } else {
                     List<String> inheritedWithBindingNames = compilerContext.withObjectManager
                             .getInheritedBindingNames();
                     if (!inheritedWithBindingNames.isEmpty()) {
-                        compilerContext.identifierCompiler.emitInheritedWithAwareDeleteIdentifier(identifierName,
+                        IdentifierCompiler.emitInheritedWithAwareDeleteIdentifier(compilerContext, identifierName,
                                 inheritedWithBindingNames, 0, fallsBackToNonDeletableBinding);
                     } else if (fallsBackToNonDeletableBinding) {
                         emitter.emitOpcode(Opcode.PUSH_FALSE);
@@ -98,7 +97,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 }
             } else {
                 // delete non-reference expression => evaluate for side effects, then true
-                compilerContext.expressionCompiler.compile(operand);
+                compilerContext.compileExpression(operand);
                 emitter.emitOpcode(Opcode.DROP);
                 emitter.emitOpcode(Opcode.PUSH_TRUE);
             }
@@ -119,12 +118,12 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 Opcode update = isPrefix
                         ? (isInc ? Opcode.INC : Opcode.DEC)
                         : (isInc ? Opcode.POST_INC : Opcode.POST_DEC);
-                updateIdentifier(id, update, isPrefix);
+                updateIdentifier(compilerContext, id, update, isPrefix);
             } else if (operand instanceof MemberExpression memberExpr) {
                 if (memberExpr.getObject().isSuperIdentifier()) {
                     // Super property update follows super-reference semantics:
                     // [this, superObj, key] + GET_SUPER_VALUE -> old value -> update -> PUT_SUPER_VALUE
-                    compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
+                    EmitHelpers.emitSuperPropertyReference(compilerContext, memberExpr);
                     emitter.emitOpcode(Opcode.TO_PROPKEY);
                     emitter.emitOpcode(Opcode.DUP3);
                     emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
@@ -142,8 +141,8 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 }
                 if (memberExpr.isComputed()) {
                     // Array element: obj[prop]
-                    compilerContext.expressionCompiler.compile(memberExpr.getObject());
-                    compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+                    compilerContext.compileExpression(memberExpr.getObject());
+                    compilerContext.compileExpression(memberExpr.getProperty());
                     emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
 
                     if (isPrefix) {
@@ -165,7 +164,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 } else {
                     // Object property: obj.prop or obj.#field
                     if (memberExpr.getProperty() instanceof Identifier propId) {
-                        compilerContext.expressionCompiler.compile(memberExpr.getObject());
+                        compilerContext.compileExpression(memberExpr.getObject());
 
                         if (isPrefix) {
                             // Prefix: ++obj.prop - returns new value
@@ -197,7 +196,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                             throw new JSCompilerException("Private field not found: #" + fieldName, privateId);
                         }
 
-                        compilerContext.expressionCompiler.compile(memberExpr.getObject());
+                        compilerContext.compileExpression(memberExpr.getObject());
 
                         if (isPrefix) {
                             // Prefix: ++obj.#field - returns new value
@@ -229,7 +228,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 }
             } else if (operand instanceof CallExpression) {
                 // Annex B: CallExpression as increment/decrement target throws ReferenceError at runtime.
-                compilerContext.expressionCompiler.compile(operand);
+                compilerContext.compileExpression(operand);
                 emitter.emitOpcode(Opcode.DROP);
                 emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
                 emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
@@ -243,7 +242,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 && unaryExpr.getOperand() instanceof Identifier id) {
             String name = id.getName();
             if ("import.meta".equals(name) || "new.target".equals(name)) {
-                compilerContext.expressionCompiler.compile(unaryExpr.getOperand());
+                compilerContext.compileExpression(unaryExpr.getOperand());
                 emitter.emitOpcode(Opcode.TYPEOF);
                 return;
             }
@@ -255,16 +254,17 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             } else {
                 Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
                 if (localIndex != null) {
-                    compilerContext.identifierCompiler.emitLocalRead(name, localIndex);
+                    IdentifierCompiler.emitLocalRead(compilerContext, name, localIndex);
                 } else {
-                    compilerContext.identifierCompiler.emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR_UNDEF);
+                    IdentifierCompiler.emitCapturedOrGlobalIdentifierLookup(compilerContext, name,
+                            Opcode.GET_VAR_UNDEF);
                 }
             }
             emitter.emitOpcode(Opcode.TYPEOF);
             return;
         }
 
-        compilerContext.expressionCompiler.compile(unaryExpr.getOperand());
+        compilerContext.compileExpression(unaryExpr.getOperand());
 
         Opcode op = switch (unaryExpr.getOperator()) {
             case BIT_NOT -> Opcode.NOT;
@@ -282,15 +282,17 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
         emitter.emitOpcode(op);
     }
 
-    private void compileDeleteOptionalMemberExpression(MemberExpression memberExpression) {
+    private static void compileDeleteOptionalMemberExpression(CompilerContext compilerContext,
+            MemberExpression memberExpression) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // delete a?.b: a short-circuited chain deletes nothing and evaluates to true (QuickJS: drop, push_true).
-        compilerContext.emitHelpers.compileOptionalChain(() -> {
-            compilerContext.emitHelpers.compileOptionalChainLinkTarget(memberExpression, memberExpression.getObject());
+        EmitHelpers.compileOptionalChain(compilerContext, () -> {
+            EmitHelpers.compileOptionalChainLinkTarget(compilerContext, memberExpression, memberExpression.getObject());
             if (memberExpression.isOptional()) {
-                compilerContext.emitHelpers.emitOptionalChainTest(1);
+                EmitHelpers.emitOptionalChainTest(compilerContext, 1);
             }
             if (memberExpression.isComputed()) {
-                compilerContext.expressionCompiler.compile(memberExpression.getProperty());
+                compilerContext.compileExpression(memberExpression.getProperty());
             } else {
                 // The parser rejects `delete a?.#x`, so a non-computed property is an identifier.
                 emitter.emitPushConstant(new JSString(((Identifier) memberExpression.getProperty()).getName()));
@@ -302,16 +304,18 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
         });
     }
 
-    private void updateIdentifier(Identifier id, Opcode update, boolean isPrefix) {
+    private static void updateIdentifier(CompilerContext compilerContext, Identifier id, Opcode update,
+            boolean isPrefix) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (!compilerContext.withObjectManager.hasActiveWithObject()
                 && compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
             Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
             if (localIndex != null) {
                 // Local binding.
-                compilerContext.expressionCompiler.compile(id);
+                compilerContext.compileExpression(id);
                 emitter.emitOpcode(update);
                 if (compilerContext.scopeManager.isLocalBindingConst(id.getName())) {
-                    compilerContext.emitHelpers.emitConstAssignmentErrorForLocal(id.getName(), localIndex);
+                    EmitHelpers.emitConstAssignmentErrorForLocal(compilerContext, id.getName(), localIndex);
                 } else {
                     emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
                 }
@@ -321,10 +325,10 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName());
             if (capturedIndex != null) {
                 // Captured binding.
-                compilerContext.expressionCompiler.compile(id);
+                compilerContext.compileExpression(id);
                 emitter.emitOpcode(update);
                 if (compilerContext.captureResolver.isCapturedBindingImmutable(id.getName())) {
-                    compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(id.getName(), capturedIndex);
+                    EmitHelpers.emitConstAssignmentErrorForCaptured(compilerContext, id.getName(), capturedIndex);
                 } else {
                     emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
                 }
@@ -332,7 +336,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             }
         }
         // The reference determines the receiver before either reading or updating its value.
-        compilerContext.assignmentExpressionCompiler.emitIdentifierReference(id.getName());
+        AssignmentExpressionCompiler.emitIdentifierReference(compilerContext, id.getName());
         emitter.emitOpcode(Opcode.GET_REF_VALUE);
         emitter.emitOpcode(update);
         emitter.emitOpcode(isPrefix ? Opcode.INSERT3 : Opcode.PERM4);

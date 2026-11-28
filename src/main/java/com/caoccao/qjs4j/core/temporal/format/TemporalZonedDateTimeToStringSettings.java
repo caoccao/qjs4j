@@ -30,15 +30,11 @@ public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, S
             "auto", "auto", "auto", null, TemporalRoundingMode.TRUNC, true, -1, 1L);
 
     public static TemporalZonedDateTimeToStringSettings read(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
-                TemporalError.INVALID_OPTIONS.message());
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionsObject == null) {
-            return TemporalZonedDateTimeToStringSettings.DEFAULT;
-        }
+        return TemporalTimeStringOptions.readOptions(context, optionsValue, TemporalError.INVALID_OPTIONS.message(),
+                DEFAULT, TemporalZonedDateTimeToStringSettings::readFields);
+    }
 
+    private static TemporalZonedDateTimeToStringSettings readFields(JSContext context, JSObject optionsObject) {
         String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsObject);
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;

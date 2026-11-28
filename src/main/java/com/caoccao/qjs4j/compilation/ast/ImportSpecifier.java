@@ -27,7 +27,7 @@ public final class ImportSpecifier extends ASTNode {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(imported) || kind.in(local);
     }
 

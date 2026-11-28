@@ -23,39 +23,38 @@ import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
-    MemberExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class MemberExpressionCompiler {
+    private MemberExpressionCompiler() {
     }
 
-    @Override
-    void compile(MemberExpression memberExpr) {
-        boolean joinsOptionalChain = compilerContext.emitHelpers.consumeOptionalChainLink(memberExpr);
+    static void compile(CompilerContext compilerContext, MemberExpression memberExpr) {
+        boolean joinsOptionalChain = EmitHelpers.consumeOptionalChainLink(compilerContext, memberExpr);
         if (memberExpr.getObject().isSuperIdentifier()) {
-            compilerContext.emitHelpers.emitGetSuperValue(memberExpr, false);
+            EmitHelpers.emitGetSuperValue(compilerContext, memberExpr, false);
             return;
         }
         if (!joinsOptionalChain && memberExpr.isPartOfOptionalChain()) {
             // The last link of an optional chain: every `?.` in it exits here.
-            compilerContext.emitHelpers.compileOptionalChain(() -> compileLink(memberExpr), null);
+            EmitHelpers.compileOptionalChain(compilerContext, () -> compileLink(compilerContext, memberExpr), null);
         } else {
-            compileLink(memberExpr);
+            compileLink(compilerContext, memberExpr);
         }
     }
 
-    private void compileLink(MemberExpression memberExpr) {
+    private static void compileLink(CompilerContext compilerContext, MemberExpression memberExpr) {
         // Stack: -> value
-        compilerContext.emitHelpers.compileOptionalChainLinkTarget(memberExpr, memberExpr.getObject());
+        EmitHelpers.compileOptionalChainLinkTarget(compilerContext, memberExpr, memberExpr.getObject());
         if (memberExpr.isOptional()) {
-            compilerContext.emitHelpers.emitOptionalChainTest(1);
+            EmitHelpers.emitOptionalChainTest(compilerContext, 1);
         }
-        emitPropertyAccess(memberExpr, false);
+        emitPropertyAccess(compilerContext, memberExpr, false);
     }
 
     /** A method call keeps the receiver below its function on the operand stack. */
-    void emitPropertyAccess(MemberExpression memberExpr, boolean keepReceiver) {
+    static void emitPropertyAccess(CompilerContext compilerContext, MemberExpression memberExpr, boolean keepReceiver) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (keepReceiver) {
-            compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
+            EmitHelpers.emitMemberSourcePosition(compilerContext, memberExpr);
         }
         if (memberExpr.isComputed() || memberExpr.getProperty() instanceof PrivateIdentifier) {
             if (keepReceiver) {
@@ -63,7 +62,7 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
             }
             Opcode read;
             if (memberExpr.isComputed()) {
-                compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+                compilerContext.compileExpression(memberExpr.getProperty());
                 read = Opcode.GET_ARRAY_EL;
             } else {
                 PrivateIdentifier id = (PrivateIdentifier) memberExpr.getProperty();
@@ -75,12 +74,12 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
                 read = Opcode.GET_PRIVATE_FIELD;
             }
             if (!keepReceiver) {
-                compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
+                EmitHelpers.emitMemberSourcePosition(compilerContext, memberExpr);
             }
             emitter.emitOpcode(read);
         } else if (memberExpr.getProperty() instanceof Identifier id) {
             if (!keepReceiver) {
-                compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
+                EmitHelpers.emitMemberSourcePosition(compilerContext, memberExpr);
             }
             emitter.emitOpcodeAtom(keepReceiver ? Opcode.GET_FIELD2 : Opcode.GET_FIELD, id.getName());
         }

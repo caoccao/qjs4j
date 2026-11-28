@@ -34,7 +34,7 @@ public class ExpressionContainsAwaitYieldTest {
                 LOCATION);
 
         assertThat(awaitArrayExpression.containsAwait()).isTrue();
-        assertThat(identifierForAwait.awaitInside).isNull();
+        assertThat(ASTNode.SyntaxQuery.AWAIT.cachedResult(identifierForAwait)).isNull();
 
         YieldExpression yieldExpression = new YieldExpression(new Literal(1, LOCATION), false, LOCATION);
         Identifier identifierForYield = new Identifier("x", LOCATION);
@@ -42,7 +42,7 @@ public class ExpressionContainsAwaitYieldTest {
                 LOCATION);
 
         assertThat(yieldArrayExpression.containsYield()).isTrue();
-        assertThat(identifierForYield.yieldInside).isNull();
+        assertThat(ASTNode.SyntaxQuery.YIELD.cachedResult(identifierForYield)).isNull();
     }
 
     @Test
@@ -131,7 +131,7 @@ public class ExpressionContainsAwaitYieldTest {
         assertThat(awaitChain.containsAwait()).isTrue();
         assertThat(awaitChain.containsYield()).isFalse();
         // The await is the leftmost operand, so no right operand needed to be asked.
-        assertThat(lastRightOfAwaitChain.awaitInside).isNull();
+        assertThat(ASTNode.SyntaxQuery.AWAIT.cachedResult(lastRightOfAwaitChain)).isNull();
         assertThat(yieldChain.containsYield()).isTrue();
         assertThat(yieldChain.containsAwait()).isFalse();
         assertThat(evalChain.containsDirectEvalVarArguments()).isTrue();

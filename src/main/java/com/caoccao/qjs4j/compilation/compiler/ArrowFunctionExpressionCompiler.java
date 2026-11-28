@@ -49,9 +49,9 @@ final class ArrowFunctionExpressionCompiler {
         functionContext.classFieldEvalContext = compilerContext.classFieldEvalContext
                 || compilerContext.inClassFieldInitializer;
         // Inherit class inner name so eval() inside nested arrows can resolve it.
-        compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
-        Set<String> enclosingParameterScopeFunctionNames = compilerContext.functionExpressionCompiler
-                .inheritParameterScopeFunctionNameCapture(functionContext);
+        FunctionExpressionCompiler.inheritClassInnerNameCapture(compilerContext, functionContext);
+        Set<String> enclosingParameterScopeFunctionNames = FunctionExpressionCompiler
+                .inheritParameterScopeFunctionNameCapture(compilerContext, functionContext);
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
@@ -76,8 +76,8 @@ final class ArrowFunctionExpressionCompiler {
                 && !hasArgumentsParameterBinding;
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> destructuringParams = compilerContext.functionExpressionCompiler
-                .declareParameters(arrowExpr.getParams(), functionContext, parameterSlotIndexes);
+        List<int[]> destructuringParams = FunctionExpressionCompiler.declareParameters(arrowExpr.getParams(),
+                functionContext, parameterSlotIndexes);
 
         // For top-level arrows with parameter expressions, keep a local slot for dynamically
         // declared `arguments` from direct eval in parameter initializers.
@@ -88,7 +88,7 @@ final class ArrowFunctionExpressionCompiler {
             functionContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, argumentsLocalIndex);
         }
 
-        compilerContext.functionExpressionCompiler.initializeParameters(functionCompiler, arrowExpr,
+        FunctionExpressionCompiler.initializeParameters(compilerContext, functionCompiler, arrowExpr,
                 parameterSlotIndexes, destructuringParams, false);
 
         boolean enteredBodyScope = false;
@@ -114,7 +114,7 @@ final class ArrowFunctionExpressionCompiler {
                 }
             } else if (arrowExpr.getBody() instanceof Expression expr) {
                 // Expression body - implicitly returns the expression value
-                functionContext.expressionCompiler.compile(expr);
+                functionContext.compileExpression(expr);
                 FunctionBodyCompiler.ARROW.emitReturn(functionContext, arrowExpr.isAsync());
             }
 
@@ -155,7 +155,7 @@ final class ArrowFunctionExpressionCompiler {
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
 
-        compilerContext.emitHelpers.emitCapturedValues(functionCompiler, function);
+        EmitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
         compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }

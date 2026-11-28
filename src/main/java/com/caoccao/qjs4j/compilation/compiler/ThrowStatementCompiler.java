@@ -28,7 +28,7 @@ final class ThrowStatementCompiler {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
-        compilerContext.expressionCompiler.compile(throwStmt.getArgument());
+        compilerContext.compileExpression(throwStmt.getArgument());
 
         // Check if any scope in the disposal path has a CATCH handler for using declarations.
         // If so, just throw directly - the CATCH handler will handle disposal with the error
@@ -52,7 +52,7 @@ final class ThrowStatementCompiler {
         int throwValueIndex = compilerContext.storeTemporary("#throw_value_");
 
         int disposalCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
-        compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
+        EmitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, 0);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         compilerContext.emitter.emitGetLocal(throwValueIndex);

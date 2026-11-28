@@ -76,7 +76,7 @@ public final class JSFinalizationRegistry extends JSObject {
             RegistrationRecord record = registrations.remove(ref);
             if (record != null) {
                 try {
-                    cleanupCallback.call(context, JSUndefined.INSTANCE, new JSValue[]{record.heldValue});
+                    cleanupCallback.call(context, JSUndefined.INSTANCE, record.heldValue);
                 } catch (Exception e) {
                     // Cleanup callback errors should not crash the program
                 }

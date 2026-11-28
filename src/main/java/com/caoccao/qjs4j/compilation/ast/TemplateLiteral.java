@@ -39,7 +39,7 @@ public final class TemplateLiteral extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(expressions);
     }
 

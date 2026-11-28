@@ -23,14 +23,22 @@ import java.util.List;
  */
 public abstract sealed class Pattern extends ASTNode
         permits Expression, ObjectPattern, ArrayPattern, RestElement, AssignmentPattern {
-    protected List<String> boundNames;
+    private List<String> boundNames;
 
     protected Pattern(SourceLocation location) {
         super(location);
-        this.boundNames = null;
     }
 
-    public abstract List<String> getBoundNames();
+    protected List<String> computeBoundNames() {
+        return List.of();
+    }
+
+    public List<String> getBoundNames() {
+        if (boundNames == null) {
+            boundNames = computeBoundNames();
+        }
+        return boundNames;
+    }
 
     public abstract String toPatternString();
 }

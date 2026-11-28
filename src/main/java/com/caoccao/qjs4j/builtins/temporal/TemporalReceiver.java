@@ -140,6 +140,21 @@ public record TemporalReceiver<T extends JSObject>(Class<T> type, String typeNam
         return context.hasPendingException() ? null : type.cast(value);
     }
 
+    public JSValue withFields(JSContext context, JSValue receiver, JSValue[] args, String missingFields,
+            FieldReplacement<T> replacement) {
+        T value = require(context, receiver, "with");
+        if (value == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args, missingFields);
+        return fields == null ? JSUndefined.INSTANCE : replacement.apply(context, value, fields, args);
+    }
+
+    @FunctionalInterface
+    public interface FieldReplacement<T> {
+        JSValue apply(JSContext context, T receiver, JSObject fields, JSValue[] args);
+    }
+
     public JSValue withCalendar(JSContext context, JSValue receiver, JSValue[] args,
             CalendarReplacement<T> replacement) {
         T value = require(context, receiver, "withCalendar");

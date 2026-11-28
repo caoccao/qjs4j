@@ -24,7 +24,7 @@ final class ForStatementCompiler {
     }
 
     static void compile(CompilerContext compilerContext, ForStatement forStmt) {
-        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+        StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
 
         boolean initCompiled = false;
         if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
@@ -37,7 +37,7 @@ final class ForStatementCompiler {
         boolean hasUsingInit = !initCompiled && forStmt.getInit() instanceof VariableDeclaration usingCheck
                 && usingCheck.getKind().isUsing();
 
-        int forUsingCatchJump = compilerContext.emitHelpers.beginUsingScope(hasUsingInit);
+        int forUsingCatchJump = EmitHelpers.beginUsingScope(compilerContext, hasUsingInit);
 
         if (!initCompiled && forStmt.getInit() != null) {
             if (forStmt.getInit() instanceof VariableDeclaration varDecl) {
@@ -48,18 +48,18 @@ final class ForStatementCompiler {
                 VariableDeclarationCompiler.compile(compilerContext, varDecl);
                 compilerContext.popState();
             } else if (forStmt.getInit() instanceof Expression expr) {
-                compilerContext.expressionCompiler.compile(expr);
+                compilerContext.compileExpression(expr);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else if (forStmt.getInit() instanceof ExpressionStatement exprStmt) {
                 compilerContext.emitter.emitSourcePosition(exprStmt.getLocation());
-                compilerContext.expressionCompiler.compile(exprStmt.getExpression());
+                compilerContext.compileExpression(exprStmt.getExpression());
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         }
 
         if (forStmt.getInit() instanceof VariableDeclaration lexicalForInit
                 && lexicalForInit.getKind() != VariableKind.VAR) {
-            compilerContext.emitHelpers.emitCloseLocForPattern(lexicalForInit);
+            EmitHelpers.emitCloseLocForPattern(compilerContext, lexicalForInit);
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
@@ -69,22 +69,22 @@ final class ForStatementCompiler {
 
         int jumpToEnd = -1;
         if (forStmt.getTest() != null) {
-            compilerContext.expressionCompiler.compile(forStmt.getTest());
+            compilerContext.compileExpression(forStmt.getTest());
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         }
-        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+        StatementCompiler.emitEvalReturnUndefinedIfNeeded(compilerContext);
 
-        compilerContext.statementCompiler.compileNestedStatement(forStmt.getBody());
+        StatementCompiler.compileNestedStatement(compilerContext, forStmt.getBody());
 
         if (forStmt.getInit() instanceof VariableDeclaration varDeclForClose
                 && varDeclForClose.getKind() != VariableKind.VAR) {
-            compilerContext.emitHelpers.emitCloseLocForPattern(varDeclForClose);
+            EmitHelpers.emitCloseLocForPattern(compilerContext, varDeclForClose);
         }
 
         int updateStart = compilerContext.emitter.currentOffset();
 
         if (forStmt.getUpdate() != null) {
-            compilerContext.expressionCompiler.compile(forStmt.getUpdate());
+            compilerContext.compileExpression(forStmt.getUpdate());
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
@@ -100,7 +100,7 @@ final class ForStatementCompiler {
 
         compilerContext.loopManager.popLoop();
 
-        compilerContext.emitHelpers.finishUsingScope(forUsingCatchJump, false);
+        EmitHelpers.finishUsingScope(compilerContext, forUsingCatchJump, false);
 
         // Patch break positions AFTER disposal code, since break already handles
         // its own disposal via emitUsingDisposalsForScopeDepthGreaterThan

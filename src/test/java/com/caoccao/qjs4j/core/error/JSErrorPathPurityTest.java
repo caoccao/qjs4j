@@ -346,6 +346,6 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
      */
     private void throwFrom(String code) {
         JSValue function = context.eval(code);
-        ((JSFunction) function).call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        ((JSFunction) function).call(context, JSUndefined.INSTANCE);
     }
 }

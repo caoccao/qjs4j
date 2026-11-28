@@ -52,7 +52,7 @@ public final class MemberExpression extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(object) || kind.in(property);
     }
 

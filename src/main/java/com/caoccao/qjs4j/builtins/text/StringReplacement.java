@@ -204,8 +204,8 @@ public final class StringReplacement {
             }
             return expand(context, substitute, input, index, index + search.length(), new String[]{search}, null);
         }
-        JSValue value = JSCall.call(context, replaceValue, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString(search), JSNumber.of(index), new JSString(input)});
+        JSValue value = JSCall.call(context, replaceValue, JSUndefined.INSTANCE, new JSString(search),
+                JSNumber.of(index), new JSString(input));
         return context.hasPendingException() ? null : JSTypeConversions.toString(context, value);
     }
 

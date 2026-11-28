@@ -32,8 +32,8 @@ public final class YieldExpression extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
-        return kind == Suspension.YIELD || kind.in(argument);
+    boolean containsSuspension(SyntaxQuery kind) {
+        return kind == SyntaxQuery.YIELD || kind.in(argument);
     }
 
     public Expression getArgument() {

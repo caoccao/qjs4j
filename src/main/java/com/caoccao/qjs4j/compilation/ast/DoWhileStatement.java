@@ -26,7 +26,7 @@ public final class DoWhileStatement extends WhileLoop {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(getBody()) || kind.in(getTest());
     }
 

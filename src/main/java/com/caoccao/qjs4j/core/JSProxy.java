@@ -110,7 +110,7 @@ public final class JSProxy extends JSObject {
             executionContext.throwTypeError(operation + " trap must be a function");
             return false;
         }
-        JSValue result = function.call(executionContext, handler, new JSValue[]{target});
+        JSValue result = function.call(executionContext, handler, target);
         boolean reported = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
         if (prevent) {
             if (reported && object.isExtensible()) {

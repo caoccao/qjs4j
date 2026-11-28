@@ -31,20 +31,17 @@ public abstract sealed class WhileLoop extends Statement permits WhileStatement,
         this.body = body;
     }
 
+    @Override
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        return body != null ? body.getVarDeclarators() : List.of();
+    }
+
     public Statement getBody() {
         return body;
     }
 
     public Expression getTest() {
         return test;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
-        }
-        return varDeclarators;
     }
 
 }

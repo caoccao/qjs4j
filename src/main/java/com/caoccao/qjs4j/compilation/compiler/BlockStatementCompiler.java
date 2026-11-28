@@ -44,7 +44,7 @@ final class BlockStatementCompiler {
                 }
                 for (VariableDeclarator d : vd.getDeclarations()) {
                     Set<String> names = new HashSet<>();
-                    compilerContext.compilerAnalysis.collectPatternBindingNames(d.getId(), names);
+                    CompilerAnalysis.collectPatternBindingNames(d.getId(), names);
                     for (String name : names) {
                         Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(name);
                         if (localIndex == null) {
@@ -74,37 +74,21 @@ final class BlockStatementCompiler {
         // per Annex B.3.2.
         // Suppress Annex B var store during hoisting — it's deferred to the source position.
         compilerContext.suppressAnnexBVarStore = true;
-        for (Statement stmt : block.getBody()) {
-            FunctionDeclaration funcDecl = stmt.unwrapLabeledFunctionDeclaration();
-            if (funcDecl != null) {
-                FunctionDeclarationCompiler.compile(compilerContext, funcDecl);
-            }
-        }
+        StatementCompiler.hoistBlockFunctions(compilerContext, block.getBody());
         compilerContext.suppressAnnexBVarStore = false;
 
         // Set up CATCH handler for exception-safe using disposal.
         // The CATCH is emitted BEFORE Phase 3 so the CatchOffset is below all
         // statement values. Each statement is net-zero stack effect, so the
         // CatchOffset stays at the bottom.
-        int usingCatchJump = compilerContext.emitHelpers.beginUsingScope(hasUsingDeclarations);
+        int usingCatchJump = EmitHelpers.beginUsingScope(compilerContext, hasUsingDeclarations);
 
         // Phase 3: compile non-function statements in source order.
         // For function declarations, emit the Annex B var store at the source position
         // (the function itself was already hoisted in Phase 2).
-        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
-        compilerContext.isLastInProgram = false;
-        for (Statement stmt : block.getBody()) {
-            FunctionDeclaration hoistedFunction = stmt.unwrapLabeledFunctionDeclaration();
-            if (hoistedFunction != null) {
-                // Per Annex B.3.3: emit the var store at the source position
-                compilerContext.emitHelpers.emitDeferredAnnexBVarStore(hoistedFunction);
-                continue;
-            }
-            compilerContext.statementCompiler.compile(stmt);
-        }
-        compilerContext.isLastInProgram = savedIsLastInProgram;
+        StatementCompiler.compileBlockStatements(compilerContext, block.getBody());
 
-        compilerContext.emitHelpers.finishUsingScope(usingCatchJump, false);
+        EmitHelpers.finishUsingScope(compilerContext, usingCatchJump, false);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }

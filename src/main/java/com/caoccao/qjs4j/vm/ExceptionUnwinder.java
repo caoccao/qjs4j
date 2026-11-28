@@ -44,7 +44,7 @@ final class ExceptionUnwinder {
                 return;
             }
             if (method instanceof JSFunction function) {
-                JSValue result = function.call(context, iterator, JSValue.NO_ARGS);
+                JSValue result = function.call(context, iterator);
                 if (!captureCloseError(vm, throwing) && !throwing && !(result instanceof JSObject)) {
                     vm.pendingException = context.throwTypeError("iterator result is not an object");
                 }
@@ -88,7 +88,7 @@ final class ExceptionUnwinder {
             if (method.isNullOrUndefined()) {
                 return null;
             }
-            closeResult = JSCall.call(context, method, iterator, JSValue.NO_ARGS);
+            closeResult = JSCall.call(context, method, iterator);
         } catch (JSVirtualMachineException error) {
             captureCloseException(vm, throwing, error);
             return null;

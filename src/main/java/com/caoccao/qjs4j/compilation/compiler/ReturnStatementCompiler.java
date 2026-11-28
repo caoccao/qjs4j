@@ -40,7 +40,7 @@ final class ReturnStatementCompiler {
                 && compilerContext.tryBlockDepth == 0 && !compilerContext.loopManager.hasActiveIteratorLoops()) {
             // Direct call in tail position: TAIL_CALL handles the return entirely
             compilerContext.emitTailCalls = true;
-            compilerContext.expressionCompiler.compile(retStmt.getArgument());
+            compilerContext.compileExpression(retStmt.getArgument());
             compilerContext.emitTailCalls = false;
             return;
         }
@@ -57,7 +57,7 @@ final class ReturnStatementCompiler {
             if (enableTco) {
                 compilerContext.emitTailCalls = true;
             }
-            compilerContext.expressionCompiler.compile(retStmt.getArgument());
+            compilerContext.compileExpression(retStmt.getArgument());
             compilerContext.emitTailCalls = false;
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -65,11 +65,11 @@ final class ReturnStatementCompiler {
 
         int returnValueIndex = compilerContext.storeTemporary("#return_value_");
 
-        compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
+        EmitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, 0);
 
         // Execute active finally blocks via GOSUB before returning.
         // Walk from innermost to outermost finally context.
-        compilerContext.emitHelpers.emitActiveFinallyGosubs();
+        EmitHelpers.emitActiveFinallyGosubs(compilerContext);
 
         if (compilerContext.finallySubroutineDepth > 0) {
             // Return from a finally subroutine must discard the caller completion value
@@ -78,7 +78,7 @@ final class ReturnStatementCompiler {
         }
 
         if (compilerContext.loopManager.hasActiveIteratorLoops()) {
-            compilerContext.emitHelpers.emitAbruptCompletionIteratorClose();
+            EmitHelpers.emitAbruptCompletionIteratorClose(compilerContext);
         }
 
         compilerContext.emitter.emitGetLocal(returnValueIndex);

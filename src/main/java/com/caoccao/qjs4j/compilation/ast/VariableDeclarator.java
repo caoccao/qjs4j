@@ -27,7 +27,7 @@ public final class VariableDeclarator extends ASTNode {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(id) || kind.in(init);
     }
 

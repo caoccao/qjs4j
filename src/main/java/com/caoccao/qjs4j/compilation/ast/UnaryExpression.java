@@ -22,7 +22,6 @@ import com.caoccao.qjs4j.compilation.lexer.TokenType;
  * Represents a unary expression.
  */
 public final class UnaryExpression extends Expression {
-    private Boolean directEvalVarArgumentsInside;
     private final Expression operand;
     private final UnaryOperator operator;
     private final boolean prefix;
@@ -32,19 +31,15 @@ public final class UnaryExpression extends Expression {
         this.operator = operator;
         this.operand = operand;
         this.prefix = prefix;
-        directEvalVarArgumentsInside = null;
     }
 
     @Override
-    public boolean containsDirectEvalVarArguments() {
-        if (directEvalVarArgumentsInside == null) {
-            directEvalVarArgumentsInside = operand != null && operand.containsDirectEvalVarArguments();
-        }
-        return directEvalVarArgumentsInside;
+    boolean computeDirectEvalVarArguments() {
+        return SyntaxQuery.DIRECT_EVAL_VAR_ARGUMENTS.in(operand);
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(operand);
     }
 

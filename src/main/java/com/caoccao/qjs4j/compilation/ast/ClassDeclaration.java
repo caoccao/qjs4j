@@ -34,7 +34,7 @@ public final class ClassDeclaration extends Declaration {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(expression);
     }
 

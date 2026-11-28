@@ -35,8 +35,8 @@ public abstract sealed class ForEachStatement extends ForLoop permits ForInState
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
-        return (isAsync && kind == Suspension.AWAIT) || kind.in(head) || kind.in(right) || kind.in(body);
+    boolean containsSuspension(SyntaxQuery kind) {
+        return (isAsync && kind == SyntaxQuery.AWAIT) || kind.in(head) || kind.in(right) || kind.in(body);
     }
 
     public ASTNode getLeft() {

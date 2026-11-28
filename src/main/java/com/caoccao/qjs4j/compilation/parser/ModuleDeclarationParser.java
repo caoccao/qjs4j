@@ -25,13 +25,11 @@ import java.util.*;
 
 /** Parses module declarations and records their imported bindings and exported names. */
 final class ModuleDeclarationParser {
-    private final ParserDelegates delegates;
     private final List<ExportSpecifier> exportSpecifiers = new ArrayList<>();
     private final ParserContext parserContext;
 
-    ModuleDeclarationParser(ParserContext parserContext, ParserDelegates delegates) {
+    ModuleDeclarationParser(ParserContext parserContext) {
         this.parserContext = parserContext;
-        this.delegates = delegates;
     }
 
     private void addModuleExportedName(String name) {
@@ -82,7 +80,7 @@ final class ModuleDeclarationParser {
 
             if (parserContext.match(TokenType.CLASS)) {
                 // export default class { ... } — infer name "default" per spec
-                ClassExpression classExpr = delegates.functions.parseClassExpression();
+                ClassExpression classExpr = FunctionClassParser.parseClassExpression(parserContext);
                 String className = classExpr.getId() != null ? classExpr.getId().getName() : null;
                 if (classExpr.getId() == null) {
                     classExpr = new ClassExpression(new Identifier(JSKeyword.DEFAULT, classExpr.getLocation()),
@@ -90,11 +88,11 @@ final class ModuleDeclarationParser {
                 }
                 // Named class in export default creates a lexical binding
                 if (className != null) {
-                    delegates.declarations.addModuleLexicalName(className);
+                    parserContext.declarations.addModuleLexicalName(className);
                 }
                 return new ExpressionStatement(classExpr, location);
             } else if (parserContext.match(TokenType.FUNCTION)) {
-                Statement funcDecl = delegates.functions.parseExportDefaultFunctionDeclaration(false);
+                Statement funcDecl = FunctionClassParser.parseExportDefaultFunctionDeclaration(parserContext, false);
                 if (parserContext.match(TokenType.LPAREN)) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
@@ -102,14 +100,14 @@ final class ModuleDeclarationParser {
             } else if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
                     && parserContext.peek().type() == TokenType.FUNCTION
                     && parserContext.peek().line() == parserContext.currentToken.line()) {
-                Statement asyncDecl = delegates.functions.parseExportDefaultAsyncFunctionDeclaration();
+                Statement asyncDecl = FunctionClassParser.parseExportDefaultAsyncFunctionDeclaration(parserContext);
                 if (parserContext.match(TokenType.LPAREN)) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 return asyncDecl;
             } else {
                 // export default <expression>;
-                Expression expr = delegates.expressions.parseAssignmentExpression();
+                Expression expr = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                 parserContext.consumeSemicolon();
                 return new ExpressionStatement(expr, location);
             }
@@ -135,25 +133,25 @@ final class ModuleDeclarationParser {
         // export var/let/const/function/class ...
         if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET)
                 || parserContext.match(TokenType.CONST)) {
-            Statement decl = delegates.statements.parseVariableDeclaration();
+            Statement decl = StatementParser.parseVariableDeclaration(parserContext);
             // Track exported names from declaration
             collectDeclaredNames(decl);
             return decl;
         }
         if (parserContext.match(TokenType.FUNCTION)) {
-            Statement decl = delegates.functions.parseFunctionDeclaration(false, false);
+            Statement decl = FunctionClassParser.parseFunctionDeclaration(parserContext, false, false);
             collectDeclaredNames(decl);
             return decl;
         }
         if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
                 && parserContext.peek().type() == TokenType.FUNCTION
                 && parserContext.peek().line() == parserContext.currentToken.line()) {
-            Statement decl = delegates.statements.parseAsyncDeclaration();
+            Statement decl = StatementParser.parseAsyncDeclaration(parserContext);
             collectDeclaredNames(decl);
             return decl;
         }
         if (parserContext.match(TokenType.CLASS)) {
-            Statement decl = delegates.functions.parseClassDeclaration();
+            Statement decl = FunctionClassParser.parseClassDeclaration(parserContext);
             collectDeclaredNames(decl);
             return decl;
         }
@@ -222,7 +220,7 @@ final class ModuleDeclarationParser {
         if (parserContext.consumeIf(TokenType.MUL)) {
             expectContextualKeyword(TokenType.AS, "as");
             String name = parserContext.parseBindingIdentifierName();
-            delegates.declarations.addModuleLexicalName(name);
+            parserContext.declarations.addModuleLexicalName(name);
         } else if (parserContext.match(TokenType.LBRACE)) {
             parseNamedImportSpecifiers();
         } else {
@@ -251,7 +249,7 @@ final class ModuleDeclarationParser {
         }
         if (parserContext.match(TokenType.IDENTIFIER)) {
             String name = parserContext.parseBindingIdentifierName();
-            delegates.declarations.addModuleLexicalName(name);
+            parserContext.declarations.addModuleLexicalName(name);
             if (parserContext.consumeIf(TokenType.COMMA)) {
                 parseImportBindings();
             }
@@ -301,7 +299,7 @@ final class ModuleDeclarationParser {
                         && (JSKeyword.EVAL.equals(localName) || JSKeyword.ARGUMENTS.equals(localName))) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
-                delegates.declarations.addModuleLexicalName(localName);
+                parserContext.declarations.addModuleLexicalName(localName);
                 if (!parserContext.match(TokenType.COMMA)) {
                     break;
                 }

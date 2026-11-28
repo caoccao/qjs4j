@@ -71,18 +71,18 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
         for (ObjectExpressionProperty property : regularProperties) {
             int propertyKeyLocalIndex = -1;
             if (property.isComputed()) {
-                compilerContext.expressionCompiler.compilePropertyKey(property.getKey());
+                ExpressionCompiler.compilePropertyKey(compilerContext, property.getKey());
                 propertyKeyLocalIndex = compilerContext.declareTemporary("#objectAssignKey");
                 compilerContext.emitter.emitPutLocal(propertyKeyLocalIndex);
             }
 
-            int targetDepth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(property.getValue());
+            int targetDepth = ExpressionCompiler.preEvaluateAssignmentTarget(compilerContext, property.getValue());
 
             compilerContext.emitter.emitGetLocal(sourceLocalIndex);
             String atom = ObjectDestructuringCompiler.prepareRead(compilerContext, property, propertyKeyLocalIndex);
             ObjectDestructuringCompiler.read(compilerContext.emitter, atom);
 
-            compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(property.getValue(),
+            ExpressionDestructuringAssignmentCompiler.compileFromPreEvaluated(compilerContext, property.getValue(),
                     targetDepth);
 
             // If rest, add property key to exclude list
@@ -114,7 +114,7 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
             }
             compilerContext.emitter.emitGetLocal(sourceLocalIndex);
             ObjectDestructuringCompiler.copyRest(compilerContext.emitter, hasExclusions);
-            compilerContext.expressionDestructuringAssignmentCompiler.compile(restTarget);
+            ExpressionDestructuringAssignmentCompiler.compile(compilerContext, restTarget);
             ObjectDestructuringCompiler.finishRest(compilerContext.emitter, hasExclusions);
         }
     }

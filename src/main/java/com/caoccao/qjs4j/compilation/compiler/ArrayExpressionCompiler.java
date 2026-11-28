@@ -36,7 +36,7 @@ final class ArrayExpressionCompiler {
             // Simple case: no spread elements, no holes
             compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, 0);
             for (Expression element : arrayExpr.getElements()) {
-                compilerContext.expressionCompiler.compile(element);
+                compilerContext.compileExpression(element);
                 compilerContext.emitter.emitArrayElement();
             }
             compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -56,7 +56,7 @@ final class ArrayExpressionCompiler {
                         needsIndex = true;
                     }
                     // Compile the iterable expression
-                    compilerContext.expressionCompiler.compile(spreadElement.getArgument());
+                    compilerContext.compileExpression(spreadElement.getArgument());
                     // A value that is not iterable reports the spread operand's position, as V8 does.
                     compilerContext.emitter.emitSourcePosition(spreadElement.getArgument().getLocation());
                     // Emit APPEND to spread elements into the array
@@ -67,7 +67,7 @@ final class ArrayExpressionCompiler {
                 } else if (element != null) {
                     if (needsIndex) {
                         // We have index on stack, use DEFINE_ARRAY_EL
-                        compilerContext.expressionCompiler.compile(element);
+                        compilerContext.compileExpression(element);
                         compilerContext.emitter.emitArrayElement();
                         needsLength = false;
                     } else {
@@ -75,7 +75,7 @@ final class ArrayExpressionCompiler {
                         // Start using index-based assignment since we have holes or spread
                         compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, idx);
                         needsIndex = true;
-                        compilerContext.expressionCompiler.compile(element);
+                        compilerContext.compileExpression(element);
                         compilerContext.emitter.emitArrayElement();
                         needsLength = false;
                     }

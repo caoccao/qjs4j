@@ -32,7 +32,12 @@ public final class LabeledStatement extends Statement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        return body != null ? body.getVarDeclarators() : List.of();
+    }
+
+    @Override
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(body);
     }
 
@@ -42,14 +47,6 @@ public final class LabeledStatement extends Statement {
 
     public Identifier getLabel() {
         return label;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
-        }
-        return varDeclarators;
     }
 
 }

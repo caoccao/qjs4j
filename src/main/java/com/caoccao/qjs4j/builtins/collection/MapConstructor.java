@@ -85,8 +85,7 @@ public final class MapConstructor {
             }
 
             JSValue value = nextResult.get(PropertyKey.VALUE);
-            JSValue key = JSCall.call(context, callback, JSUndefined.INSTANCE,
-                    new JSValue[]{value, JSNumber.of(index)});
+            JSValue key = JSCall.call(context, callback, JSUndefined.INSTANCE, value, JSNumber.of(index));
             if (context.hasPendingException()) {
                 JSIteratorHelper.closeIterator(context, iterator);
                 return JSUndefined.INSTANCE;

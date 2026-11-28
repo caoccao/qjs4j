@@ -25,13 +25,21 @@ import java.util.List;
 
 /** Interprets the array/object cover grammar in arrow parameters and destructuring assignments. */
 final class AssignmentPatterns {
-    private final ParserContext parserContext;
 
-    AssignmentPatterns(ParserContext parserContext) {
-        this.parserContext = parserContext;
+    private AssignmentPatterns() {
     }
 
-    private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
+    private static void checkParameterRest(int index, int size, Expression argument) {
+        if (index != size - 1) {
+            throw new JSSyntaxErrorException("Rest element must be last element");
+        }
+        if (argument instanceof AssignmentExpression) {
+            throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
+        }
+    }
+
+    private static ArrayPattern convertArrowArrayExpressionToPattern(ParserContext parserContext,
+            ArrayExpression arrayExpression) {
         List<Pattern> elements = new ArrayList<>();
         for (int elementIndex = 0; elementIndex < arrayExpression.getElements().size(); elementIndex++) {
             Expression elementExpression = arrayExpression.getElements().get(elementIndex);
@@ -39,36 +47,38 @@ final class AssignmentPatterns {
                 elements.add(null);
             } else if (elementExpression instanceof SpreadElement spreadElement) {
                 checkParameterRest(elementIndex, arrayExpression.getElements().size(), spreadElement.getArgument());
-                Pattern restArgumentPattern = convertArrowExpressionToPattern(spreadElement.getArgument());
+                Pattern restArgumentPattern = convertArrowExpressionToPattern(parserContext,
+                        spreadElement.getArgument());
                 elements.add(new RestElement(restArgumentPattern, spreadElement.getLocation()));
             } else {
-                elements.add(convertArrowExpressionToPattern(elementExpression));
+                elements.add(convertArrowExpressionToPattern(parserContext, elementExpression));
             }
         }
         return new ArrayPattern(elements, arrayExpression.getLocation());
     }
 
-    Pattern convertArrowExpressionToPattern(Expression expression) {
+    static Pattern convertArrowExpressionToPattern(ParserContext parserContext, Expression expression) {
         if (expression instanceof Identifier identifier) {
             parserContext.validateBindingIdentifier(identifier.getName());
             return identifier;
         }
         if (expression instanceof ObjectExpression objectExpression) {
-            return convertArrowObjectExpressionToPattern(objectExpression);
+            return convertArrowObjectExpressionToPattern(parserContext, objectExpression);
         }
         if (expression instanceof ArrayExpression arrayExpression) {
-            return convertArrowArrayExpressionToPattern(arrayExpression);
+            return convertArrowArrayExpressionToPattern(parserContext, arrayExpression);
         }
         if (expression instanceof AssignmentExpression assignmentExpression
                 && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-            Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.getLeft());
+            Pattern leftPattern = convertArrowExpressionToPattern(parserContext, assignmentExpression.getLeft());
             return new AssignmentPattern(leftPattern, assignmentExpression.getRight(),
                     assignmentExpression.getLocation());
         }
-        throw invalidArrowParameter();
+        throw invalidArrowParameter(parserContext);
     }
 
-    private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
+    private static ObjectPattern convertArrowObjectExpressionToPattern(ParserContext parserContext,
+            ObjectExpression objectExpression) {
         List<ObjectPatternProperty> properties = new ArrayList<>();
         RestElement restElement = null;
         List<ObjectExpressionProperty> objProperties = objectExpression.getProperties();
@@ -76,12 +86,12 @@ final class AssignmentPatterns {
             ObjectExpressionProperty property = objProperties.get(i);
             if ("spread".equals(property.getKind())) {
                 checkParameterRest(i, objProperties.size(), property.getValue());
-                Pattern restArgumentPattern = convertArrowExpressionToPattern(property.getValue());
+                Pattern restArgumentPattern = convertArrowExpressionToPattern(parserContext, property.getValue());
                 restElement = new RestElement(restArgumentPattern, property.getValue().getLocation());
                 continue;
             }
             if (!"init".equals(property.getKind())) {
-                throw invalidArrowParameter();
+                throw invalidArrowParameter(parserContext);
             }
             Expression propertyKey = property.getKey();
             boolean validNonComputedKey = propertyKey instanceof Identifier
@@ -89,16 +99,16 @@ final class AssignmentPatterns {
                             || literal.getValue() instanceof Integer || literal.getValue() instanceof Long
                             || literal.getValue() instanceof Double || literal.getValue() instanceof Float));
             if (!property.isComputed() && !validNonComputedKey) {
-                throw invalidArrowParameter();
+                throw invalidArrowParameter(parserContext);
             }
-            Pattern valuePattern = convertArrowExpressionToPattern(property.getValue());
+            Pattern valuePattern = convertArrowExpressionToPattern(parserContext, property.getValue());
             properties.add(new ObjectPatternProperty(propertyKey, valuePattern, property.isComputed(),
                     property.isShorthand()));
         }
         return new ObjectPattern(properties, restElement, objectExpression.getLocation());
     }
 
-    private Expression extractAssignmentTarget(Expression expression) {
+    private static Expression extractAssignmentTarget(Expression expression) {
         if (expression instanceof AssignmentExpression assignmentExpression
                 && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
             return assignmentExpression.getLeft();
@@ -106,7 +116,8 @@ final class AssignmentPatterns {
         return expression;
     }
 
-    private boolean hasTrailingCommaAfterRestElement(ArrayExpression arrayExpression, int assignmentOperatorOffset) {
+    private static boolean hasTrailingCommaAfterRestElement(ParserContext parserContext,
+            ArrayExpression arrayExpression, int assignmentOperatorOffset) {
         String source = parserContext.lexer.getSource();
         int startOffset = arrayExpression.getLocation().offset();
         if (startOffset < 0 || startOffset >= source.length() || startOffset >= assignmentOperatorOffset) {
@@ -163,12 +174,12 @@ final class AssignmentPatterns {
         return previousOffset >= startOffset && source.charAt(previousOffset) == ',';
     }
 
-    private JSSyntaxErrorException invalidArrowParameter() {
+    private static JSSyntaxErrorException invalidArrowParameter(ParserContext parserContext) {
         return new JSSyntaxErrorException("Invalid arrow function parameter at line "
                 + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
     }
 
-    private boolean isArrowDestructuringParameterExpression(Expression expression) {
+    private static boolean isArrowDestructuringParameterExpression(Expression expression) {
         if (expression instanceof ObjectExpression || expression instanceof ArrayExpression) {
             return true;
         }
@@ -180,7 +191,8 @@ final class AssignmentPatterns {
         return false;
     }
 
-    void parseArrowParameterExpression(Expression expression, List<Pattern> params, List<Expression> defaults) {
+    static void parseArrowParameterExpression(ParserContext parserContext, Expression expression, List<Pattern> params,
+            List<Expression> defaults) {
         if (expression instanceof Identifier identifier) {
             params.add(identifier);
             defaults.add(null);
@@ -194,27 +206,29 @@ final class AssignmentPatterns {
             return;
         }
         if (isArrowDestructuringParameterExpression(expression)) {
-            parseDestructuringArrowParameter(expression, params, defaults);
+            parseDestructuringArrowParameter(parserContext, expression, params, defaults);
             return;
         }
-        throw invalidArrowParameter();
+        throw invalidArrowParameter(parserContext);
     }
 
-    void parseDestructuringArrowParameter(Expression expression, List<Pattern> params, List<Expression> defaults) {
+    static void parseDestructuringArrowParameter(ParserContext parserContext, Expression expression,
+            List<Pattern> params, List<Expression> defaults) {
         Pattern parameterPattern;
         Expression defaultExpression = null;
         if (expression instanceof AssignmentExpression assignmentExpression
                 && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-            parameterPattern = convertArrowExpressionToPattern(assignmentExpression.getLeft());
+            parameterPattern = convertArrowExpressionToPattern(parserContext, assignmentExpression.getLeft());
             defaultExpression = assignmentExpression.getRight();
         } else {
-            parameterPattern = convertArrowExpressionToPattern(expression);
+            parameterPattern = convertArrowExpressionToPattern(parserContext, expression);
         }
         params.add(parameterPattern);
         defaults.add(defaultExpression);
     }
 
-    private void validateArrayAssignmentPatternTarget(ArrayExpression arrayExpression, int assignmentOperatorOffset) {
+    private static void validateArrayAssignmentPatternTarget(ParserContext parserContext,
+            ArrayExpression arrayExpression, int assignmentOperatorOffset) {
         List<Expression> elements = arrayExpression.getElements();
         for (int elementIndex = 0; elementIndex < elements.size(); elementIndex++) {
             Expression elementExpression = elements.get(elementIndex);
@@ -222,19 +236,20 @@ final class AssignmentPatterns {
                 continue;
             }
             if (elementExpression instanceof SpreadElement spreadElement) {
-                validateRestTarget(spreadElement.getArgument(), elementIndex, elements.size(),
+                validateRestTarget(parserContext, spreadElement.getArgument(), elementIndex, elements.size(),
                         assignmentOperatorOffset);
                 continue;
             }
-            validateElement(elementExpression, assignmentOperatorOffset);
+            validateElement(parserContext, elementExpression, assignmentOperatorOffset);
         }
         if (!elements.isEmpty() && elements.get(elements.size() - 1) instanceof SpreadElement
-                && hasTrailingCommaAfterRestElement(arrayExpression, assignmentOperatorOffset)) {
+                && hasTrailingCommaAfterRestElement(parserContext, arrayExpression, assignmentOperatorOffset)) {
             throw new JSSyntaxErrorException("Rest element must be last element");
         }
     }
 
-    void validateAssignmentPatternTarget(Expression expression, int assignmentOperatorOffset) {
+    static void validateAssignmentPatternTarget(ParserContext parserContext, Expression expression,
+            int assignmentOperatorOffset) {
         if (parserContext.isParenthesizedExpression(expression)) {
             if (expression instanceof ArrayExpression || expression instanceof ObjectExpression) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
@@ -261,67 +276,61 @@ final class AssignmentPatterns {
             return;
         }
         if (expression instanceof ArrayExpression arrayExpression) {
-            validateArrayAssignmentPatternTarget(arrayExpression, assignmentOperatorOffset);
+            validateArrayAssignmentPatternTarget(parserContext, arrayExpression, assignmentOperatorOffset);
             return;
         }
         if (expression instanceof ObjectExpression objectExpression) {
-            validateObjectAssignmentPatternTarget(objectExpression, assignmentOperatorOffset);
+            validateObjectAssignmentPatternTarget(parserContext, objectExpression, assignmentOperatorOffset);
             return;
         }
         throw new JSSyntaxErrorException("Invalid destructuring assignment target");
     }
 
-    private void validateElement(Expression value, int offset) {
+    private static void validateElement(ParserContext parserContext, Expression value, int offset) {
         Expression target = extractAssignmentTarget(value);
         if (target != value && parserContext.isParenthesizedExpression(value)) {
             throw new JSSyntaxErrorException("Invalid destructuring assignment target");
         }
-        validateAssignmentPatternTarget(target, offset);
+        validateAssignmentPatternTarget(parserContext, target, offset);
     }
 
-    void validateForInOfAssignmentTarget(Expression expression, int assignmentBoundaryOffset) {
+    static void validateForInOfAssignmentTarget(ParserContext parserContext, Expression expression,
+            int assignmentBoundaryOffset) {
         if (expression instanceof CallExpression) {
             if (parserContext.strictMode) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
             }
             return;
         }
-        validateAssignmentPatternTarget(expression, assignmentBoundaryOffset);
+        validateAssignmentPatternTarget(parserContext, expression, assignmentBoundaryOffset);
     }
 
-    private void validateObjectAssignmentPatternTarget(ObjectExpression objectExpression,
-            int assignmentOperatorOffset) {
+    private static void validateObjectAssignmentPatternTarget(ParserContext parserContext,
+            ObjectExpression objectExpression, int assignmentOperatorOffset) {
         List<ObjectExpressionProperty> properties = objectExpression.getProperties();
         for (int propertyIndex = 0; propertyIndex < properties.size(); propertyIndex++) {
             ObjectExpressionProperty property = properties.get(propertyIndex);
             if ("spread".equals(property.getKind())) {
-                validateRestTarget(property.getValue(), propertyIndex, properties.size(), assignmentOperatorOffset);
+                validateRestTarget(parserContext, property.getValue(), propertyIndex, properties.size(),
+                        assignmentOperatorOffset);
                 continue;
             }
             if (!"init".equals(property.getKind())) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
             Expression propertyValue = property.getValue();
-            validateElement(propertyValue, assignmentOperatorOffset);
+            validateElement(parserContext, propertyValue, assignmentOperatorOffset);
         }
     }
 
-    private void validateRestTarget(Expression value, int index, int size, int offset) {
+    private static void validateRestTarget(ParserContext parserContext, Expression value, int index, int size,
+            int offset) {
         if (index != size - 1) {
             throw new JSSyntaxErrorException("Rest element must be last element");
         }
         if (extractAssignmentTarget(value) != value) {
             throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
         }
-        validateAssignmentPatternTarget(value, offset);
-    }
-
-    private static void checkParameterRest(int index, int size, Expression argument) {
-        if (index != size - 1) {
-            throw new JSSyntaxErrorException("Rest element must be last element");
-        }
-        if (argument instanceof AssignmentExpression) {
-            throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
-        }
+        validateAssignmentPatternTarget(parserContext, value, offset);
     }
 }

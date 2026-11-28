@@ -33,9 +33,11 @@ import java.util.Set;
  * declarations (var, let, const, using), and statement-level constructs (block, labeled, return, break, continue,
  * throw).
  */
-record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
+final class StatementParser {
+    private StatementParser() {
+    }
 
-    private boolean containsCoverInitializedName(ObjectExpression objectExpression) {
+    private static boolean containsCoverInitializedName(ObjectExpression objectExpression) {
         for (ObjectExpressionProperty property : objectExpression.getProperties()) {
             if (!property.isShorthand()) {
                 continue;
@@ -64,21 +66,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return false;
     }
 
-    private boolean isDebuggerKeyword() {
+    private static boolean isDebuggerKeyword(ParserContext parserContext) {
         return parserContext.currentToken.type() == TokenType.IDENTIFIER
                 && JSKeyword.DEBUGGER.equals(parserContext.currentToken.value())
                 && !parserContext.currentToken.escaped();
     }
 
-    private boolean isLabelStart() {
-        Token lookaheadToken = parserContext.peek();
-        if (lookaheadToken == null || lookaheadToken.type() != TokenType.COLON) {
-            return false;
-        }
-        return parserContext.currentToken.type().isIdentifierCandidate();
-    }
-
-    private boolean isLabelledFunction(Statement statement) {
+    private static boolean isLabelledFunction(Statement statement) {
         if (!(statement instanceof LabeledStatement labeledStatement)) {
             return false;
         }
@@ -88,7 +82,15 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return labeledStatement.getBody() != null && isLabelledFunction(labeledStatement.getBody());
     }
 
-    private boolean isUsingDeclarationStartInForHead() {
+    private static boolean isLabelStart(ParserContext parserContext) {
+        Token lookaheadToken = parserContext.peek();
+        if (lookaheadToken == null || lookaheadToken.type() != TokenType.COLON) {
+            return false;
+        }
+        return parserContext.currentToken.type().isIdentifierCandidate();
+    }
+
+    private static boolean isUsingDeclarationStartInForHead(ParserContext parserContext) {
         if (!parserContext.isUsingDeclarationStart()) {
             return false;
         }
@@ -103,25 +105,25 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return tokenAfterBindingIdentifier.type() != TokenType.OF && tokenAfterBindingIdentifier.type() != TokenType.IN;
     }
 
-    private boolean isWithKeyword() {
+    private static boolean isWithKeyword(ParserContext parserContext) {
         return parserContext.currentToken.type() == TokenType.IDENTIFIER
                 && JSKeyword.WITH.equals(parserContext.currentToken.value());
     }
 
-    Statement parseAsyncDeclaration() {
+    static Statement parseAsyncDeclaration(ParserContext parserContext) {
         // ES2024: [no LineTerminator here] between `async` and `function`.
         // If there's a line terminator, `async` is an identifier expression statement.
         if (parserContext.nextToken.type() == TokenType.FUNCTION
                 && parserContext.nextToken.line() == parserContext.currentToken.line()) {
             SourceLocation asyncLocation = parserContext.consumeLocation(); // consume async
-            return delegates.functions.parseFunctionDeclaration(true, false, asyncLocation);
+            return FunctionClassParser.parseFunctionDeclaration(parserContext, true, false, asyncLocation);
         } else {
-            return parseExpressionStatement();
+            return parseExpressionStatement(parserContext);
         }
     }
 
-    BlockStatement parseBlockStatement() {
-        return parseBlockStatement(false);
+    static BlockStatement parseBlockStatement(ParserContext parserContext) {
+        return parseBlockStatement(parserContext, false);
     }
 
     /**
@@ -131,7 +133,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
      *            true for a class static block, whose declarations follow function-body rules rather than block rules
      * @return the block
      */
-    BlockStatement parseBlockStatement(boolean functionBody) {
+    static BlockStatement parseBlockStatement(ParserContext parserContext, boolean functionBody) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.LBRACE);
 
@@ -141,83 +143,73 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         List<Statement> body = new ArrayList<>();
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-            Statement stmt = parseStatement();
-            if (stmt != null) {
-                body.add(stmt);
-            }
-        }
+        parseBlockStatements(parserContext, body);
 
         if (functionBody) {
-            delegates.declarations.validateFunctionBodyEarlyErrors(body);
+            parserContext.declarations.validateFunctionBodyEarlyErrors(body);
         } else {
-            delegates.declarations.validateBlockEarlyErrors(body);
+            parserContext.declarations.validateBlockEarlyErrors(body);
         }
         parserContext.expect(TokenType.RBRACE);
         return new BlockStatement(body, location);
     }
 
-    BlockStatement parseBlockStatementAsBody() {
+    static BlockStatement parseBlockStatementAsBody(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.LBRACE);
 
         List<Statement> body = new ArrayList<>();
         boolean hasUseStrict = parserContext.parseDirectives(body);
 
-        Deque<Set<String>> enclosingLabels = parserContext.enterFunctionLabelScope();
-        try {
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                Statement stmt = parseStatement();
-                if (stmt != null) {
-                    body.add(stmt);
-                }
-            }
-        } finally {
-            parserContext.exitFunctionLabelScope(enclosingLabels);
-        }
-
-        // An arrow function's body: function-body rules, under which a top-level function declaration is
-        // var-scoped and `function f() {} var f;` is legal.
-        delegates.declarations.validateFunctionBodyEarlyErrors(body);
+        parseFunctionStatements(parserContext, body);
         parserContext.expect(TokenType.RBRACE);
         BlockStatement block = new BlockStatement(body, location);
         block.setHasUseStrictDirective(hasUseStrict);
         return block;
     }
 
-    Statement parseBreakStatement() {
+    private static void parseBlockStatements(ParserContext parserContext, List<Statement> body) {
+        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            Statement stmt = parseStatement(parserContext);
+            if (stmt != null) {
+                body.add(stmt);
+            }
+        }
+    }
+
+    static Statement parseBreakStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.BREAK);
-        return new BreakStatement(parseJumpLabel(), location);
+        return new BreakStatement(parseJumpLabel(parserContext), location);
     }
 
-    Statement parseContinueStatement() {
+    static Statement parseContinueStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.CONTINUE);
-        return new ContinueStatement(parseJumpLabel(), location);
+        return new ContinueStatement(parseJumpLabel(parserContext), location);
     }
 
-    private Statement parseDebuggerStatement() {
+    private static Statement parseDebuggerStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.consumeLocation();
         parserContext.consumeSemicolon();
         return new DebuggerStatement(location);
     }
 
-    Statement parseDoWhileStatement() {
+    static Statement parseDoWhileStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.DO);
-        Statement body = parseIterationBody("do-while");
+        Statement body = parseIterationBody(parserContext, "do-while");
         parserContext.expect(TokenType.WHILE);
         parserContext.expect(TokenType.LPAREN);
-        Expression test = delegates.expressions.parseExpression();
+        Expression test = ExpressionAssignmentParser.parseExpression(parserContext);
         parserContext.expect(TokenType.RPAREN);
         parserContext.consumeIf(TokenType.SEMICOLON);
         return new DoWhileStatement(body, test, location);
     }
 
-    Statement parseExpressionStatement() {
+    static Statement parseExpressionStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
-        Expression expression = delegates.expressions.parseExpression();
+        Expression expression = ExpressionAssignmentParser.parseExpression(parserContext);
         if (expression instanceof ObjectExpression objectExpression && containsCoverInitializedName(objectExpression)) {
             throw new JSSyntaxErrorException("Invalid shorthand property initializer");
         }
@@ -225,7 +217,66 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new ExpressionStatement(expression, location);
     }
 
-    Statement parseForStatement() {
+    private static VariableDeclaration parseForDeclaration(ParserContext parserContext, boolean using) {
+        SourceLocation location = parserContext.getLocation();
+        VariableKind kind;
+        if (parserContext.isAwaitUsingDeclarationStart()) {
+            parserContext.expect(TokenType.AWAIT);
+            kind = VariableKind.AWAIT_USING;
+        } else {
+            kind = using ? VariableKind.USING : VariableKind.fromKeyword(parserContext.currentToken.value());
+        }
+        parserContext.advance();
+        boolean savedIn = parserContext.inOperatorAllowed;
+        parserContext.inOperatorAllowed = false;
+        try {
+            return parseVariableDeclarationBody(parserContext, kind, location, false);
+        } finally {
+            parserContext.inOperatorAllowed = savedIn;
+        }
+    }
+
+    private static Statement parseForEach(ParserContext parserContext, ASTNode left, boolean isAwait,
+            SourceLocation location) {
+        boolean of = parserContext.match(TokenType.OF);
+        String kind = of ? "for-of" : "for-in";
+        if (!of) {
+            requireSynchronousFor(isAwait);
+        }
+        if (left instanceof VariableDeclaration declaration) {
+            if (!of && declaration.getKind().isUsing()) {
+                throw new JSSyntaxErrorException("The left-hand side of a for-in loop may not be a using declaration");
+            }
+            if (declaration.getDeclarations().size() != 1) {
+                throw new JSSyntaxErrorException(kind + " loop must have exactly one declaration");
+            }
+            parserContext.declarations.validateForInOfDeclarationBoundNames(declaration);
+            if (of) {
+                VariableDeclarator declarator = declaration.getDeclarations().get(0);
+                if (declarator != null && declarator.getInit() != null) {
+                    throw new JSSyntaxErrorException("Invalid initializer in for-of declaration");
+                }
+            } else {
+                validateForInDeclarationInitializers(parserContext, declaration);
+            }
+        } else {
+            validateForTarget(parserContext, (Expression) left, parserContext.currentToken.offset());
+        }
+        parserContext.advance();
+        Expression right = of
+                ? ExpressionAssignmentParser.parseAssignmentExpression(parserContext)
+                : ExpressionAssignmentParser.parseExpression(parserContext);
+        parserContext.expect(TokenType.RPAREN);
+        Statement body = parseIterationBody(parserContext, kind);
+        if (left instanceof VariableDeclaration declaration) {
+            parserContext.declarations.validateForInOfDeclarationBodyEarlyErrors(declaration, body);
+        }
+        return of
+                ? new ForOfStatement(left, right, body, isAwait, location)
+                : new ForInStatement(left, right, body, location);
+    }
+
+    static Statement parseForStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.FOR);
 
@@ -241,14 +292,14 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         parserContext.expect(TokenType.LPAREN);
 
-        boolean using = isUsingDeclarationStartInForHead();
+        boolean using = isUsingDeclarationStartInForHead(parserContext);
         Statement init = null;
         if (using || parserContext.isAwaitUsingDeclarationStart() || parserContext.match(TokenType.VAR)
                 || parserContext.match(TokenType.CONST)
-                || (parserContext.match(TokenType.LET) && shouldParseLetAsLexicalDeclarationInForHead())) {
-            VariableDeclaration declaration = parseForDeclaration(using);
+                || (parserContext.match(TokenType.LET) && shouldParseLetAsLexicalDeclarationInForHead(parserContext))) {
+            VariableDeclaration declaration = parseForDeclaration(parserContext, using);
             if (parserContext.match(TokenType.OF) || parserContext.match(TokenType.IN)) {
-                return parseForEach(declaration, isAwait, location);
+                return parseForEach(parserContext, declaration, isAwait, location);
             }
             requireSynchronousFor(isAwait);
             if (declaration.getKind() == VariableKind.CONST
@@ -266,7 +317,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.inOperatorAllowed = first == TokenType.LBRACKET || first == TokenType.LBRACE;
             Expression expr;
             try {
-                expr = delegates.expressions.parseAssignmentExpression();
+                expr = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
             } finally {
                 parserContext.inOperatorAllowed = savedIn;
             }
@@ -276,9 +327,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 int offset = binary.getLocation() != null
                         ? binary.getLocation().offset()
                         : parserContext.currentToken.offset();
-                validateForTarget(binary.getLeft(), offset);
+                validateForTarget(parserContext, binary.getLeft(), offset);
                 parserContext.expect(TokenType.RPAREN);
-                return new ForInStatement(binary.getLeft(), binary.getRight(), parseIterationBody("for-in"), location);
+                return new ForInStatement(binary.getLeft(), binary.getRight(),
+                        parseIterationBody(parserContext, "for-in"), location);
             }
             if (parserContext.match(TokenType.IN) || parserContext.match(TokenType.OF)) {
                 if (!isAwait && parserContext.match(TokenType.OF)
@@ -286,11 +338,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                                 && JSKeyword.ASYNC.equals(id.getName())))) {
                     throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
                 }
-                return parseForEach(expr, isAwait, location);
+                return parseForEach(parserContext, expr, isAwait, location);
             }
             requireSynchronousFor(isAwait);
             while (parserContext.consumeIf(TokenType.COMMA)) {
-                Expression right = delegates.expressions.parseAssignmentExpression();
+                Expression right = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                 expr = new SequenceExpression(List.of(expr, right), expr.getLocation());
             }
             init = new ExpressionStatement(expr, expr.getLocation());
@@ -300,55 +352,83 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         // Test
         Expression test = null;
         if (!parserContext.match(TokenType.SEMICOLON)) {
-            test = delegates.expressions.parseExpression();
+            test = ExpressionAssignmentParser.parseExpression(parserContext);
         }
         parserContext.expect(TokenType.SEMICOLON);
 
         // Update
         Expression update = null;
         if (!parserContext.match(TokenType.RPAREN)) {
-            update = delegates.expressions.parseExpression();
+            update = ExpressionAssignmentParser.parseExpression(parserContext);
         }
         parserContext.expect(TokenType.RPAREN);
 
-        Statement body = parseIterationBody("for");
+        Statement body = parseIterationBody(parserContext, "for");
         if (init instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
-            delegates.declarations.validateForInOfDeclarationBodyEarlyErrors(varDecl, body);
+            parserContext.declarations.validateForInOfDeclarationBodyEarlyErrors(varDecl, body);
         }
 
         return new ForStatement(init, test, update, body, location);
     }
 
-    Statement parseIfStatement() {
+    static void parseFunctionStatements(ParserContext parserContext, List<Statement> body) {
+        Deque<Set<String>> enclosingLabels = parserContext.enterFunctionLabelScope();
+        try {
+            parseBlockStatements(parserContext, body);
+        } finally {
+            parserContext.exitFunctionLabelScope(enclosingLabels);
+        }
+        parserContext.declarations.validateFunctionBodyEarlyErrors(body);
+    }
+
+    static Statement parseIfStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.IF);
         parserContext.expect(TokenType.LPAREN);
-        Expression test = delegates.expressions.parseExpression();
+        Expression test = ExpressionAssignmentParser.parseExpression(parserContext);
         parserContext.expect(TokenType.RPAREN);
 
-        Statement consequent = parseStatement();
+        Statement consequent = parseStatement(parserContext);
         validateNoLexicalDeclarationInStatementPosition(consequent);
         validateNoUsingDeclarationWithInitializerInStatementPosition(consequent);
         validateNoLabelledFunctionInIterationBody(consequent);
-        validateFunctionInStatementPosition(consequent, "if");
+        validateFunctionInStatementPosition(parserContext, consequent, "if");
         Statement alternate = null;
 
         if (parserContext.consumeIf(TokenType.ELSE)) {
-            alternate = parseStatement();
+            alternate = parseStatement(parserContext);
             validateNoLexicalDeclarationInStatementPosition(alternate);
             validateNoUsingDeclarationWithInitializerInStatementPosition(alternate);
             validateNoLabelledFunctionInIterationBody(alternate);
-            validateFunctionInStatementPosition(alternate, "if");
+            validateFunctionInStatementPosition(parserContext, alternate, "if");
         }
 
         return new IfStatement(test, consequent, alternate, location);
+    }
+
+    private static Statement parseIterationBody(ParserContext parserContext, String kind) {
+        Statement body = parseStatement(parserContext);
+        validateNoLabelledFunctionInIterationBody(body);
+        validateNoFunctionDeclarationInIterationBody(body, kind);
+        validateNoLexicalDeclarationInStatementPosition(body);
+        validateNoUsingDeclarationWithInitializerInStatementPosition(body);
+        return body;
+    }
+
+    private static Identifier parseJumpLabel(ParserContext parserContext) {
+        Identifier label = null;
+        if (parserContext.currentToken.type().isIdentifierCandidate() && !parserContext.hasNewlineBefore()) {
+            label = parserContext.parseIdentifier();
+        }
+        parserContext.consumeSemicolon();
+        return label;
     }
 
     /**
      * Parse a labeled statement: label: statement Following QuickJS js_parse_statement_or_decl label handling. In
      * non-strict mode, labeled function declarations are allowed (Annex B).
      */
-    Statement parseLabeledStatement() {
+    static Statement parseLabeledStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         Identifier label = parserContext.parseIdentifier();
         // ES2024 14.13.1: It is a Syntax Error if any source text is matched by
@@ -363,17 +443,17 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         currentLabels.add(label.getName());
         parserContext.labelStack.push(currentLabels);
         try {
-            Statement body = parseStatement();
+            Statement body = parseStatement(parserContext);
             validateNoLexicalDeclarationInStatementPosition(body);
             validateNoUsingDeclarationWithInitializerInStatementPosition(body);
-            validateFunctionInStatementPosition(body, "labelled");
+            validateFunctionInStatementPosition(parserContext, body, "labelled");
             return new LabeledStatement(label, body, location);
         } finally {
             parserContext.labelStack.pop();
         }
     }
 
-    Statement parseReturnStatement() {
+    static Statement parseReturnStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         // Return is only valid inside function bodies.
         if (parserContext.inClassStaticInit || parserContext.functionNesting == 0) {
@@ -384,46 +464,46 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         Expression argument = null;
         if (!parserContext.hasNewlineBefore() && !parserContext.match(TokenType.SEMICOLON)
                 && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-            argument = delegates.expressions.parseExpression();
+            argument = ExpressionAssignmentParser.parseExpression(parserContext);
         }
 
         parserContext.consumeSemicolon();
         return new ReturnStatement(argument, location);
     }
 
-    Statement parseStatement() {
+    static Statement parseStatement(ParserContext parserContext) {
         parserContext.statementNesting++;
         try {
             if (parserContext.isAwaitUsingDeclarationStart()) {
-                validateAwaitUsingDeclarationPlacement();
-                return parseUsingDeclaration(true);
+                validateAwaitUsingDeclarationPlacement(parserContext);
+                return parseUsingDeclaration(parserContext, true);
             }
             if (parserContext.isUsingDeclarationStart()) {
-                return parseUsingDeclaration(false);
+                return parseUsingDeclaration(parserContext, false);
             }
-            if (isDebuggerKeyword()) {
-                return parseDebuggerStatement();
+            if (isDebuggerKeyword(parserContext)) {
+                return parseDebuggerStatement(parserContext);
             }
-            if (isWithKeyword()) {
-                return parseWithStatement();
+            if (isWithKeyword(parserContext)) {
+                return parseWithStatement(parserContext);
             }
             // Check for labeled statement: identifier followed by ':'
             // Following QuickJS is_label() check
-            if (isLabelStart()) {
-                return parseLabeledStatement();
+            if (isLabelStart(parserContext)) {
+                return parseLabeledStatement(parserContext);
             }
             return switch (parserContext.currentToken.type()) {
-                case IF -> parseIfStatement();
-                case DO -> parseDoWhileStatement();
-                case WHILE -> parseWhileStatement();
-                case FOR -> parseForStatement();
-                case RETURN -> parseReturnStatement();
-                case BREAK -> parseBreakStatement();
-                case CONTINUE -> parseContinueStatement();
-                case THROW -> parseThrowStatement();
-                case TRY -> parseTryStatement();
-                case SWITCH -> parseSwitchStatement();
-                case LBRACE -> parseBlockStatement();
+                case IF -> parseIfStatement(parserContext);
+                case DO -> parseDoWhileStatement(parserContext);
+                case WHILE -> parseWhileStatement(parserContext);
+                case FOR -> parseForStatement(parserContext);
+                case RETURN -> parseReturnStatement(parserContext);
+                case BREAK -> parseBreakStatement(parserContext);
+                case CONTINUE -> parseContinueStatement(parserContext);
+                case THROW -> parseThrowStatement(parserContext);
+                case TRY -> parseTryStatement(parserContext);
+                case SWITCH -> parseSwitchStatement(parserContext);
+                case LBRACE -> parseBlockStatement(parserContext);
                 case LET -> {
                     // In sloppy mode, 'let' can be an identifier (not a declaration keyword)
                     // when NOT followed by an identifier, '[', or '{'
@@ -438,23 +518,23 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                                         && nextTok.type() != TokenType.LBRACE && nextTok.type() != TokenType.ASYNC
                                         && nextTok.type() != TokenType.AWAIT && nextTok.type() != TokenType.YIELD
                                         && nextTok.type() != TokenType.LET)) {
-                            yield parseExpressionStatement();
+                            yield parseExpressionStatement(parserContext);
                         }
                     }
-                    yield parseVariableDeclaration();
+                    yield parseVariableDeclaration(parserContext);
                 }
-                case VAR, CONST -> parseVariableDeclaration();
+                case VAR, CONST -> parseVariableDeclaration(parserContext);
                 case ASYNC -> // Async function declaration: async function f() {}
-                    parseAsyncDeclaration();
+                    parseAsyncDeclaration(parserContext);
                 case FUNCTION -> // Function declarations are treated as statements in JavaScript
-                    delegates.functions.parseFunctionDeclaration(false, false);
+                    FunctionClassParser.parseFunctionDeclaration(parserContext, false, false);
                 case CLASS -> // Class declarations are treated as statements in JavaScript
-                    delegates.functions.parseClassDeclaration();
+                    FunctionClassParser.parseClassDeclaration(parserContext);
                 case EXPORT -> {
                     if (!parserContext.moduleMode || parserContext.statementNesting > 1) {
                         throw new JSSyntaxErrorException("Unexpected token 'export'");
                     }
-                    yield delegates.modules().parseExportDeclaration();
+                    yield parserContext.modules().parseExportDeclaration();
                 }
                 case IMPORT -> {
                     Token nextToken = parserContext.peek();
@@ -463,28 +543,28 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     if (!isDynamicImportExpression) {
                         if (parserContext.moduleMode && parserContext.functionNesting == 0
                                 && parserContext.statementNesting <= 1) {
-                            yield delegates.modules().parseImportDeclarationStatement();
+                            yield parserContext.modules().parseImportDeclarationStatement();
                         }
                         throw new JSSyntaxErrorException("Cannot use import statement outside a module");
                     }
-                    yield parseExpressionStatement();
+                    yield parseExpressionStatement(parserContext);
                 }
                 case SEMICOLON -> {
                     parserContext.advance(); // consume semicolon
                     yield null; // empty statement
                 }
-                default -> parseExpressionStatement();
+                default -> parseExpressionStatement(parserContext);
             };
         } finally {
             parserContext.statementNesting--;
         }
     }
 
-    Statement parseSwitchStatement() {
+    static Statement parseSwitchStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.SWITCH);
         parserContext.expect(TokenType.LPAREN);
-        Expression discriminant = delegates.expressions.parseExpression();
+        Expression discriminant = ExpressionAssignmentParser.parseExpression(parserContext);
         parserContext.expect(TokenType.RPAREN);
         parserContext.expect(TokenType.LBRACE);
 
@@ -494,7 +574,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             Expression test = null;
             if (parserContext.consumeIf(TokenType.CASE)) {
-                test = delegates.expressions.parseExpression();
+                test = ExpressionAssignmentParser.parseExpression(parserContext);
             } else if (parserContext.consumeIf(TokenType.DEFAULT)) {
                 if (defaultClauseFound) {
                     throw new JSSyntaxErrorException("More than one default clause in switch statement");
@@ -507,7 +587,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             List<Statement> consequent = new ArrayList<>();
             while (!parserContext.match(TokenType.CASE) && !parserContext.match(TokenType.DEFAULT)
                     && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                Statement stmt = parseStatement();
+                Statement stmt = parseStatement(parserContext);
                 if (stmt != null) {
                     consequent.add(stmt);
                 }
@@ -516,33 +596,33 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         parserContext.expect(TokenType.RBRACE);
-        delegates.declarations.validateSwitchCaseBlockEarlyErrors(cases);
+        parserContext.declarations.validateSwitchCaseBlockEarlyErrors(cases);
         return new SwitchStatement(discriminant, cases, location);
     }
 
-    Statement parseThrowStatement() {
+    static Statement parseThrowStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.THROW);
         if (parserContext.hasNewlineBefore()) {
             throw new JSSyntaxErrorException("Illegal newline after throw");
         }
-        Expression argument = delegates.expressions.parseExpression();
+        Expression argument = ExpressionAssignmentParser.parseExpression(parserContext);
         parserContext.consumeSemicolon();
         return new ThrowStatement(argument, location);
     }
 
-    Statement parseTryStatement() {
+    static Statement parseTryStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.TRY);
-        BlockStatement block = parseBlockStatement();
+        BlockStatement block = parseBlockStatement(parserContext);
 
         TryStatement.CatchClause handler = null;
         if (parserContext.consumeIf(TokenType.CATCH)) {
             Pattern param = null;
             if (parserContext.consumeIf(TokenType.LPAREN)) {
-                param = delegates.patterns.parsePattern();
+                param = PatternParser.parsePattern(parserContext);
                 Set<String> boundNames = new HashSet<>();
-                delegates.declarations.collectPatternBoundNamesAndCheckDuplicates(param, boundNames);
+                parserContext.declarations.collectPatternBoundNamesAndCheckDuplicates(param, boundNames);
                 if (parserContext.strictMode) {
                     for (String boundName : boundNames) {
                         if (JSKeyword.EVAL.equals(boundName) || JSKeyword.ARGUMENTS.equals(boundName)) {
@@ -552,14 +632,14 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 }
                 parserContext.expect(TokenType.RPAREN);
             }
-            BlockStatement catchBody = parseBlockStatement();
-            delegates.declarations.validateCatchClauseEarlyErrors(param, catchBody);
+            BlockStatement catchBody = parseBlockStatement(parserContext);
+            parserContext.declarations.validateCatchClauseEarlyErrors(param, catchBody);
             handler = new TryStatement.CatchClause(param, catchBody);
         }
 
         BlockStatement finalizer = null;
         if (parserContext.consumeIf(TokenType.FINALLY)) {
-            finalizer = parseBlockStatement();
+            finalizer = parseBlockStatement(parserContext);
         }
 
         if (handler == null && finalizer == null) {
@@ -569,7 +649,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new TryStatement(block, handler, finalizer, location);
     }
 
-    Statement parseUsingDeclaration(boolean isAwaitUsing) {
+    static Statement parseUsingDeclaration(ParserContext parserContext, boolean isAwaitUsing) {
         SourceLocation location = parserContext.getLocation();
         VariableKind kind;
         if (isAwaitUsing) {
@@ -589,21 +669,23 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.advance();
             kind = VariableKind.USING;
         }
-        return parseVariableDeclarationBody(kind, location);
+        return parseVariableDeclarationBody(parserContext, kind, location);
     }
 
-    Statement parseVariableDeclaration() {
+    static Statement parseVariableDeclaration(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         VariableKind kind = VariableKind.fromKeyword(parserContext.currentToken.value()); // VAR, LET, or CONST
         parserContext.advance();
-        return parseVariableDeclarationBody(kind, location);
+        return parseVariableDeclarationBody(parserContext, kind, location);
     }
 
-    Statement parseVariableDeclarationBody(VariableKind kind, SourceLocation location) {
-        return parseVariableDeclarationBody(kind, location, true);
+    static Statement parseVariableDeclarationBody(ParserContext parserContext, VariableKind kind,
+            SourceLocation location) {
+        return parseVariableDeclarationBody(parserContext, kind, location, true);
     }
 
-    VariableDeclaration parseVariableDeclarationBody(VariableKind kind, SourceLocation location, boolean consumeSemi) {
+    static VariableDeclaration parseVariableDeclarationBody(ParserContext parserContext, VariableKind kind,
+            SourceLocation location, boolean consumeSemi) {
         boolean isUsingKind = kind == VariableKind.USING || kind == VariableKind.AWAIT_USING;
         List<VariableDeclarator> declarations = new ArrayList<>();
 
@@ -611,15 +693,15 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.consumeIf(TokenType.COMMA)) {
             }
 
-            Pattern id = delegates.patterns.parsePattern();
+            Pattern id = PatternParser.parsePattern(parserContext);
             Set<String> declaredNames = new HashSet<>();
             if (kind != VariableKind.VAR) {
-                delegates.declarations.collectPatternBoundNamesAndCheckDuplicates(id, declaredNames);
+                parserContext.declarations.collectPatternBoundNamesAndCheckDuplicates(id, declaredNames);
                 if (declaredNames.contains(JSKeyword.LET)) {
                     throw new JSSyntaxErrorException("let is disallowed as a lexically bound name");
                 }
             } else {
-                delegates.declarations.collectPatternBoundNames(id, declaredNames);
+                parserContext.declarations.collectPatternBoundNames(id, declaredNames);
             }
             if (parserContext.strictMode) {
                 for (String declaredName : declaredNames) {
@@ -634,7 +716,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             Expression init = null;
 
             if (parserContext.consumeIf(TokenType.ASSIGN)) {
-                init = delegates.expressions.parseAssignmentExpression();
+                init = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
             } else if (kind == VariableKind.CONST && consumeSemi) {
                 throw new JSSyntaxErrorException("Missing initializer in const declaration");
             } else if (isUsingKind && consumeSemi) {
@@ -650,37 +732,43 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new VariableDeclaration(declarations, kind, location);
     }
 
-    Statement parseWhileStatement() {
+    static Statement parseWhileStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.WHILE);
         parserContext.expect(TokenType.LPAREN);
-        Expression test = delegates.expressions.parseExpression();
+        Expression test = ExpressionAssignmentParser.parseExpression(parserContext);
         parserContext.expect(TokenType.RPAREN);
-        Statement body = parseIterationBody("while");
+        Statement body = parseIterationBody(parserContext, "while");
 
         return new WhileStatement(test, body, location);
     }
 
-    Statement parseWithStatement() {
+    static Statement parseWithStatement(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
         if (parserContext.strictMode) {
             throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
         }
-        if (!isWithKeyword()) {
+        if (!isWithKeyword(parserContext)) {
             throw new JSSyntaxErrorException("Unexpected token");
         }
         parserContext.advance(); // consume 'with'
         parserContext.expect(TokenType.LPAREN);
-        Expression object = delegates.expressions.parseExpression();
+        Expression object = ExpressionAssignmentParser.parseExpression(parserContext);
         parserContext.expect(TokenType.RPAREN);
-        Statement body = parseStatement();
+        Statement body = parseStatement(parserContext);
         validateNoFunctionDeclarationInWithStatementPosition(body);
         validateNoLabelledFunctionInWithStatementPosition(body);
         validateNoLexicalDeclarationInStatementPosition(body);
         return new WithStatement(object, body, location);
     }
 
-    private boolean shouldParseLetAsLexicalDeclarationInForHead() {
+    private static void requireSynchronousFor(boolean isAwait) {
+        if (isAwait) {
+            throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+        }
+    }
+
+    private static boolean shouldParseLetAsLexicalDeclarationInForHead(ParserContext parserContext) {
         if (!parserContext.match(TokenType.LET)) {
             return true;
         }
@@ -697,7 +785,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         };
     }
 
-    private void validateAwaitUsingDeclarationPlacement() {
+    private static void validateAwaitUsingDeclarationPlacement(ParserContext parserContext) {
         if (parserContext.moduleMode || parserContext.functionNesting > 0 || parserContext.statementNesting > 1
                 || parserContext.inClassStaticInit || parserContext.classBodyNesting > 0) {
             return;
@@ -705,7 +793,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         throw new JSSyntaxErrorException("using declarations are not allowed at the top level of scripts");
     }
 
-    private void validateForInDeclarationInitializers(VariableDeclaration variableDeclaration) {
+    private static void validateForInDeclarationInitializers(ParserContext parserContext,
+            VariableDeclaration variableDeclaration) {
         if (variableDeclaration == null || variableDeclaration.getDeclarations().isEmpty()) {
             return;
         }
@@ -721,7 +810,15 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
-    private void validateFunctionInStatementPosition(Statement statement, String position) {
+    private static void validateForTarget(ParserContext parserContext, Expression left, int offset) {
+        if (!parserContext.isValidForInOfTarget(left)) {
+            throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
+        }
+        ExpressionAssignmentParser.validateForInOfAssignmentTarget(parserContext, left, offset);
+    }
+
+    private static void validateFunctionInStatementPosition(ParserContext parserContext, Statement statement,
+            String position) {
         if (statement instanceof FunctionDeclaration functionDeclaration) {
             if (parserContext.strictMode && functionDeclaration.isAnnexBSimpleDeclaration()) {
                 throw new JSSyntaxErrorException(
@@ -734,32 +831,32 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
-    private void validateNoFunctionDeclarationInIterationBody(Statement statement, String statementKind) {
+    private static void validateNoFunctionDeclarationInIterationBody(Statement statement, String statementKind) {
         if (statement instanceof FunctionDeclaration) {
             throw new JSSyntaxErrorException(
                     "Function declarations are not allowed in " + statementKind + " statement position");
         }
     }
 
-    private void validateNoFunctionDeclarationInWithStatementPosition(Statement statement) {
+    private static void validateNoFunctionDeclarationInWithStatementPosition(Statement statement) {
         if (statement instanceof FunctionDeclaration) {
             throw new JSSyntaxErrorException("Function declarations are not allowed in with statement position");
         }
     }
 
-    private void validateNoLabelledFunctionInIterationBody(Statement statement) {
+    private static void validateNoLabelledFunctionInIterationBody(Statement statement) {
         if (isLabelledFunction(statement)) {
             throw new JSSyntaxErrorException("Labelled functions are only allowed at body level");
         }
     }
 
-    private void validateNoLabelledFunctionInWithStatementPosition(Statement statement) {
+    private static void validateNoLabelledFunctionInWithStatementPosition(Statement statement) {
         if (isLabelledFunction(statement)) {
             throw new JSSyntaxErrorException("Labelled functions are only allowed at body level");
         }
     }
 
-    private void validateNoLexicalDeclarationInStatementPosition(Statement statement) {
+    private static void validateNoLexicalDeclarationInStatementPosition(Statement statement) {
         if (statement instanceof VariableDeclaration variableDeclaration
                 && variableDeclaration.getKind() != VariableKind.VAR) {
             throw new JSSyntaxErrorException("Lexical declaration cannot appear in a single-statement context");
@@ -769,99 +866,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
-    private void validateNoUsingDeclarationWithInitializerInStatementPosition(Statement statement) {
+    private static void validateNoUsingDeclarationWithInitializerInStatementPosition(Statement statement) {
         if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
             throw new JSSyntaxErrorException("using declarations are not allowed in this statement position");
         }
-    }
-
-    private VariableDeclaration parseForDeclaration(boolean using) {
-        SourceLocation location = parserContext.getLocation();
-        VariableKind kind;
-        if (parserContext.isAwaitUsingDeclarationStart()) {
-            parserContext.expect(TokenType.AWAIT);
-            kind = VariableKind.AWAIT_USING;
-        } else {
-            kind = using ? VariableKind.USING : VariableKind.fromKeyword(parserContext.currentToken.value());
-        }
-        parserContext.advance();
-        boolean savedIn = parserContext.inOperatorAllowed;
-        parserContext.inOperatorAllowed = false;
-        try {
-            return parseVariableDeclarationBody(kind, location, false);
-        } finally {
-            parserContext.inOperatorAllowed = savedIn;
-        }
-    }
-
-    private Statement parseForEach(ASTNode left, boolean isAwait, SourceLocation location) {
-        boolean of = parserContext.match(TokenType.OF);
-        String kind = of ? "for-of" : "for-in";
-        if (!of) {
-            requireSynchronousFor(isAwait);
-        }
-        if (left instanceof VariableDeclaration declaration) {
-            if (!of && declaration.getKind().isUsing()) {
-                throw new JSSyntaxErrorException("The left-hand side of a for-in loop may not be a using declaration");
-            }
-            if (declaration.getDeclarations().size() != 1) {
-                throw new JSSyntaxErrorException(kind + " loop must have exactly one declaration");
-            }
-            delegates.declarations.validateForInOfDeclarationBoundNames(declaration);
-            if (of) {
-                VariableDeclarator declarator = declaration.getDeclarations().get(0);
-                if (declarator != null && declarator.getInit() != null) {
-                    throw new JSSyntaxErrorException("Invalid initializer in for-of declaration");
-                }
-            } else {
-                validateForInDeclarationInitializers(declaration);
-            }
-        } else {
-            validateForTarget((Expression) left, parserContext.currentToken.offset());
-        }
-        parserContext.advance();
-        Expression right = of
-                ? delegates.expressions.parseAssignmentExpression()
-                : delegates.expressions.parseExpression();
-        parserContext.expect(TokenType.RPAREN);
-        Statement body = parseIterationBody(kind);
-        if (left instanceof VariableDeclaration declaration) {
-            delegates.declarations.validateForInOfDeclarationBodyEarlyErrors(declaration, body);
-        }
-        return of
-                ? new ForOfStatement(left, right, body, isAwait, location)
-                : new ForInStatement(left, right, body, location);
-    }
-
-    private void validateForTarget(Expression left, int offset) {
-        if (!parserContext.isValidForInOfTarget(left)) {
-            throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
-        }
-        delegates.expressions.validateForInOfAssignmentTarget(left, offset);
-    }
-
-    private static void requireSynchronousFor(boolean isAwait) {
-        if (isAwait) {
-            throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
-        }
-    }
-
-    private Statement parseIterationBody(String kind) {
-        Statement body = parseStatement();
-        validateNoLabelledFunctionInIterationBody(body);
-        validateNoFunctionDeclarationInIterationBody(body, kind);
-        validateNoLexicalDeclarationInStatementPosition(body);
-        validateNoUsingDeclarationWithInitializerInStatementPosition(body);
-        return body;
-    }
-
-    private Identifier parseJumpLabel() {
-        Identifier label = null;
-        if (parserContext.currentToken.type().isIdentifierCandidate() && !parserContext.hasNewlineBefore()) {
-            label = parserContext.parseIdentifier();
-        }
-        parserContext.consumeSemicolon();
-        return label;
     }
 
 }

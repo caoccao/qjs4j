@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
@@ -26,26 +27,36 @@ import com.caoccao.qjs4j.vm.Opcode;
  * {@code ??=} have no opcode: the first stores the right operand as it is, the others compile to a conditional jump.
  */
 public enum AssignmentOperator {
-    AND_ASSIGN(Opcode.AND),
-    ASSIGN(null),
-    DIV_ASSIGN(Opcode.DIV),
-    EXP_ASSIGN(Opcode.POW),
-    LOGICAL_AND_ASSIGN(null),
-    LOGICAL_OR_ASSIGN(null),
-    LSHIFT_ASSIGN(Opcode.SHL),
-    MINUS_ASSIGN(Opcode.SUB),
-    MOD_ASSIGN(Opcode.MOD),
-    MUL_ASSIGN(Opcode.MUL),
-    NULLISH_ASSIGN(null),
-    OR_ASSIGN(Opcode.OR),
-    PLUS_ASSIGN(Opcode.ADD),
-    RSHIFT_ASSIGN(Opcode.SAR),
-    URSHIFT_ASSIGN(Opcode.SHR),
-    XOR_ASSIGN(Opcode.XOR);
+    AND_ASSIGN(TokenType.AND_ASSIGN, Opcode.AND),
+    ASSIGN(TokenType.ASSIGN, null),
+    DIV_ASSIGN(TokenType.DIV_ASSIGN, Opcode.DIV),
+    EXP_ASSIGN(TokenType.EXP_ASSIGN, Opcode.POW),
+    LOGICAL_AND_ASSIGN(TokenType.LOGICAL_AND_ASSIGN, null),
+    LOGICAL_OR_ASSIGN(TokenType.LOGICAL_OR_ASSIGN, null),
+    LSHIFT_ASSIGN(TokenType.LSHIFT_ASSIGN, Opcode.SHL),
+    MINUS_ASSIGN(TokenType.MINUS_ASSIGN, Opcode.SUB),
+    MOD_ASSIGN(TokenType.MOD_ASSIGN, Opcode.MOD),
+    MUL_ASSIGN(TokenType.MUL_ASSIGN, Opcode.MUL),
+    NULLISH_ASSIGN(TokenType.NULLISH_ASSIGN, null),
+    OR_ASSIGN(TokenType.OR_ASSIGN, Opcode.OR),
+    PLUS_ASSIGN(TokenType.PLUS_ASSIGN, Opcode.ADD),
+    RSHIFT_ASSIGN(TokenType.RSHIFT_ASSIGN, Opcode.SAR),
+    URSHIFT_ASSIGN(TokenType.URSHIFT_ASSIGN, Opcode.SHR),
+    XOR_ASSIGN(TokenType.XOR_ASSIGN, Opcode.XOR);
+
+    private static final AssignmentOperator[] BY_TOKEN = new AssignmentOperator[TokenType.values().length];
+
+    static {
+        for (AssignmentOperator operator : values()) {
+            BY_TOKEN[operator.token.ordinal()] = operator;
+        }
+    }
 
     private final Opcode opcode;
+    private final TokenType token;
 
-    AssignmentOperator(Opcode opcode) {
+    AssignmentOperator(TokenType token, Opcode opcode) {
+        this.token = token;
         this.opcode = opcode;
     }
 
@@ -56,5 +67,9 @@ public enum AssignmentOperator {
      */
     public Opcode getOpcode() {
         return opcode;
+    }
+
+    public static AssignmentOperator fromToken(TokenType token) {
+        return BY_TOKEN[token.ordinal()];
     }
 }

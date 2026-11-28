@@ -14,18 +14,23 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.compilation.compiler;
+package com.caoccao.qjs4j.core.intl;
 
-import com.caoccao.qjs4j.compilation.ast.ASTNode;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSObject;
 
-abstract class AstNodeCompiler<T extends ASTNode> {
-    protected final CompilerContext compilerContext;
-    protected final BytecodeEmitter emitter;
+import java.util.Locale;
 
-    public AstNodeCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
-        emitter = compilerContext.emitter;
+/** The locale selected when an Intl object is initialized. */
+public abstract class IntlLocaleObject extends JSObject {
+    final Locale locale;
+
+    IntlLocaleObject(JSContext context, Locale locale) {
+        super(context);
+        this.locale = locale;
     }
 
-    abstract void compile(T astNode);
+    public final Locale getLocale() {
+        return locale;
+    }
 }

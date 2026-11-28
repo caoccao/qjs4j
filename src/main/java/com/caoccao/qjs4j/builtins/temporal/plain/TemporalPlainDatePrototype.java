@@ -248,16 +248,17 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "with");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
-                "Temporal error: Must specify at least one calendar field.");
-        if (fields == null) {
-            return JSUndefined.INSTANCE;
-        }
+        return RECEIVER.withFields(context, thisArg, args, "Temporal error: Must specify at least one calendar field.",
+                TemporalPlainDatePrototype::withFields);
+    }
 
+    public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
+        return RECEIVER.withCalendar(context, thisArg, args,
+                (ctx, plainDate, calendarId) -> JSTemporalPlainDate.create(ctx, plainDate.getIsoDate(), calendarId));
+    }
+
+    private static JSValue withFields(JSContext context, JSTemporalPlainDate plainDate, JSObject fields,
+            JSValue[] args) {
         TemporalCalendarId calendarId = plainDate.getCalendarId();
         TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
         Integer day = bag.positiveDateField("day");
@@ -272,11 +273,6 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         return dateFields.merge(context, plainDate, JSValue.argumentOrUndefined(args, 1));
-    }
-
-    public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.withCalendar(context, thisArg, args,
-                (ctx, plainDate, calendarId) -> JSTemporalPlainDate.create(ctx, plainDate.getIsoDate(), calendarId));
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -150,16 +150,12 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainYearMonth plainYearMonth = RECEIVER.require(context, thisArg, "with");
-        if (plainYearMonth == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
-                TemporalError.MISSING_PARTIAL_FIELDS.message());
-        if (fields == null) {
-            return JSUndefined.INSTANCE;
-        }
+        return RECEIVER.withFields(context, thisArg, args, TemporalError.MISSING_PARTIAL_FIELDS.message(),
+                TemporalPlainYearMonthPrototype::withFields);
+    }
 
+    private static JSValue withFields(JSContext context, JSTemporalPlainYearMonth plainYearMonth, JSObject fields,
+            JSValue[] args) {
         TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
         Integer month = bag.integerByKey(PropertyKey.MONTH);
         String monthCode = bag.stringByKey(PropertyKey.MONTH_CODE);

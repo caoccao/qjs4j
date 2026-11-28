@@ -28,9 +28,8 @@ import java.util.*;
 /**
  * Handles compilation of function expressions.
  */
-final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpression> {
-    FunctionExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class FunctionExpressionCompiler {
+    private FunctionExpressionCompiler() {
     }
 
     /**
@@ -38,21 +37,21 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
      * functions introduce a new function boundary, which breaks yield/await semantics, so they must only be used when
      * the enclosing context is a plain (non-generator, non-async) sloppy-mode function.
      */
-    private boolean canUseStrictWrapper() {
+    private static boolean canUseStrictWrapper(CompilerContext compilerContext) {
         return !compilerContext.strictMode && !compilerContext.isInGeneratorFunction
                 && !compilerContext.isInAsyncFunction;
     }
 
-    @Override
-    void compile(FunctionExpression functionExpression) {
+    static void compile(CompilerContext compilerContext, FunctionExpression functionExpression) {
         OrdinaryFunctionCompiler.compile(compilerContext, functionExpression, false);
     }
 
-    void compile(FunctionExpression functionExpression, boolean forceNonConstructor) {
+    static void compile(CompilerContext compilerContext, FunctionExpression functionExpression,
+            boolean forceNonConstructor) {
         OrdinaryFunctionCompiler.compile(compilerContext, functionExpression, forceNonConstructor);
     }
 
-    void declareAndInitializeImplicitArgumentsBinding(CompilerContext functionContext) {
+    static void declareAndInitializeImplicitArgumentsBinding(CompilerContext functionContext) {
         if (functionContext.inGlobalScope || functionContext.isInArrowFunction) {
             return;
         }
@@ -73,7 +72,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
      * @return list of (index, pattern) pairs for destructuring params that need post-processing after default/rest
      *         initialization
      */
-    List<int[]> declareParameters(List<Pattern> params, CompilerContext functionContext,
+    static List<int[]> declareParameters(List<Pattern> params, CompilerContext functionContext,
             List<Integer> parameterSlotIndexes) {
         List<int[]> destructuringParams = new ArrayList<>();
         for (int i = 0; i < params.size(); i++) {
@@ -86,14 +85,14 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                 int slotIndex = functionContext.scopeManager.currentScope().declareParameter("#param_" + i);
                 parameterSlotIndexes.add(slotIndex);
                 // Declare local variables for all bound names in the pattern
-                functionContext.patternCompiler.declarePatternVariables(param);
+                PatternCompiler.declarePatternVariables(functionContext, param);
                 destructuringParams.add(new int[]{slotIndex, i});
             }
         }
         return destructuringParams;
     }
 
-    void emitParameterDestructuring(List<Pattern> params, List<int[]> destructuringParams,
+    static void emitParameterDestructuring(List<Pattern> params, List<int[]> destructuringParams,
             CompilerContext functionContext) {
         for (int[] entry : destructuringParams) {
             int slotIndex = entry[0];
@@ -104,7 +103,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             // Push the argument value onto the stack
             functionContext.emitter.emitGetLocal(slotIndex);
             // Destructure and assign to local variables
-            functionContext.patternCompiler.compile(pattern);
+            functionContext.compilePattern(pattern);
         }
     }
 
@@ -112,7 +111,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
      * Emit destructuring code for pattern parameters after defaults and rest handling. Reads the argument value from
      * the synthetic parameter slot and destructures it.
      */
-    void emitRestParameterBinding(RestParameter restParameter, CompilerContext functionContext) {
+    static void emitRestParameterBinding(RestParameter restParameter, CompilerContext functionContext) {
         if (restParameter.getArgument() instanceof Identifier restId) {
             // Simple rest: ...args → declare local and store
             String restParamName = restId.getName();
@@ -120,7 +119,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             functionContext.emitter.emitIntOperand(Opcode.PUT_LOC, restLocalIndex);
         } else {
             // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment
-            functionContext.patternCompiler.compile(restParameter.getArgument());
+            functionContext.compilePattern(restParameter.getArgument());
         }
     }
 
@@ -129,28 +128,29 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
      * a generator/async, wraps the expression in a strict-mode wrapper function called inline. Otherwise, compiles
      * inline with compile-time strict mode set.
      */
-    void emitStrictClassBodyExpression(Expression expression) {
-        if (canUseStrictWrapper()) {
-            emitStrictExpressionCall(expression);
+    static void emitStrictClassBodyExpression(CompilerContext compilerContext, Expression expression) {
+        if (canUseStrictWrapper(compilerContext)) {
+            emitStrictExpressionCall(compilerContext, expression);
         } else {
             compilerContext.pushState();
             compilerContext.strictMode = true;
             try {
-                compilerContext.expressionCompiler.compile(expression);
+                compilerContext.compileExpression(expression);
             } finally {
                 compilerContext.popState();
             }
         }
     }
 
-    private void emitStrictExpressionCall(Expression expression) {
+    private static void emitStrictExpressionCall(CompilerContext compilerContext, Expression expression) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         BytecodeCompiler wrapperCompiler = compilerContext.newNestedCompiler(true, compilerContext.privateSymbols);
         CompilerContext wrapperContext = wrapperCompiler.context();
-        compilerContext.functionExpressionCompiler.inheritVisibleWithObjectBindings(wrapperContext);
+        FunctionExpressionCompiler.inheritVisibleWithObjectBindings(compilerContext, wrapperContext);
         wrapperContext.scopeManager.enterScope();
         wrapperContext.inGlobalScope = false;
 
-        wrapperContext.expressionCompiler.compile(expression);
+        wrapperContext.compileExpression(expression);
         wrapperContext.emitter.emitOpcode(Opcode.RETURN);
 
         int localCount = wrapperContext.scopeManager.isEmpty()
@@ -161,14 +161,14 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
 
         JSBytecodeFunction wrapperFunction = new JSBytecodeFunction(compilerContext.context, bytecode, "", 0,
                 JSValue.NO_ARGS, null, false, false, false, false, true, null);
-        compilerContext.emitHelpers.emitCapturedValues(wrapperCompiler, wrapperFunction);
+        EmitHelpers.emitCapturedValues(wrapperCompiler, wrapperFunction);
 
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, wrapperFunction);
         emitter.emitOpcode(Opcode.UNDEFINED);
         emitter.emitIntOperand(Opcode.CALL, 0);
     }
 
-    void inheritClassInnerNameCapture(CompilerContext targetContext) {
+    static void inheritClassInnerNameCapture(CompilerContext compilerContext, CompilerContext targetContext) {
         String classInnerName = compilerContext.classInnerNameToCapture;
         if (classInnerName != null) {
             targetContext.classInnerNameToCapture = classInnerName;
@@ -189,7 +189,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
      *            the nested function's compilation context
      * @return the inherited bindings; empty when there are none
      */
-    Set<String> inheritParameterScopeFunctionNameCapture(CompilerContext targetContext) {
+    static Set<String> inheritParameterScopeFunctionNameCapture(CompilerContext compilerContext,
+            CompilerContext targetContext) {
         Set<String> parameterScopeFunctionNames = compilerContext.parameterScopeFunctionNames;
         if (!parameterScopeFunctionNames.isEmpty()) {
             targetContext.parameterScopeFunctionNames = parameterScopeFunctionNames;
@@ -201,9 +202,9 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         return parameterScopeFunctionNames;
     }
 
-    void inheritVisibleLexicalCapturesForDirectEvalInBody(CompilerContext targetContext, BlockStatement functionBody,
-            boolean hasNonSimpleParameters) {
-        if (hasNonSimpleParameters || !mayContainDirectEvalInBody(functionBody)) {
+    static void inheritVisibleLexicalCapturesForDirectEvalInBody(CompilerContext compilerContext,
+            CompilerContext targetContext, BlockStatement functionBody, boolean hasNonSimpleParameters) {
+        if (hasNonSimpleParameters || !mayContainDirectEvalInBody(compilerContext, functionBody)) {
             return;
         }
         Set<String> visibleOuterBindingNames = new LinkedHashSet<>();
@@ -223,16 +224,16 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         }
     }
 
-    void inheritVisibleWithObjectBindings(CompilerContext functionContext) {
+    static void inheritVisibleWithObjectBindings(CompilerContext compilerContext, CompilerContext functionContext) {
         functionContext.withObjectManager.addInheritedBindingNames(compilerContext.withObjectManager
                 .getVisibleBindingNamesForNestedFunction(compilerContext.scopeManager));
     }
 
-    <T extends ASTNode & FunctionNode> void initializeParameters(BytecodeCompiler functionCompiler, T node,
-            List<Integer> parameterSlots, List<int[]> destructuringParams, boolean generator) {
+    static <T extends ASTNode & FunctionNode> void initializeParameters(CompilerContext compilerContext,
+            BytecodeCompiler functionCompiler, T node, List<Integer> parameterSlots, List<int[]> destructuringParams,
+            boolean generator) {
         CompilerContext functionContext = functionCompiler.context();
-        compilerContext.emitHelpers.emitDefaultParameterInit(functionCompiler, node.getFunctionParams(), parameterSlots,
-                node);
+        EmitHelpers.emitDefaultParameterInit(functionCompiler, node.getFunctionParams(), parameterSlots, node);
         if (node.getRestParameter() != null) {
             functionContext.emitter.emitIntOperand(Opcode.REST, node.getParams().size());
             emitRestParameterBinding(node.getRestParameter(), functionContext);
@@ -243,7 +244,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         }
     }
 
-    private boolean mayContainDirectEvalInBody(BlockStatement functionBody) {
+    private static boolean mayContainDirectEvalInBody(CompilerContext compilerContext, BlockStatement functionBody) {
         if (compilerContext.sourceCode == null || functionBody == null || functionBody.getLocation() == null) {
             return false;
         }

@@ -30,7 +30,7 @@ public final class ForStatement extends ForLoop {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(head) || kind.in(test) || kind.in(update) || kind.in(body);
     }
 

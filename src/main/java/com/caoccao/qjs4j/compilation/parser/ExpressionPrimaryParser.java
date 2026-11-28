@@ -29,31 +29,32 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class ExpressionPrimaryParser {
-    private final ParserDelegates delegates;
-    private final ExpressionParser expressions;
-    private final ParserContext parserContext;
 
-    ExpressionPrimaryParser(ParserContext parserContext, ParserDelegates delegates, ExpressionParser expressions) {
-        this.parserContext = parserContext;
-        this.delegates = delegates;
-        this.expressions = expressions;
+    private ExpressionPrimaryParser() {
     }
 
-    private CallExpression createCallExpression(Expression callee, List<Expression> arguments, boolean optional,
-            SourceLocation location) {
+    private static CallExpression createCallExpression(ParserContext parserContext, Expression callee,
+            List<Expression> arguments, boolean optional, SourceLocation location) {
         boolean partOfOptionalChain = optional
                 || (callee.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(callee));
         return new CallExpression(callee, arguments, optional, partOfOptionalChain, location);
     }
 
-    private MemberExpression createMemberExpression(Expression object, Expression property, boolean computed,
-            boolean optional, SourceLocation location) {
+    private static MemberExpression createMemberExpression(ParserContext parserContext, Expression object,
+            Expression property, boolean computed, boolean optional, SourceLocation location) {
         boolean partOfOptionalChain = optional
                 || (object.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(object));
         return new MemberExpression(object, property, computed, optional, partOfOptionalChain, location);
     }
 
-    private List<Expression> parseCallArguments() {
+    private static boolean isPrivateDeleteTarget(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.getProperty() instanceof PrivateIdentifier;
+        }
+        return false;
+    }
+
+    private static List<Expression> parseCallArguments(ParserContext parserContext) {
         parserContext.advance();
         List<Expression> args = new ArrayList<>();
 
@@ -66,10 +67,10 @@ final class ExpressionPrimaryParser {
                 }
                 if (parserContext.match(TokenType.ELLIPSIS)) {
                     SourceLocation spreadLocation = parserContext.consumeLocation();
-                    Expression argument = expressions.parseAssignmentExpression();
+                    Expression argument = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                     args.add(new SpreadElement(argument, spreadLocation));
                 } else {
-                    args.add(expressions.parseAssignmentExpression());
+                    args.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
                 }
             } while (parserContext.match(TokenType.COMMA));
         }
@@ -78,8 +79,8 @@ final class ExpressionPrimaryParser {
         return args;
     }
 
-    Expression parseCallExpression() {
-        Expression expr = expressions.parseMemberExpression();
+    static Expression parseCallExpression(ParserContext parserContext) {
+        Expression expr = ExpressionPrimaryParser.parseMemberExpression(parserContext);
 
         while (true) {
             if (parserContext.match(TokenType.TEMPLATE)) {
@@ -87,22 +88,22 @@ final class ExpressionPrimaryParser {
                 if (expr.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(expr)) {
                     throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
                 }
-                expr = parseTaggedTemplate(expr);
+                expr = parseTaggedTemplate(parserContext, expr);
             } else if (parserContext.match(TokenType.LPAREN)) {
                 if (expr instanceof Identifier identifier && JSKeyword.IMPORT.equals(identifier.getName())) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
-                expr = parseCallSuffix(expr);
+                expr = parseCallSuffix(parserContext, expr);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
-                expr = parseOptionalLink(expr);
+                expr = parseOptionalLink(parserContext, expr);
             } else if (parserContext.match(TokenType.DOT)) {
                 validateNoCoverInitializedName(expr);
                 SourceLocation location = parserContext.consumeLocation();
-                Expression property = parseMemberPropertyName();
-                expr = createMemberExpression(expr, property, false, false, location);
+                Expression property = parseMemberPropertyName(parserContext);
+                expr = createMemberExpression(parserContext, expr, property, false, false, location);
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 validateNoCoverInitializedName(expr);
-                expr = parseComputedMember(expr, false);
+                expr = parseComputedMember(parserContext, expr, false);
             } else {
                 break;
             }
@@ -111,29 +112,59 @@ final class ExpressionPrimaryParser {
         return expr;
     }
 
-    private Expression parseCallSuffix(Expression callee) {
+    private static Expression parseCallSuffix(ParserContext parserContext, Expression callee) {
         SourceLocation location = parserContext.getLocation();
-        return createCallExpression(callee, parseCallArguments(), false, location);
+        return createCallExpression(parserContext, callee, parseCallArguments(parserContext), false, location);
     }
 
-    private Expression parseComputedMember(Expression object, boolean assignmentOnly) {
+    private static Expression parseComputedMember(ParserContext parserContext, Expression object,
+            boolean assignmentOnly) {
         SourceLocation location = parserContext.consumeLocation();
-        Expression property = assignmentOnly ? expressions.parseAssignmentExpression() : expressions.parseExpression();
+        Expression property = assignmentOnly
+                ? ExpressionAssignmentParser.parseAssignmentExpression(parserContext)
+                : ExpressionAssignmentParser.parseExpression(parserContext);
         parserContext.expect(TokenType.RBRACKET);
-        return createMemberExpression(object, property, true, false, location);
+        return createMemberExpression(parserContext, object, property, true, false, location);
     }
 
-    private SpreadElement parseCoverRestElement() {
+    private static SpreadElement parseCoverRestElement(ParserContext parserContext) {
         SourceLocation location = parserContext.consumeLocation();
         Expression argument = switch (parserContext.currentToken.type()) {
-            case LBRACKET -> delegates.literals.parseArrayExpression();
-            case LBRACE -> delegates.literals.parseObjectExpression();
+            case LBRACKET -> LiteralParser.parseArrayExpression(parserContext);
+            case LBRACE -> LiteralParser.parseObjectExpression(parserContext);
             default -> parserContext.parseIdentifier();
         };
         return new SpreadElement(argument, location);
     }
 
-    Expression parseMemberExpression() {
+    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
+        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
+        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0' && normalizedValue.charAt(1) >= '0'
+                && normalizedValue.charAt(1) <= '9' && normalizedValue.indexOf('.') == -1
+                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
+            boolean allOctalDigits = true;
+            for (int i = 1; i < normalizedValue.length(); i++) {
+                if (normalizedValue.charAt(i) > '7') {
+                    allOctalDigits = false;
+                    break;
+                }
+            }
+            if (allOctalDigits) {
+                long longVal = Long.parseLong(normalizedValue, 8);
+                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
+                        ? (int) longVal
+                        : (double) longVal;
+            }
+        }
+        double doubleVal = Double.parseDouble(normalizedValue);
+        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal) && doubleVal >= Integer.MIN_VALUE
+                && doubleVal <= Integer.MAX_VALUE) {
+            return (int) doubleVal;
+        }
+        return doubleVal;
+    }
+
+    static Expression parseMemberExpression(ParserContext parserContext) {
         if (parserContext.match(TokenType.NEW)) {
             SourceLocation location = parserContext.getLocation();
             parserContext.requireUnescapedToken("Unexpected token NEW");
@@ -165,7 +196,7 @@ final class ExpressionPrimaryParser {
                 throw new JSSyntaxErrorException("Unexpected import call in constructor position");
             }
 
-            Expression callee = parseMemberExpression();
+            Expression callee = parseMemberExpression(parserContext);
             if (startsWithImport && callee instanceof ImportExpression) {
                 throw new JSSyntaxErrorException("Unexpected import call in constructor position");
             }
@@ -173,15 +204,15 @@ final class ExpressionPrimaryParser {
             while (true) {
                 if (parserContext.consumeIf(TokenType.DOT)) {
                     SourceLocation memberLocation = parserContext.getLocation();
-                    Expression property = parseMemberPropertyName();
-                    callee = createMemberExpression(callee, property, false, false, memberLocation);
+                    Expression property = parseMemberPropertyName(parserContext);
+                    callee = createMemberExpression(parserContext, callee, property, false, false, memberLocation);
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     // A computed member is located at its `[`, as in the call loop and as V8 reports it.
-                    callee = parseComputedMember(callee, false);
+                    callee = parseComputedMember(parserContext, callee, false);
                 } else if (parserContext.match(TokenType.TEMPLATE)) {
                     // No optional chain can reach here: `new a?.b` is rejected, and a parenthesized
                     // chain such as `new (a?.b)`x`` is an ordinary tag.
-                    callee = parseTaggedTemplate(callee);
+                    callee = parseTaggedTemplate(parserContext, callee);
                 } else {
                     break;
                 }
@@ -190,22 +221,24 @@ final class ExpressionPrimaryParser {
                 throw new JSSyntaxErrorException("Invalid optional chain from new expression");
             }
 
-            List<Expression> args = parserContext.match(TokenType.LPAREN) ? parseCallArguments() : new ArrayList<>();
+            List<Expression> args = parserContext.match(TokenType.LPAREN)
+                    ? parseCallArguments(parserContext)
+                    : new ArrayList<>();
             return new NewExpression(callee, args, location);
         }
 
-        Expression expr = expressions.parsePrimaryExpression();
+        Expression expr = ExpressionPrimaryParser.parsePrimaryExpression(parserContext);
         while (true) {
             if (parserContext.match(TokenType.DOT)) {
                 validateNoCoverInitializedName(expr);
                 parserContext.advance();
                 SourceLocation memberLocation = parserContext.getLocation();
-                Expression property = parseMemberPropertyName();
-                expr = createMemberExpression(expr, property, false, false, memberLocation);
+                Expression property = parseMemberPropertyName(parserContext);
+                expr = createMemberExpression(parserContext, expr, property, false, false, memberLocation);
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 validateNoCoverInitializedName(expr);
                 // A computed member is located at its `[`, as in the call loop and as V8 reports it.
-                expr = parseComputedMember(expr, false);
+                expr = parseComputedMember(parserContext, expr, false);
             } else {
                 break;
             }
@@ -213,7 +246,7 @@ final class ExpressionPrimaryParser {
         return expr;
     }
 
-    Expression parseMemberPropertyName() {
+    static Expression parseMemberPropertyName(ParserContext parserContext) {
         TokenType type = parserContext.currentToken.type();
         if (type.isIdentifierName()) {
             return parserContext.consumeIdentifierName();
@@ -227,21 +260,45 @@ final class ExpressionPrimaryParser {
         throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
     }
 
-    private Expression parseOptionalLink(Expression base) {
-        SourceLocation location = parserContext.consumeLocation();
-        if (parserContext.match(TokenType.LPAREN)) {
-            return createCallExpression(base, parseCallArguments(), true, location);
+    private static Literal parseNumericLiteral(String token, SourceLocation location, boolean bigInt) {
+        String digits = token.replace("_", "");
+        int radix = 10;
+        if (digits.length() > 1 && digits.charAt(0) == '0') {
+            radix = switch (digits.charAt(1)) {
+                case 'x', 'X' -> 16;
+                case 'o', 'O' -> 8;
+                case 'b', 'B' -> 2;
+                default -> 10;
+            };
         }
-        if (parserContext.consumeIf(TokenType.LBRACKET)) {
-            Expression property = expressions.parseExpression();
-            parserContext.expect(TokenType.RBRACKET);
-            return createMemberExpression(base, property, true, true, location);
+        if (radix != 10) {
+            digits = digits.substring(2);
         }
-        return createMemberExpression(base, parseMemberPropertyName(), false, true, location);
+        if (bigInt) {
+            return new Literal(new BigInteger(digits, radix), location);
+        }
+        if (radix == 10) {
+            return new Literal(parseDecimalOrLegacyOctal(digits), location);
+        }
+        return new Literal((double) Long.parseLong(digits, radix), location);
     }
 
-    Expression parsePostfixExpression() {
-        Expression expr = expressions.parseCallExpression();
+    private static Expression parseOptionalLink(ParserContext parserContext, Expression base) {
+        SourceLocation location = parserContext.consumeLocation();
+        if (parserContext.match(TokenType.LPAREN)) {
+            return createCallExpression(parserContext, base, parseCallArguments(parserContext), true, location);
+        }
+        if (parserContext.consumeIf(TokenType.LBRACKET)) {
+            Expression property = ExpressionAssignmentParser.parseExpression(parserContext);
+            parserContext.expect(TokenType.RBRACKET);
+            return createMemberExpression(parserContext, base, property, true, true, location);
+        }
+        return createMemberExpression(parserContext, base, parseMemberPropertyName(parserContext), false, true,
+                location);
+    }
+
+    static Expression parsePostfixExpression(ParserContext parserContext) {
+        Expression expr = ExpressionPrimaryParser.parseCallExpression(parserContext);
 
         if (!parserContext.hasNewlineBefore()
                 && (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC))) {
@@ -271,29 +328,30 @@ final class ExpressionPrimaryParser {
         return expr;
     }
 
-    Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {
+    static Expression parsePostPrimaryExpression(ParserContext parserContext, Expression expr,
+            SourceLocation location) {
         while (true) {
             if (parserContext.match(TokenType.TEMPLATE)) {
                 if (expr.isPartOfOptionalChain()) {
                     throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
                 }
-                expr = parseTaggedTemplate(expr);
+                expr = parseTaggedTemplate(parserContext, expr);
             } else if (parserContext.match(TokenType.LPAREN)) {
-                expr = parseCallSuffix(expr);
+                expr = parseCallSuffix(parserContext, expr);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
-                expr = parseOptionalLink(expr);
+                expr = parseOptionalLink(parserContext, expr);
             } else if (parserContext.match(TokenType.DOT)) {
                 SourceLocation loc = parserContext.consumeLocation();
-                Expression property = parseMemberPropertyName();
-                expr = createMemberExpression(expr, property, false, false, loc);
+                Expression property = parseMemberPropertyName(parserContext);
+                expr = createMemberExpression(parserContext, expr, property, false, false, loc);
             } else if (parserContext.match(TokenType.LBRACKET)) {
-                expr = parseComputedMember(expr, true);
+                expr = parseComputedMember(parserContext, expr, true);
             } else {
                 break;
             }
         }
 
-        AssignmentOperator operator = ParserContext.assignmentOperator(parserContext.currentToken.type());
+        AssignmentOperator operator = AssignmentOperator.fromToken(parserContext.currentToken.type());
         if (operator != null) {
             // Validate that expr is a valid assignment target
             if (!(expr instanceof Identifier) && !(expr instanceof MemberExpression)
@@ -308,14 +366,14 @@ final class ExpressionPrimaryParser {
                 }
             }
             parserContext.advance();
-            Expression right = expressions.parseAssignmentExpression();
+            Expression right = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
             return new AssignmentExpression(expr, operator, right, loc);
         }
 
         return expr;
     }
 
-    Expression parsePrimaryExpression() {
+    static Expression parsePrimaryExpression(ParserContext parserContext) {
         SourceLocation location = parserContext.getLocation();
 
         return switch (parserContext.currentToken.type()) {
@@ -338,7 +396,7 @@ final class ExpressionPrimaryParser {
                 String value = parserContext.consumeValue();
                 yield new Literal(new RegExpLiteralValue(value), location);
             }
-            case TEMPLATE -> delegates.literals.parseTemplateLiteral(false);
+            case TEMPLATE -> LiteralParser.parseTemplateLiteral(parserContext, false);
             case TRUE -> {
                 parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
                 parserContext.advance();
@@ -375,22 +433,22 @@ final class ExpressionPrimaryParser {
                 if (parserContext.consumeIf(TokenType.RPAREN)) {
                     // `()` is only an arrow function's empty parameter list; as an expression it is an error. It
                     // used to evaluate to an empty array.
-                    requireArrowAfterCoverParameters("Unexpected token ')'");
+                    requireArrowAfterCoverParameters(parserContext, "Unexpected token ')'");
                     yield new ArrayExpression(new ArrayList<>(), location);
                 }
 
                 if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.ELLIPSIS)) {
                     if (parserContext.match(TokenType.ELLIPSIS)) {
-                        SpreadElement rest = parseCoverRestElement();
+                        SpreadElement rest = parseCoverRestElement(parserContext);
                         parserContext.expect(TokenType.RPAREN);
-                        requireArrowAfterCoverParameters("Unexpected token '...'");
+                        requireArrowAfterCoverParameters(parserContext, "Unexpected token '...'");
                         yield new ArrayExpression(List.of(rest), location);
                     }
 
                     {
                         boolean savedIn = parserContext.inOperatorAllowed;
                         parserContext.inOperatorAllowed = true;
-                        Expression firstExpr = expressions.parseAssignmentExpression();
+                        Expression firstExpr = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
 
                         if (!parserContext.match(TokenType.COMMA)) {
                             // Single expression in parens
@@ -417,12 +475,12 @@ final class ExpressionPrimaryParser {
 
                             if (parserContext.match(TokenType.ELLIPSIS)) {
                                 // Rest/spread: (expr, ...rest) for arrow params
-                                SpreadElement rest = parseCoverRestElement();
+                                SpreadElement rest = parseCoverRestElement(parserContext);
                                 elements.add(rest);
                                 break;
                             }
 
-                            elements.add(expressions.parseAssignmentExpression());
+                            elements.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
                         }
 
                         parserContext.inOperatorAllowed = savedIn;
@@ -431,9 +489,9 @@ final class ExpressionPrimaryParser {
                         // A rest element or a trailing comma makes this an arrow parameter list and nothing else.
                         boolean hasSpread = elements.get(elements.size() - 1) instanceof SpreadElement;
                         if (hasSpread) {
-                            requireArrowAfterCoverParameters("Unexpected token '...'");
+                            requireArrowAfterCoverParameters(parserContext, "Unexpected token '...'");
                         } else if (trailingComma) {
-                            requireArrowAfterCoverParameters("Unexpected token ')'");
+                            requireArrowAfterCoverParameters(parserContext, "Unexpected token ')'");
                         }
 
                         if (elements.size() == 1) {
@@ -450,7 +508,7 @@ final class ExpressionPrimaryParser {
                 } else {
                     boolean savedIn = parserContext.inOperatorAllowed;
                     parserContext.inOperatorAllowed = true;
-                    Expression expr = expressions.parseExpression();
+                    Expression expr = ExpressionAssignmentParser.parseExpression(parserContext);
                     parserContext.inOperatorAllowed = savedIn;
                     parserContext.expect(TokenType.RPAREN);
                     if (parserContext.isParenthesizedExpression(expr) && parserContext.match(TokenType.ARROW)) {
@@ -472,51 +530,17 @@ final class ExpressionPrimaryParser {
                 parserContext.advance();
                 yield new Literal(new RegExpLiteralValue(value), location);
             }
-            case LBRACKET -> delegates.literals.parseArrayExpression();
-            case LBRACE -> delegates.literals.parseObjectExpression();
-            case FUNCTION -> delegates.functions.parseFunctionExpression();
-            case CLASS -> delegates.functions.parseClassExpression();
+            case LBRACKET -> LiteralParser.parseArrayExpression(parserContext);
+            case LBRACE -> LiteralParser.parseObjectExpression(parserContext);
+            case FUNCTION -> FunctionClassParser.parseFunctionExpression(parserContext);
+            case CLASS -> FunctionClassParser.parseClassExpression(parserContext);
             case AT -> {
-                // Parse decorator list before class expression
-                // Decorator: @ DecoratorMemberExpression | @ DecoratorCallExpression | @
-                // DecoratorParenthesizedExpression
-                while (parserContext.match(TokenType.AT)) {
-                    parserContext.advance(); // consume @
-                    if (parserContext.match(TokenType.LPAREN)) {
-                        // DecoratorParenthesizedExpression: @(expression)
-                        parserContext.advance(); // consume (
-                        boolean savedIn = parserContext.inOperatorAllowed;
-                        parserContext.inOperatorAllowed = true;
-                        expressions.parseExpression();
-                        parserContext.inOperatorAllowed = savedIn;
-                        parserContext.expect(TokenType.RPAREN);
-                    } else {
-                        // DecoratorMemberExpression: identifier (.propertyName)*
-                        parserContext.parseIdentifier();
-                        while (parserContext.match(TokenType.DOT)) {
-                            parserContext.advance(); // consume .
-                            if (parserContext.consumeIf(TokenType.PRIVATE_NAME)) {
-                            } else {
-                                expressions.parsePropertyName();
-                            }
-                        }
-                        // Optional DecoratorCallExpression: DecoratorMemberExpression Arguments
-                        if (parserContext.consumeIf(TokenType.LPAREN)) {
-                            if (!parserContext.match(TokenType.RPAREN)) {
-                                expressions.parseAssignmentExpression();
-                                while (parserContext.consumeIf(TokenType.COMMA)) {
-                                    expressions.parseAssignmentExpression();
-                                }
-                            }
-                            parserContext.expect(TokenType.RPAREN);
-                        }
-                    }
-                }
+                FunctionClassParser.parseDecoratorList(parserContext);
                 // After decorators, must be a class expression
                 if (!parserContext.match(TokenType.CLASS)) {
                     throw new JSSyntaxErrorException("Decorators are not valid here");
                 }
-                yield delegates.functions.parseClassExpression();
+                yield FunctionClassParser.parseClassExpression(parserContext);
             }
             case IMPORT -> {
                 parserContext.requireUnescapedToken("Unexpected token IMPORT");
@@ -537,7 +561,7 @@ final class ExpressionPrimaryParser {
                         parserContext.advance(); // consume '.'
                         parserContext.advance(); // consume 'defer'
                         parserContext.expect(TokenType.LPAREN);
-                        Expression source = expressions.parseAssignmentExpression();
+                        Expression source = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                         parserContext.expect(TokenType.RPAREN);
                         yield new ImportExpression(source, null, true, location);
                     } else {
@@ -547,11 +571,11 @@ final class ExpressionPrimaryParser {
                     boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                     parserContext.inOperatorAllowed = true;
                     try {
-                        Expression source = expressions.parseAssignmentExpression();
+                        Expression source = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                         Expression options = null;
                         if (parserContext.consumeIf(TokenType.COMMA)) {
                             if (!parserContext.match(TokenType.RPAREN)) {
-                                options = expressions.parseAssignmentExpression();
+                                options = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                                 if (parserContext.consumeIf(TokenType.COMMA)) {
                                 }
                             }
@@ -584,7 +608,7 @@ final class ExpressionPrimaryParser {
         };
     }
 
-    Expression parsePropertyName() {
+    static Expression parsePropertyName(ParserContext parserContext) {
         TokenType type = parserContext.currentToken.type();
         if (type != TokenType.NULL && type.isIdentifierName()) {
             return parserContext.consumeIdentifierName();
@@ -600,7 +624,7 @@ final class ExpressionPrimaryParser {
                 // Allow 'in' operator inside computed property names
                 boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                 parserContext.inOperatorAllowed = true;
-                Expression expr = expressions.parseAssignmentExpression();
+                Expression expr = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                 parserContext.inOperatorAllowed = savedInOperatorAllowed;
                 parserContext.expect(TokenType.RBRACKET);
                 yield expr;
@@ -613,18 +637,20 @@ final class ExpressionPrimaryParser {
         };
     }
 
-    private Expression parseTaggedTemplate(Expression tag) {
+    private static Expression parseTaggedTemplate(ParserContext parserContext, Expression tag) {
         SourceLocation location = parserContext.getLocation();
-        return new TaggedTemplateExpression(tag, delegates.literals.parseTemplateLiteral(true), location);
+        return new TaggedTemplateExpression(tag, LiteralParser.parseTemplateLiteral(parserContext, true), location);
     }
 
-    Expression parseUnaryExpression() {
+    static Expression parseUnaryExpression(ParserContext parserContext) {
         if (parserContext.match(TokenType.ASYNC) && parserContext.nextToken.type() == TokenType.FUNCTION
                 && parserContext.nextToken.line() == parserContext.currentToken.line()) {
             parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
             SourceLocation asyncLocation = parserContext.consumeLocation();
-            Expression asyncFunctionExpression = delegates.functions.parseFunctionExpression(true, asyncLocation);
-            return expressions.parsePostPrimaryExpression(asyncFunctionExpression, asyncLocation);
+            Expression asyncFunctionExpression = FunctionClassParser.parseFunctionExpression(parserContext, true,
+                    asyncLocation);
+            return ExpressionPrimaryParser.parsePostPrimaryExpression(parserContext, asyncFunctionExpression,
+                    asyncLocation);
         }
 
         if (parserContext.match(TokenType.AWAIT)) {
@@ -636,19 +662,19 @@ final class ExpressionPrimaryParser {
             }
             if (!parserContext.isAwaitExpressionAllowed()) {
                 if (parserContext.isAwaitIdentifierAllowed()) {
-                    return parsePostfixExpression();
+                    return parsePostfixExpression(parserContext);
                 }
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
             SourceLocation location = parserContext.consumeLocation();
-            Expression argument = parseUnaryExpression();
+            Expression argument = parseUnaryExpression(parserContext);
             return new AwaitExpression(argument, location);
         }
 
         if (parserContext.match(TokenType.YIELD)) {
             // In non-strict, non-generator contexts, yield is a valid identifier
             if (parserContext.isYieldIdentifierAllowed()) {
-                return parsePostfixExpression();
+                return parsePostfixExpression(parserContext);
             }
             // In strict mode outside a generator, yield is a reserved word
             if (parserContext.generatorFunctionNesting == 0) {
@@ -662,7 +688,7 @@ final class ExpressionPrimaryParser {
         if (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC)) {
             UnaryOperator op = parserContext.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
             SourceLocation location = parserContext.consumeLocation();
-            Expression operand = parseUnaryExpression();
+            Expression operand = parseUnaryExpression(parserContext);
             if (operand instanceof Identifier identifier) {
                 String identifierName = identifier.getName();
                 if ("import.meta".equals(identifierName) || "new.target".equals(identifierName)
@@ -687,7 +713,7 @@ final class ExpressionPrimaryParser {
         UnaryOperator op = UnaryOperator.prefixOperator(parserContext.currentToken.type());
         if (op != null) {
             SourceLocation location = parserContext.consumeLocation();
-            Expression operand = parseUnaryExpression();
+            Expression operand = parseUnaryExpression(parserContext);
             if (op == UnaryOperator.DELETE) {
                 // The early error is stated over IdentifierReference. `this` and `new.target` are
                 // parsed as Identifier nodes but are a PrimaryExpression and a MetaProperty, so
@@ -703,7 +729,7 @@ final class ExpressionPrimaryParser {
             return new UnaryExpression(op, operand, true, location);
         }
 
-        return parsePostfixExpression();
+        return parsePostfixExpression(parserContext);
     }
 
     /**
@@ -713,70 +739,13 @@ final class ExpressionPrimaryParser {
      * @param message
      *            V8's message for the token that makes it a parameter list
      */
-    private void requireArrowAfterCoverParameters(String message) {
+    private static void requireArrowAfterCoverParameters(ParserContext parserContext, String message) {
         if (!parserContext.match(TokenType.ARROW)) {
             throw new JSSyntaxErrorException(message);
         }
         if (parserContext.hasNewlineBefore()) {
             throw new JSSyntaxErrorException("Unexpected token '=>'");
         }
-    }
-
-    private static boolean isPrivateDeleteTarget(Expression expression) {
-        if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.getProperty() instanceof PrivateIdentifier;
-        }
-        return false;
-    }
-
-    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
-        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
-        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0' && normalizedValue.charAt(1) >= '0'
-                && normalizedValue.charAt(1) <= '9' && normalizedValue.indexOf('.') == -1
-                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
-            boolean allOctalDigits = true;
-            for (int i = 1; i < normalizedValue.length(); i++) {
-                if (normalizedValue.charAt(i) > '7') {
-                    allOctalDigits = false;
-                    break;
-                }
-            }
-            if (allOctalDigits) {
-                long longVal = Long.parseLong(normalizedValue, 8);
-                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                        ? (int) longVal
-                        : (double) longVal;
-            }
-        }
-        double doubleVal = Double.parseDouble(normalizedValue);
-        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal) && doubleVal >= Integer.MIN_VALUE
-                && doubleVal <= Integer.MAX_VALUE) {
-            return (int) doubleVal;
-        }
-        return doubleVal;
-    }
-
-    private static Literal parseNumericLiteral(String token, SourceLocation location, boolean bigInt) {
-        String digits = token.replace("_", "");
-        int radix = 10;
-        if (digits.length() > 1 && digits.charAt(0) == '0') {
-            radix = switch (digits.charAt(1)) {
-                case 'x', 'X' -> 16;
-                case 'o', 'O' -> 8;
-                case 'b', 'B' -> 2;
-                default -> 10;
-            };
-        }
-        if (radix != 10) {
-            digits = digits.substring(2);
-        }
-        if (bigInt) {
-            return new Literal(new BigInteger(digits, radix), location);
-        }
-        if (radix == 10) {
-            return new Literal(parseDecimalOrLegacyOctal(digits), location);
-        }
-        return new Literal((double) Long.parseLong(digits, radix), location);
     }
 
     /**

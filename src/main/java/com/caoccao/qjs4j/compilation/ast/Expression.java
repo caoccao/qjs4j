@@ -32,8 +32,12 @@ public abstract sealed class Expression extends Pattern
         super(location);
     }
 
-    public boolean containsDirectEvalVarArguments() {
+    boolean computeDirectEvalVarArguments() {
         return false;
+    }
+
+    public final boolean containsDirectEvalVarArguments() {
+        return SyntaxQuery.DIRECT_EVAL_VAR_ARGUMENTS.in(this);
     }
 
     /**
@@ -44,14 +48,6 @@ public abstract sealed class Expression extends Pattern
      */
     public boolean containsOptionalChain() {
         return false;
-    }
-
-    @Override
-    public List<String> getBoundNames() {
-        if (boundNames == null) {
-            boundNames = List.of();
-        }
-        return boundNames;
     }
 
     public boolean hasTailCallInTailPosition() {

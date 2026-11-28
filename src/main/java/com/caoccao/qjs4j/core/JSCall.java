@@ -50,7 +50,11 @@ public final class JSCall {
         return callArgs;
     }
 
-    public static JSValue call(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
+    public static JSValue call(JSContext context, JSValue callable, JSValue thisArg) {
+        return call(context, callable, thisArg, JSValue.NO_ARGS);
+    }
+
+    public static JSValue call(JSContext context, JSValue callable, JSValue thisArg, JSValue... args) {
         if (callable instanceof JSProxy proxy) {
             return proxy.apply(context, thisArg, args);
         }

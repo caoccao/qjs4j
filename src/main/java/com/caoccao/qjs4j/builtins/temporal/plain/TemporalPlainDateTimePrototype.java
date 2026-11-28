@@ -280,16 +280,17 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDateTime plainDateTime = RECEIVER.require(context, thisArg, "with");
-        if (plainDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
-                TemporalError.MISSING_PARTIAL_FIELDS.message());
-        if (fields == null) {
-            return JSUndefined.INSTANCE;
-        }
+        return RECEIVER.withFields(context, thisArg, args, TemporalError.MISSING_PARTIAL_FIELDS.message(),
+                TemporalPlainDateTimePrototype::withFields);
+    }
 
+    public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
+        return RECEIVER.withCalendar(context, thisArg, args, (ctx, plainDateTime, calendarId) -> JSTemporalPlainDateTime
+                .create(ctx, plainDateTime.getIsoDateTime(), calendarId));
+    }
+
+    private static JSValue withFields(JSContext context, JSTemporalPlainDateTime plainDateTime, JSObject fields,
+            JSValue[] args) {
         IsoTime originalTime = plainDateTime.getIsoDateTime().time();
         TemporalCalendarId calendarId = plainDateTime.getCalendarId();
         TemporalTimeFields bag = new TemporalTimeFields(context, fields);
@@ -320,11 +321,6 @@ public final class TemporalPlainDateTimePrototype {
 
         return TemporalPlainDateTimeConstructor.dateTimeFromRegulatedFields(context, bag, resultDate, originalTime,
                 overflow, TemporalError.INVALID_ISO_DATE, plainDateTime.getCalendarId());
-    }
-
-    public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.withCalendar(context, thisArg, args, (ctx, plainDateTime, calendarId) -> JSTemporalPlainDateTime
-                .create(ctx, plainDateTime.getIsoDateTime(), calendarId));
     }
 
     public static JSValue withPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -437,7 +437,7 @@ public final class VirtualMachine {
             // property definition. Using [[Set]] here would consult the target's prototype chain,
             // so an Object.prototype setter or non-writable data property would intercept the copy
             // and the property would never land on the result object.
-            boolean created = targetObject.defineProperty(key, propertyValue, PropertyDescriptor.DataState.All);
+            boolean created = targetObject.createDataProperty(key, propertyValue);
             if (context.hasPendingException()) {
                 pendingException = context.takePendingException();
                 return;
@@ -848,11 +848,11 @@ public final class VirtualMachine {
                     }
                 } catch (JSVirtualMachineException e) {
                     // Restore stack and strict mode on exception
-                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    restoreExecuteCallerState(restoreStackTop, previousFrame, savedStrictMode);
                     throw e;
                 } catch (JSException e) {
                     // Preserve thrown JS values so callers can keep the original error type and realm.
-                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    restoreExecuteCallerState(restoreStackTop, previousFrame, savedStrictMode);
                     JSValue errorValue = e.getErrorValue();
                     if (errorValue instanceof JSError jsError) {
                         throw new JSVirtualMachineException(jsError);
@@ -860,14 +860,14 @@ public final class VirtualMachine {
                     throw new JSVirtualMachineException(e.getMessage(), errorValue);
                 } catch (StackOverflowError stackOverflow) {
                     // Convert JVM StackOverflowError to JS RangeError
-                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    restoreExecuteCallerState(restoreStackTop, previousFrame, savedStrictMode);
                     JSValue rangeError = context.throwRangeError("Maximum call stack size exceeded");
                     context.clearPendingException();
                     throw new JSVirtualMachineException("Maximum call stack size exceeded", rangeError);
                 } catch (JSErrorException e) {
                     // A spec-defined error raised outside an opcode handler (for example while
                     // building the frame). Keep its type instead of flattening it to "VM error".
-                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    restoreExecuteCallerState(restoreStackTop, previousFrame, savedStrictMode);
                     JSValue errorValue = context.throwError(e);
                     context.clearPendingException();
                     throw new JSVirtualMachineException(e.getDetailedMessage(), errorValue);
@@ -879,7 +879,7 @@ public final class VirtualMachine {
                     // keep the cause. It is raised as a termination, not as a JSVirtualMachineException:
                     // the caller frame's opcode handler turned that into a pending exception, so the
                     // script could catch an engine bug and the Java cause was dropped.
-                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    restoreExecuteCallerState(restoreStackTop, previousFrame, savedStrictMode);
                     throw new JSTerminationException(describeInternalFailure(function, executionContext, e), e);
                 }
             }
@@ -1335,16 +1335,6 @@ public final class VirtualMachine {
     void restoreExecuteCallerState(int restoreStackTop, StackFrame previousFrame, boolean savedStrictMode) {
         // setStackTop rather than a raw field write: it clears the frame's vacated operand slots so
         // the values they held stop pinning object graphs.
-        valueStack.setStackTop(restoreStackTop);
-        currentFrame = previousFrame;
-        if (savedStrictMode) {
-            context.enterStrictMode();
-        } else {
-            context.exitStrictMode();
-        }
-    }
-
-    void restoreExecuteFailureState(int restoreStackTop, StackFrame previousFrame, boolean savedStrictMode) {
         valueStack.setStackTop(restoreStackTop);
         currentFrame = previousFrame;
         if (savedStrictMode) {

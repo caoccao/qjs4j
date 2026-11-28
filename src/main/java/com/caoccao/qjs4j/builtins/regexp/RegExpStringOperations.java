@@ -93,8 +93,8 @@ final class RegExpStringOperations {
 
     private static JSObject createIteratorResultObject(JSContext context, JSValue value, boolean done) {
         JSObject resultObject = context.createJSObject();
-        resultObject.defineProperty(PropertyKey.VALUE, value, PropertyDescriptor.DataState.All);
-        resultObject.defineProperty(PropertyKey.DONE, JSBoolean.valueOf(done), PropertyDescriptor.DataState.All);
+        resultObject.createDataProperty(PropertyKey.VALUE, value);
+        resultObject.createDataProperty(PropertyKey.DONE, JSBoolean.valueOf(done));
         return resultObject;
     }
 
@@ -171,7 +171,7 @@ final class RegExpStringOperations {
         }
         // Step 4: If IsCallable(exec) is true, call it
         if (execValue instanceof JSFunction execFunction) {
-            JSValue result = execFunction.call(context, regexpObject, new JSValue[]{inputString});
+            JSValue result = execFunction.call(context, regexpObject, inputString);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

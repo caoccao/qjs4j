@@ -32,8 +32,8 @@ public final class AwaitExpression extends Expression {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
-        return kind == Suspension.AWAIT || kind.in(argument);
+    boolean containsSuspension(SyntaxQuery kind) {
+        return kind == SyntaxQuery.AWAIT || kind.in(argument);
     }
 
     public Expression getArgument() {

@@ -28,13 +28,12 @@ import java.util.List;
  * Handles compilation of identifier expressions and with-scope-aware identifier resolution for reads, calls, and
  * deletes.
  */
-final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
-    IdentifierCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class IdentifierCompiler {
+    private IdentifierCompiler() {
     }
 
-    @Override
-    void compile(Identifier identifier) {
+    static void compile(CompilerContext compilerContext, Identifier identifier) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         String name = identifier.getName();
         // Handle 'this' keyword
         if (JSKeyword.THIS.equals(name)) {
@@ -67,14 +66,16 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         }
 
         if (compilerContext.withObjectManager.hasActiveWithObject()) {
-            emitWithAwareIdentifierLookup(name);
+            emitWithAwareIdentifierLookup(compilerContext, name);
             return;
         }
 
-        emitIdentifierLookupWithoutWith(name);
+        emitIdentifierLookupWithoutWith(compilerContext, name);
     }
 
-    void emitCapturedOrGlobalIdentifierLookup(String name, Opcode globalOpcode) {
+    static void emitCapturedOrGlobalIdentifierLookup(CompilerContext compilerContext, String name,
+            Opcode globalOpcode) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
         if (capturedIndex != null) {
             emitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, capturedIndex);
@@ -84,7 +85,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         }
     }
 
-    private void emitIdentifierLookupWithoutWith(String name) {
+    private static void emitIdentifierLookupWithoutWith(CompilerContext compilerContext, String name) {
 
         // Always check local scopes first, even in global scope (for nested blocks/loops)
         // This must happen BEFORE the 'arguments' special handling so that
@@ -93,7 +94,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
 
         if (localIndex != null) {
-            emitLocalRead(name, localIndex);
+            emitLocalRead(compilerContext, name, localIndex);
             return;
         }
 
@@ -106,23 +107,25 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         if (JSArguments.NAME.equals(name) && compilerContext.hasEnclosingArgumentsBinding) {
             // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
             // The VM will handle differently for arrow vs regular functions
-            emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 0); // Type 0 = arguments object
+            compilerContext.emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 0); // Type 0 = arguments object
             return;
         }
 
-        if (emitInheritedWithAwareIdentifierLookup(name)) {
+        if (emitInheritedWithAwareIdentifierLookup(compilerContext, name)) {
             return;
         }
 
-        emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
+        emitCapturedOrGlobalIdentifierLookup(compilerContext, name, Opcode.GET_VAR);
     }
 
-    void emitInheritedWithAwareDeleteIdentifier(String name, List<String> withBindingNames, int withDepth) {
-        emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth, false);
+    static void emitInheritedWithAwareDeleteIdentifier(CompilerContext compilerContext, String name,
+            List<String> withBindingNames, int withDepth) {
+        emitInheritedWithAwareDeleteIdentifier(compilerContext, name, withBindingNames, withDepth, false);
     }
 
-    void emitInheritedWithAwareDeleteIdentifier(String name, List<String> withBindingNames, int withDepth,
-            boolean fallbackToFalse) {
+    static void emitInheritedWithAwareDeleteIdentifier(CompilerContext compilerContext, String name,
+            List<String> withBindingNames, int withDepth, boolean fallbackToFalse) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (withDepth >= withBindingNames.size()) {
             if (fallbackToFalse) {
                 emitter.emitOpcode(Opcode.PUSH_FALSE);
@@ -132,47 +135,50 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             return;
         }
 
-        if (!emitInheritedWithObject(withBindingNames.get(withDepth))) {
-            emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth + 1, fallbackToFalse);
+        if (!emitInheritedWithObject(compilerContext, withBindingNames.get(withDepth))) {
+            emitInheritedWithAwareDeleteIdentifier(compilerContext, name, withBindingNames, withDepth + 1,
+                    fallbackToFalse);
             return;
         }
 
-        emitWithObjectDelete(name,
-                () -> emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth + 1, fallbackToFalse));
+        emitWithObjectDelete(compilerContext, name, () -> emitInheritedWithAwareDeleteIdentifier(compilerContext, name,
+                withBindingNames, withDepth + 1, fallbackToFalse));
     }
 
-    private boolean emitInheritedWithAwareIdentifierLookup(String name) {
+    private static boolean emitInheritedWithAwareIdentifierLookup(CompilerContext compilerContext, String name) {
         if (compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
             return false;
         }
-        emitInheritedWithAwareIdentifierLookup(name, compilerContext.withObjectManager.getInheritedBindingNames(), 0,
-                false);
+        emitInheritedWithAwareIdentifierLookup(compilerContext, name,
+                compilerContext.withObjectManager.getInheritedBindingNames(), 0, false);
         return true;
     }
 
-    private void emitInheritedWithAwareIdentifierLookup(String name, List<String> withBindingNames, int withDepth,
-            boolean forCall) {
+    private static void emitInheritedWithAwareIdentifierLookup(CompilerContext compilerContext, String name,
+            List<String> withBindingNames, int withDepth, boolean forCall) {
         if (withDepth >= withBindingNames.size()) {
-            emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
+            emitCapturedOrGlobalIdentifierLookup(compilerContext, name, Opcode.GET_VAR);
             if (forCall) {
-                emitter.emitOpcode(Opcode.UNDEFINED);
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }
             return;
         }
 
-        if (!emitInheritedWithObject(withBindingNames.get(withDepth))) {
-            emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1, forCall);
+        if (!emitInheritedWithObject(compilerContext, withBindingNames.get(withDepth))) {
+            emitInheritedWithAwareIdentifierLookup(compilerContext, name, withBindingNames, withDepth + 1, forCall);
             return;
         }
 
-        emitWithObjectLookup(name, forCall,
-                () -> emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1, forCall));
+        emitWithObjectLookup(compilerContext, name, forCall,
+                () -> emitInheritedWithAwareIdentifierLookup(compilerContext, name, withBindingNames, withDepth + 1,
+                        forCall));
     }
 
     /**
      * Load a captured with-object, or report that its binding is unavailable.
      */
-    boolean emitInheritedWithObject(String bindingName) {
+    static boolean emitInheritedWithObject(CompilerContext compilerContext, String bindingName) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(bindingName);
         if (localIndex != null) {
             emitter.emitGetLocal(localIndex);
@@ -187,17 +193,19 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     }
 
     /** A local in its temporal dead zone must throw even when read by typeof. */
-    void emitLocalRead(String name, int index) {
+    static void emitLocalRead(CompilerContext compilerContext, String name, int index) {
         Opcode opcode = compilerContext.tdzLocals.contains(name) ? Opcode.GET_LOC_CHECK : Opcode.GET_LOC;
-        emitter.emitOpcodeU16(opcode, index);
+        compilerContext.emitter.emitOpcodeU16(opcode, index);
     }
 
-    void emitWithAwareDeleteIdentifier(String name, List<Integer> withObjectLocals, int withDepth) {
-        emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth, false);
+    static void emitWithAwareDeleteIdentifier(CompilerContext compilerContext, String name,
+            List<Integer> withObjectLocals, int withDepth) {
+        emitWithAwareDeleteIdentifier(compilerContext, name, withObjectLocals, withDepth, false);
     }
 
-    void emitWithAwareDeleteIdentifier(String name, List<Integer> withObjectLocals, int withDepth,
-            boolean fallbackToFalse) {
+    static void emitWithAwareDeleteIdentifier(CompilerContext compilerContext, String name,
+            List<Integer> withObjectLocals, int withDepth, boolean fallbackToFalse) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (withDepth >= withObjectLocals.size()) {
             if (fallbackToFalse) {
                 emitter.emitOpcode(Opcode.PUSH_FALSE);
@@ -210,19 +218,20 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
         // Load with-object and check if it has the property
         emitter.emitGetLocal(withObjectLocalIndex);
-        emitWithObjectDelete(name,
-                () -> emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth + 1, fallbackToFalse));
+        emitWithObjectDelete(compilerContext, name, () -> emitWithAwareDeleteIdentifier(compilerContext, name,
+                withObjectLocals, withDepth + 1, fallbackToFalse));
     }
 
-    private void emitWithAwareIdentifierLookup(String name) {
+    private static void emitWithAwareIdentifierLookup(CompilerContext compilerContext, String name) {
         List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
-        emitWithAwareIdentifierLookup(name, withObjectLocals, 0, false);
+        emitWithAwareIdentifierLookup(compilerContext, name, withObjectLocals, 0, false);
     }
 
-    private void emitWithAwareIdentifierLookup(String name, List<Integer> withObjectLocals, int withDepth,
-            boolean forCall) {
+    private static void emitWithAwareIdentifierLookup(CompilerContext compilerContext, String name,
+            List<Integer> withObjectLocals, int withDepth, boolean forCall) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (withDepth >= withObjectLocals.size()) {
-            emitIdentifierLookupWithoutWith(name);
+            emitIdentifierLookupWithoutWith(compilerContext, name);
             if (forCall) {
                 emitter.emitOpcode(Opcode.UNDEFINED);
             }
@@ -231,30 +240,31 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
         emitter.emitGetLocal(withObjectLocalIndex);
-        emitWithObjectLookup(name, forCall,
-                () -> emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1, forCall));
+        emitWithObjectLookup(compilerContext, name, forCall,
+                () -> emitWithAwareIdentifierLookup(compilerContext, name, withObjectLocals, withDepth + 1, forCall));
     }
 
-    void emitWithAwareIdentifierLookupForCall(String name) {
+    static void emitWithAwareIdentifierLookupForCall(CompilerContext compilerContext, String name) {
         List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
         if (!withObjectLocals.isEmpty()) {
-            emitWithAwareIdentifierLookup(name, withObjectLocals, 0, true);
+            emitWithAwareIdentifierLookup(compilerContext, name, withObjectLocals, 0, true);
             return;
         }
         if (!compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
-            emitInheritedWithAwareIdentifierLookup(name, compilerContext.withObjectManager.getInheritedBindingNames(),
-                    0, true);
+            emitInheritedWithAwareIdentifierLookup(compilerContext, name,
+                    compilerContext.withObjectManager.getInheritedBindingNames(), 0, true);
             return;
         }
-        emitIdentifierLookupWithoutWith(name);
-        emitter.emitOpcode(Opcode.UNDEFINED);
+        emitIdentifierLookupWithoutWith(compilerContext, name);
+        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
     }
 
     /**
      * Resolve a delete against the with-object already on the stack. Stack: withObject -> boolean. The fallback starts
      * with the with-object removed.
      */
-    private void emitWithObjectDelete(String name, Runnable emitFallback) {
+    private static void emitWithObjectDelete(CompilerContext compilerContext, String name, Runnable emitFallback) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
         emitter.emitPushConstant(new JSString(name));
         emitter.emitOpcode(Opcode.DELETE);
@@ -269,10 +279,12 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
      * withObject (call). GetBindingValue must repeat HasProperty after HasBinding and the unscopables check: proxy
      * traps or getters may have removed the binding in between.
      */
-    private void emitWithObjectLookup(String name, boolean forCall, Runnable emitFallback) {
+    private static void emitWithObjectLookup(CompilerContext compilerContext, String name, boolean forCall,
+            Runnable emitFallback) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
         int jumpToMissingBinding = WithBindingCompiler.emitHasPropertyTest(emitter, name);
-        emitWithPropertyLookup(name, forCall);
+        emitWithPropertyLookup(compilerContext, name, forCall);
         int jumpToEnd = emitter.emitJump(Opcode.GOTO);
 
         emitter.patchJumpToHere(jumpToMissingBinding);
@@ -297,7 +309,8 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         emitter.patchJumpToHere(jumpToEndFromMissing);
     }
 
-    private void emitWithPropertyLookup(String name, boolean forCall) {
+    private static void emitWithPropertyLookup(CompilerContext compilerContext, String name, boolean forCall) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitOpcodeAtom(forCall ? Opcode.GET_FIELD2 : Opcode.GET_FIELD, name);
         if (forCall) {
             emitter.emitOpcode(Opcode.SWAP);

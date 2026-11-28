@@ -25,13 +25,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles if-statement AST nodes into bytecode.
  */
-final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
-    IfStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class IfStatementCompiler {
+    private IfStatementCompiler() {
     }
 
-    @Override
-    void compile(IfStatement ifStmt) {
+    static void compile(CompilerContext compilerContext, IfStatement ifStmt) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // In strict mode, function declarations are not allowed as direct body of if/else
         // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.
         if (compilerContext.strictMode) {
@@ -50,13 +49,13 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
         }
 
         // Compile condition
-        compilerContext.expressionCompiler.compile(ifStmt.getTest());
+        compilerContext.compileExpression(ifStmt.getTest());
 
         // Jump to else/end if condition is false
         int jumpToElse = emitter.emitJump(Opcode.IF_FALSE);
 
         // Compile consequent — wrap bare function declarations in implicit block scope
-        compileImplicitBlockStatement(ifStmt.getConsequent());
+        compileImplicitBlockStatement(compilerContext, ifStmt.getConsequent());
 
         if (ifStmt.getAlternate() != null) {
             // Jump over else block after consequent
@@ -66,7 +65,7 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
             emitter.patchJumpToHere(jumpToElse);
 
             // Compile alternate — wrap bare function declarations in implicit block scope
-            compileImplicitBlockStatement(ifStmt.getAlternate());
+            compileImplicitBlockStatement(compilerContext, ifStmt.getAlternate());
 
             // Patch jump to end
             emitter.patchJumpToHere(jumpToEnd);
@@ -81,17 +80,17 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
      * declarations in if-statement positions are treated as if wrapped in a block. This ensures the function binding is
      * block-scoped and does not overwrite outer let/const bindings when Annex B is skipped.
      */
-    private void compileImplicitBlockStatement(Statement stmt) {
+    private static void compileImplicitBlockStatement(CompilerContext compilerContext, Statement stmt) {
         if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.getId() != null) {
             // Per ES2024 B.3.3, function declarations in if-statement positions
             // are treated as if wrapped in a block scope.
             compilerContext.scopeManager.enterScope();
             compilerContext.scopeManager.currentScope().declareLocal(funcDecl.getId().getName());
             FunctionDeclarationCompiler.compile(compilerContext, funcDecl);
-            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+            EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
             compilerContext.scopeManager.exitScope();
         } else {
-            compilerContext.statementCompiler.compileNestedStatement(stmt);
+            StatementCompiler.compileNestedStatement(compilerContext, stmt);
         }
     }
 }

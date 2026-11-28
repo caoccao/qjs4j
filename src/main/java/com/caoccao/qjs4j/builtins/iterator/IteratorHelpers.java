@@ -101,7 +101,7 @@ final class IteratorHelpers {
         }
         JSValue result = mode == ReturnMode.SAFE
                 ? callSafe(context, returnFunctionValue, iteratorObject, JSValue.NO_ARGS)
-                : returnFunctionValue.call(context, iteratorObject, JSValue.NO_ARGS);
+                : returnFunctionValue.call(context, iteratorObject);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -148,8 +148,7 @@ final class IteratorHelpers {
             while (sourceIndex < sources.size()) {
                 if (currentIterator == null) {
                     ConcatSource source = sources.get(sourceIndex);
-                    JSValue iteratorValue = source.iteratorMethod().call(context, source.sourceObject(),
-                            JSValue.NO_ARGS);
+                    JSValue iteratorValue = source.iteratorMethod().call(context, source.sourceObject());
                     if (context.hasPendingException()) {
                         done = true;
                         return context.getPendingException();
@@ -273,7 +272,7 @@ final class IteratorHelpers {
                     if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
                         return fail(context, "not a function");
                     }
-                    JSValue mappedIteratorValue = iteratorFunction.call(context, mappedObject, JSValue.NO_ARGS);
+                    JSValue mappedIteratorValue = iteratorFunction.call(context, mappedObject);
                     if (context.hasPendingException()) {
                         return fail(context, null);
                     }

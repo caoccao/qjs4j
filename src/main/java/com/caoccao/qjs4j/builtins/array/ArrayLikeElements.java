@@ -122,8 +122,8 @@ final class ArrayLikeElements {
             if (accumulator == null) {
                 accumulator = element;
             } else {
-                accumulator = JSCall.call(context, callback, JSUndefined.INSTANCE,
-                        new JSValue[]{accumulator, element, JSNumber.of(i), object});
+                accumulator = JSCall.call(context, callback, JSUndefined.INSTANCE, accumulator, element, JSNumber.of(i),
+                        object);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -175,7 +175,7 @@ final class ArrayLikeElements {
 
     static JSValue callElement(JSContext context, JSValue callback, JSValue thisArg, JSValue element, long index,
             JSObject receiver) {
-        return JSCall.call(context, callback, thisArg, new JSValue[]{element, JSNumber.of(index), receiver});
+        return JSCall.call(context, callback, thisArg, element, JSNumber.of(index), receiver);
     }
 
     static ArrayLikeElements capture(JSContext context, JSObject object) {

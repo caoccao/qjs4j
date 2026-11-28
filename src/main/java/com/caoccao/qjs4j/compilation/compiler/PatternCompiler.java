@@ -23,18 +23,16 @@ import com.caoccao.qjs4j.vm.Opcode;
  * Delegate compiler for pattern matching and destructuring assignment compilation. Handles assignment targets, pattern
  * assignments, and destructuring for arrays and objects.
  */
-final class PatternCompiler extends AstNodeCompiler<Pattern> {
+final class PatternCompiler {
 
-    PatternCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private PatternCompiler() {
     }
 
-    @Override
-    void compile(Pattern pattern) {
+    static void compile(CompilerContext compilerContext, Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            compilerContext.identifierPatternCompiler.compile(id);
+            IdentifierPatternCompiler.compile(compilerContext, id);
         } else if (pattern instanceof ObjectPattern objPattern) {
-            compilerContext.objectPatternCompiler.compile(objPattern);
+            ObjectPatternCompiler.compile(compilerContext, objPattern);
         } else if (pattern instanceof ArrayPattern arrPattern) {
             ArrayPatternCompiler.compile(compilerContext, arrPattern);
         } else if (pattern instanceof AssignmentPattern assignPattern) {
@@ -50,7 +48,8 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
      * scope's local (since var is function-scoped, not block-scoped). For let/const, use the normal
      * compilePatternAssignment which creates locals in the current (loop) scope.
      */
-    void compileForOfValueAssignment(Pattern pattern, boolean isVar) {
+    static void compileForOfValueAssignment(CompilerContext compilerContext, Pattern pattern, boolean isVar) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (isVar && pattern instanceof Identifier id) {
             Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
             if (localIndex != null) {
@@ -63,17 +62,17 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
             }
         } else {
             if (isVar) {
-                compileVarPatternAssignment(pattern);
+                compileVarPatternAssignment(compilerContext, pattern);
             } else {
-                compile(pattern);
+                compile(compilerContext, pattern);
             }
         }
     }
 
-    void compileVarPatternAssignment(Pattern pattern) {
+    static void compileVarPatternAssignment(CompilerContext compilerContext, Pattern pattern) {
         boolean previousValue = compilerContext.useExistingBindingInParentScopes;
         compilerContext.useExistingBindingInParentScopes = true;
-        compile(pattern);
+        compile(compilerContext, pattern);
         compilerContext.useExistingBindingInParentScopes = previousValue;
     }
 
@@ -81,7 +80,7 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
      * Declare all variables in a pattern (used for for-of loops with destructuring). This recursively declares
      * variables for Identifier, ArrayPattern, and ObjectPattern.
      */
-    void declarePatternVariables(Pattern pattern) {
+    static void declarePatternVariables(CompilerContext compilerContext, Pattern pattern) {
         if (pattern instanceof Identifier id) {
             // Simple identifier: declare it as a local variable
             compilerContext.scopeManager.currentScope().declareLocal(id.getName());
@@ -91,31 +90,31 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
                 if (element != null) {
                     if (element instanceof RestElement restElement) {
                         // Rest element: declare the argument pattern
-                        declarePatternVariables(restElement.getArgument());
+                        declarePatternVariables(compilerContext, restElement.getArgument());
                     } else {
                         // Regular element: recursively declare
-                        declarePatternVariables(element);
+                        declarePatternVariables(compilerContext, element);
                     }
                 }
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: declare all property variables
             for (ObjectPatternProperty prop : objPattern.getProperties()) {
-                declarePatternVariables(prop.getValue());
+                declarePatternVariables(compilerContext, prop.getValue());
             }
             if (objPattern.getRestElement() != null) {
-                declarePatternVariables(objPattern.getRestElement().getArgument());
+                declarePatternVariables(compilerContext, objPattern.getRestElement().getArgument());
             }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
             // Default value pattern: declare the left-hand side
-            declarePatternVariables(assignPattern.getLeft());
+            declarePatternVariables(compilerContext, assignPattern.getLeft());
         } else if (pattern instanceof RestElement restElement) {
             // Rest element at top level (shouldn't normally happen, but handle it)
-            declarePatternVariables(restElement.getArgument());
+            declarePatternVariables(compilerContext, restElement.getArgument());
         }
     }
 
-    void markPatternConstBindings(Pattern pattern) {
+    static void markPatternConstBindings(CompilerContext compilerContext, Pattern pattern) {
         if (pattern instanceof Identifier id) {
             compilerContext.scopeManager.currentScope().markConstLocal(id.getName());
             return;
@@ -123,26 +122,26 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
         if (pattern instanceof ArrayPattern arrayPattern) {
             for (Pattern element : arrayPattern.getElements()) {
                 if (element != null) {
-                    markPatternConstBindings(element);
+                    markPatternConstBindings(compilerContext, element);
                 }
             }
             return;
         }
         if (pattern instanceof ObjectPattern objectPattern) {
             for (ObjectPatternProperty property : objectPattern.getProperties()) {
-                markPatternConstBindings(property.getValue());
+                markPatternConstBindings(compilerContext, property.getValue());
             }
             if (objectPattern.getRestElement() != null) {
-                markPatternConstBindings(objectPattern.getRestElement().getArgument());
+                markPatternConstBindings(compilerContext, objectPattern.getRestElement().getArgument());
             }
             return;
         }
         if (pattern instanceof AssignmentPattern assignmentPattern) {
-            markPatternConstBindings(assignmentPattern.getLeft());
+            markPatternConstBindings(compilerContext, assignmentPattern.getLeft());
             return;
         }
         if (pattern instanceof RestElement restElement) {
-            markPatternConstBindings(restElement.getArgument());
+            markPatternConstBindings(compilerContext, restElement.getArgument());
         }
     }
 

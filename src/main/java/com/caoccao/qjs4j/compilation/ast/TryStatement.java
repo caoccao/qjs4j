@@ -35,7 +35,18 @@ public final class TryStatement extends Statement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+        appendVarDeclarators(collectedVarDeclarators, block);
+        if (handler != null) {
+            appendVarDeclarators(collectedVarDeclarators, handler.getBody());
+        }
+        appendVarDeclarators(collectedVarDeclarators, finalizer);
+        return collectedVarDeclarators;
+    }
+
+    @Override
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(block) || kind.in(handler) || kind.in(finalizer);
     }
 
@@ -51,24 +62,6 @@ public final class TryStatement extends Statement {
         return handler;
     }
 
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (block != null) {
-                collectedVarDeclarators.addAll(block.getVarDeclarators());
-            }
-            if (handler != null && handler.getBody() != null) {
-                collectedVarDeclarators.addAll(handler.getBody().getVarDeclarators());
-            }
-            if (finalizer != null) {
-                collectedVarDeclarators.addAll(finalizer.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
-    }
-
     public static final class CatchClause extends ASTNode {
         private final BlockStatement body;
         private final Pattern param;
@@ -80,7 +73,7 @@ public final class TryStatement extends Statement {
         }
 
         @Override
-        boolean containsSuspension(Suspension kind) {
+        boolean containsSuspension(SyntaxQuery kind) {
             return kind.in(param) || kind.in(body);
         }
 

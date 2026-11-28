@@ -38,7 +38,7 @@ public final class JSIteratorHelper {
         }
         JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunc) {
-            returnFunc.call(context, iterator, JSValue.NO_ARGS);
+            returnFunc.call(context, iterator);
         }
     }
 
@@ -162,7 +162,7 @@ public final class JSIteratorHelper {
         }
 
         // Call the iterator method to get the iterator
-        JSValue iterator = iteratorFunc.call(context, iterable, JSValue.NO_ARGS);
+        JSValue iterator = iteratorFunc.call(context, iterable);
         if (context.hasPendingException()) {
             return null;
         }
@@ -242,7 +242,7 @@ public final class JSIteratorHelper {
         }
 
         // Call(method, items) to get the iterator
-        JSValue iterator = iteratorFunc.call(context, items, JSValue.NO_ARGS);
+        JSValue iterator = iteratorFunc.call(context, items);
         if (context.hasPendingException()) {
             return null;
         }
@@ -263,7 +263,7 @@ public final class JSIteratorHelper {
         JSArray result = context.createJSArray();
         while (true) {
             // IteratorStep: Call iterator.next()
-            JSValue nextResult = nextFunc.call(context, iterator, JSValue.NO_ARGS);
+            JSValue nextResult = nextFunc.call(context, iterator);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -323,7 +323,7 @@ public final class JSIteratorHelper {
             return null;
         }
 
-        JSValue result = nextFunc.call(context, iterator, JSValue.NO_ARGS);
+        JSValue result = nextFunc.call(context, iterator);
         if (context.hasPendingException()) {
             return null;
         }

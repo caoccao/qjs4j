@@ -41,7 +41,7 @@ public final class LexerTemplateScanner {
             }
 
             if (c == '\'' || c == '"') {
-                position = skipQuotedString(templateStr, position, c);
+                position = skipDelimitedLiteral(templateStr, position, c);
                 regexAllowed = false;
                 continue;
             }
@@ -68,7 +68,7 @@ public final class LexerTemplateScanner {
                 }
 
                 if (regexAllowed) {
-                    position = skipRegexLiteral(templateStr, position);
+                    position = skipDelimitedLiteral(templateStr, position, '/');
                     regexAllowed = false;
                     continue;
                 }
@@ -207,6 +207,37 @@ public final class LexerTemplateScanner {
         return position;
     }
 
+    /** Skip an escaped string or regexp inside a template substitution, including regexp flags. */
+    private static int skipDelimitedLiteral(String source, int start, char delimiter) {
+        boolean regex = delimiter == '/';
+        boolean inCharacterClass = false;
+        int position = start + 1;
+        while (position < source.length()) {
+            char c = source.charAt(position++);
+            if (c == '\\') {
+                if (position < source.length()) {
+                    position++;
+                }
+            } else if (c == '\n' || c == '\r') {
+                break;
+            } else if (regex && c == '[') {
+                inCharacterClass = true;
+            } else if (regex && c == ']') {
+                inCharacterClass = false;
+            } else if (c == delimiter && !inCharacterClass) {
+                if (regex) {
+                    while (position < source.length() && Lexer.isIdentifierPart(source.charAt(position))) {
+                        position++;
+                    }
+                }
+                return position;
+            }
+        }
+        throw new JSSyntaxErrorException(regex
+                ? "Unterminated regex literal in template expression"
+                : "Unterminated string in template expression");
+    }
+
     private static int skipLineComment(String source, int position) {
         while (position < source.length() && source.charAt(position) != '\n' && source.charAt(position) != '\r') {
             position++;
@@ -243,59 +274,6 @@ public final class LexerTemplateScanner {
             position++;
         }
         return position == start ? start + 1 : position;
-    }
-
-    private static int skipQuotedString(String source, int quotePos, char quote) {
-        int position = quotePos + 1;
-        while (position < source.length()) {
-            char c = source.charAt(position);
-            if (c == '\\') {
-                position = Math.min(position + 2, source.length());
-                continue;
-            }
-            if (c == quote) {
-                return position + 1;
-            }
-            if (c == '\n' || c == '\r') {
-                throw new JSSyntaxErrorException("Unterminated string in template expression");
-            }
-            position++;
-        }
-        throw new JSSyntaxErrorException("Unterminated string in template expression");
-    }
-
-    private static int skipRegexLiteral(String source, int slashPos) {
-        int position = slashPos + 1;
-        boolean inCharacterClass = false;
-        while (position < source.length()) {
-            char c = source.charAt(position);
-            if (c == '\\') {
-                position = Math.min(position + 2, source.length());
-                continue;
-            }
-            if (c == '[') {
-                inCharacterClass = true;
-                position++;
-                continue;
-            }
-            if (c == ']' && inCharacterClass) {
-                inCharacterClass = false;
-                position++;
-                continue;
-            }
-            if (c == '/' && !inCharacterClass) {
-                position++;
-                while (position < source.length() && Lexer.isIdentifierPart(source.charAt(position))) {
-                    position++;
-                }
-                return position;
-            }
-            if (c == '\n' || c == '\r') {
-                throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
-            }
-            position++;
-        }
-        throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
     }
 
     static int templateEnd(String source, int start) {

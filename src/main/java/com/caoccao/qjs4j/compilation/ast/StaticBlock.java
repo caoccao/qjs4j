@@ -33,7 +33,7 @@ public final class StaticBlock extends ClassElement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(body);
     }
 

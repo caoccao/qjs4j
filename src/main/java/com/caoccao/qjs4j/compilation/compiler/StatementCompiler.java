@@ -27,39 +27,37 @@ import java.util.Set;
  * Compiles statement AST nodes into bytecode. Extracted from BytecodeCompiler to separate statement compilation
  * concerns.
  */
-final class StatementCompiler extends AstNodeCompiler<Statement> {
-    StatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class StatementCompiler {
+    private StatementCompiler() {
     }
 
-    @Override
-    void compile(Statement stmt) {
+    static void compile(CompilerContext compilerContext, Statement stmt) {
         if (stmt == null) {
             // An absent statement, such as the hoisted-away body of an Annex B `else function f() {}`.
             return;
         }
         // The fallback position of everything the statement emits, for stack traces.
-        emitter.emitSourcePosition(stmt.getLocation());
+        compilerContext.emitter.emitSourcePosition(stmt.getLocation());
         if (stmt instanceof ExpressionStatement exprStmt) {
-            compileExpressionStatement(exprStmt.getExpression());
+            compileExpressionStatement(compilerContext, exprStmt.getExpression());
         } else if (stmt instanceof BlockStatement block) {
             BlockStatementCompiler.compile(compilerContext, block);
         } else if (stmt instanceof IfStatement ifStmt) {
-            compilerContext.ifStatementCompiler.compile(ifStmt);
+            IfStatementCompiler.compile(compilerContext, ifStmt);
         } else if (stmt instanceof WhileLoop loop) {
-            compilerContext.whileStatementCompiler.compile(loop);
+            WhileStatementCompiler.compile(compilerContext, loop);
         } else if (stmt instanceof ForStatement forStmt) {
             ForStatementCompiler.compile(compilerContext, forStmt);
         } else if (stmt instanceof ForEachStatement forEach) {
-            compilerContext.forEachStatementCompiler.compile(forEach);
+            ForEachStatementCompiler.compile(compilerContext, forEach);
         } else if (stmt instanceof ReturnStatement retStmt) {
             ReturnStatementCompiler.compile(compilerContext, retStmt);
         } else if (stmt instanceof JumpStatement jump) {
-            compilerContext.jumpStatementCompiler.compile(jump);
+            JumpStatementCompiler.compile(compilerContext, jump);
         } else if (stmt instanceof ThrowStatement throwStmt) {
             ThrowStatementCompiler.compile(compilerContext, throwStmt);
         } else if (stmt instanceof TryStatement tryStmt) {
-            compilerContext.tryStatementCompiler.compile(tryStmt);
+            TryStatementCompiler.compile(compilerContext, tryStmt);
         } else if (stmt instanceof SwitchStatement switchStmt) {
             SwitchStatementCompiler.compile(compilerContext, switchStmt);
         } else if (stmt instanceof WithStatement withStmt) {
@@ -71,14 +69,30 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
         } else if (stmt instanceof FunctionDeclaration funcDecl) {
             FunctionDeclarationCompiler.compile(compilerContext, funcDecl);
         } else if (stmt instanceof ClassDeclaration classDecl) {
-            compilerContext.classDeclarationCompiler.compile(classDecl);
+            ClassDeclarationCompiler.compile(compilerContext, classDecl);
         } else if (stmt instanceof LabeledStatement labeledStmt) {
-            compilerContext.labeledStatementCompiler.compile(labeledStmt);
+            LabeledStatementCompiler.compile(compilerContext, labeledStmt);
         }
     }
 
-    private void compileExpressionStatement(Expression expr) {
-        compilerContext.expressionCompiler.compile(expr);
+    static void compileBlockStatements(CompilerContext compilerContext, List<Statement> statements) {
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
+        for (Statement stmt : statements) {
+            FunctionDeclaration hoistedFunction = stmt.unwrapLabeledFunctionDeclaration();
+            if (hoistedFunction != null) {
+                // Per Annex B.3.3: emit the var store at the source position
+                EmitHelpers.emitDeferredAnnexBVarStore(compilerContext, hoistedFunction);
+                continue;
+            }
+            compilerContext.compileStatement(stmt);
+        }
+        compilerContext.isLastInProgram = savedIsLastInProgram;
+    }
+
+    private static void compileExpressionStatement(CompilerContext compilerContext, Expression expr) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        compilerContext.compileExpression(expr);
         if (compilerContext.evalReturnLocalIndex >= 0) {
             emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         } else if (!compilerContext.isLastInProgram) {
@@ -86,23 +100,32 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
         }
     }
 
-    void compileNestedStatement(Statement statement) {
+    static void compileNestedStatement(CompilerContext compilerContext, Statement statement) {
         boolean saved = compilerContext.isLastInProgram;
         compilerContext.isLastInProgram = false;
         try {
-            compile(statement);
+            compile(compilerContext, statement);
         } finally {
             compilerContext.isLastInProgram = saved;
         }
     }
 
-    public void emitEvalReturnUndefinedIfNeeded() {
+    static void emitEvalReturnUndefinedIfNeeded(CompilerContext compilerContext) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
     }
 
-    private void initializeLexicalBinding(String name, boolean immutable) {
+    static void hoistBlockFunctions(CompilerContext compilerContext, List<Statement> statements) {
+        for (Statement stmt : statements) {
+            FunctionDeclaration funcDecl = stmt.unwrapLabeledFunctionDeclaration();
+            if (funcDecl != null) {
+                FunctionDeclarationCompiler.compile(compilerContext, funcDecl);
+            }
+        }
+    }
+
+    private static void initializeLexicalBinding(CompilerContext compilerContext, String name, boolean immutable) {
         var scope = compilerContext.scopeManager.currentScope();
         Integer index = scope.getLocal(name);
         if (index == null) {
@@ -111,31 +134,32 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
         if (immutable) {
             scope.markConstLocal(name);
         }
-        emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, index);
+        compilerContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, index);
         compilerContext.tdzLocals.add(name);
     }
 
-    void predeclareLexicalBindings(List<Statement> statements, boolean includeFunctions) {
+    static void predeclareLexicalBindings(CompilerContext compilerContext, List<Statement> statements,
+            boolean includeFunctions) {
         for (Statement statement : statements) {
             if (statement instanceof VariableDeclaration declaration && declaration.getKind() != VariableKind.VAR) {
                 boolean immutable = declaration.getKind().isImmutable();
                 for (VariableDeclarator declarator : declaration.getDeclarations()) {
                     if (declarator.getId() instanceof Identifier identifier) {
-                        initializeLexicalBinding(identifier.getName(), immutable);
+                        initializeLexicalBinding(compilerContext, identifier.getName(), immutable);
                         continue;
                     }
                     Set<String> names = new HashSet<>();
-                    compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), names);
+                    CompilerAnalysis.collectPatternBindingNames(declarator.getId(), names);
                     for (String name : names) {
-                        initializeLexicalBinding(name, immutable);
+                        initializeLexicalBinding(compilerContext, name, immutable);
                     }
                 }
             } else if (statement instanceof ClassDeclaration declaration && declaration.getId() != null) {
-                initializeLexicalBinding(declaration.getId().getName(), false);
+                initializeLexicalBinding(compilerContext, declaration.getId().getName(), false);
             } else if (includeFunctions) {
                 FunctionDeclaration function = statement.unwrapLabeledFunctionDeclaration();
                 if (function != null && function.getId() != null) {
-                    initializeLexicalBinding(function.getId().getName(), false);
+                    initializeLexicalBinding(compilerContext, function.getId().getName(), false);
                 }
             }
         }

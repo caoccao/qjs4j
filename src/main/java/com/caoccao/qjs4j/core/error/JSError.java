@@ -267,8 +267,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
         errorConstructor.defineProperty(PropertyKey.fromString("captureStackTrace"),
                 new JSNativeFunction(context, "captureStackTrace", 2, JSError::captureStackTrace),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        errorConstructor.defineProperty(STACK_TRACE_LIMIT, JSNumber.of(DEFAULT_STACK_TRACE_LIMIT),
-                PropertyDescriptor.DataState.All);
+        errorConstructor.createDataProperty(STACK_TRACE_LIMIT, JSNumber.of(DEFAULT_STACK_TRACE_LIMIT));
 
         // Constructor property on prototype (writable, non-enumerable, configurable)
         errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR, errorConstructor,

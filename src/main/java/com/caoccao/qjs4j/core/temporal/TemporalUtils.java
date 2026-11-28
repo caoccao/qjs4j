@@ -409,6 +409,13 @@ public final class TemporalUtils {
         return secondDifference.add(BigInteger.valueOf(nanosecondDifference));
     }
 
+    /** Read an optional integer component of an ISO reference date. */
+    public static int optionalIntegerArgument(JSContext context, JSValue[] args, int index, int defaultValue) {
+        return index >= args.length || args[index] instanceof JSUndefined
+                ? defaultValue
+                : toIntegerThrowOnInfinity(context, args[index]);
+    }
+
     /** An options bag whose overflow value has already been validated. */
     public static JSObject overflowOptions(JSContext context, String overflow) {
         JSObject options = new JSObject(context);

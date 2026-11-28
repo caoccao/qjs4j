@@ -74,7 +74,7 @@ final class GlobalFunctionBindings {
     static void prepareEvalFunction(JSObject global, String name, PropertyDescriptor existing) {
         if (existing == null || existing.isConfigurable()) {
             JSValue value = existing != null && existing.hasValue() ? existing.getValue() : JSUndefined.INSTANCE;
-            global.defineProperty(PropertyKey.fromString(name), value, PropertyDescriptor.DataState.All);
+            global.createDataProperty(PropertyKey.fromString(name), value);
         }
     }
 }

@@ -378,7 +378,7 @@ public final class ObjectPrototype {
                     if (getter == null) {
                         return JSUndefined.INSTANCE;
                     }
-                    return getter.call(context, receiver, JSValue.NO_ARGS);
+                    return getter.call(context, receiver);
                 }
                 JSValue value = descriptor.getValue();
                 return value != null ? value : JSUndefined.INSTANCE;
@@ -515,7 +515,7 @@ public final class ObjectPrototype {
             return context.getPendingException();
         }
         if (toStringMethod instanceof JSFunction func) {
-            return func.call(context, thisArg, JSValue.NO_ARGS);
+            return func.call(context, thisArg);
         }
         return context.throwTypeError("toString is not a function");
     }

@@ -23,21 +23,20 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class ProgramCompiler extends AstNodeCompiler<Program> {
-    ProgramCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ProgramCompiler {
+    private ProgramCompiler() {
     }
 
-    @Override
-    void compile(Program program) {
+    static void compile(CompilerContext compilerContext, Program program) {
         if (program.isModule()) {
-            compileModule(program);
+            compileModule(compilerContext, program);
         } else {
-            compileScript(program);
+            compileScript(compilerContext, program);
         }
     }
 
-    private void compileModule(Program program) {
+    private static void compileModule(CompilerContext compilerContext, Program program) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         compilerContext.inGlobalScope = false;
         compilerContext.isGlobalProgram = false;
         compilerContext.strictMode = true;
@@ -62,11 +61,10 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             if (statement instanceof VariableDeclaration variableDeclaration) {
                 if (variableDeclaration.getKind() == VariableKind.VAR) {
                     for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
-                                hoistedVarNames);
+                        CompilerAnalysis.collectPatternBindingNames(declarator.getId(), hoistedVarNames);
                     }
                 } else {
-                    declareLexicals(variableDeclaration, true);
+                    declareLexicals(compilerContext, variableDeclaration, true);
                 }
                 continue;
             }
@@ -76,7 +74,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 FunctionDeclarationCompiler.compile(compilerContext, functionDeclaration);
                 continue;
             }
-            compilerContext.compilerAnalysis.collectVarNamesFromStatement(statement, hoistedVarNames);
+            CompilerAnalysis.collectVarNamesFromStatement(statement, hoistedVarNames);
         }
 
         for (String variableName : hoistedVarNames) {
@@ -109,17 +107,18 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 lastProducesValue = true;
             }
             compilerContext.isLastInProgram = isLast;
-            compilerContext.statementCompiler.compile(statement);
+            compilerContext.compileStatement(statement);
         }
 
         if (!lastProducesValue) {
             emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        finishProgram();
+        finishProgram(compilerContext);
     }
 
-    private void compileScript(Program program) {
+    private static void compileScript(CompilerContext compilerContext, Program program) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         compilerContext.strictMode = program.isStrict(); // Set strict mode from program directive
         boolean useLocalProgramScope = compilerContext.predeclareProgramLexicalsAsLocals && compilerContext.strictMode;
         compilerContext.inGlobalScope = !useLocalProgramScope;
@@ -143,19 +142,19 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             } else if (stmt instanceof VariableDeclaration variableDeclaration) {
                 if (compilerContext.predeclareProgramLexicalsAsLocals
                         && variableDeclaration.getKind() != VariableKind.VAR) {
-                    declareLexicals(variableDeclaration, false);
+                    declareLexicals(compilerContext, variableDeclaration, false);
                 }
                 // Script/global var bindings are non-deletable. Direct eval var/function
                 // bindings are handled dynamically in JSGlobalObject.eval().
                 if (!compilerContext.evalMode) {
                     for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
+                        CompilerAnalysis.collectPatternBindingNames(declarator.getId(),
                                 compilerContext.nonDeletableGlobalBindings);
                     }
                 }
                 // Collect var names for hoisting
                 if (variableDeclaration.getKind() == VariableKind.VAR) {
-                    compilerContext.compilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
+                    CompilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
                 }
             } else {
                 FunctionDeclaration funcDecl = stmt.unwrapLabeledFunctionDeclaration();
@@ -171,7 +170,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                     }
                 } else {
                     // Collect var names from other statements (for, try, if, etc.)
-                    compilerContext.compilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
+                    CompilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
                 }
             }
         }
@@ -188,7 +187,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                     }
                     emitter.emitUndefinedLocal(localIndex);
                 } else {
-                    compilerContext.emitHelpers.emitConditionalVarInit(varName);
+                    EmitHelpers.emitConditionalVarInit(compilerContext, varName);
                 }
             }
         }
@@ -208,7 +207,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
 
         // Phase 1.5: Annex B.3.3.3 - create var bindings for function declarations
         // nested inside blocks, if-statements, catch clauses, etc.
-        compilerContext.compilerAnalysis.scanAnnexBFunctions(body, declaredFuncVarNames);
+        CompilerAnalysis.scanAnnexBFunctions(compilerContext, body, declaredFuncVarNames);
 
         {
             // Scripts and eval share ECMAScript statement completion semantics.
@@ -226,25 +225,26 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 if (stmt.unwrapLabeledFunctionDeclaration() != null) {
                     continue; // Already hoisted in Phase 1
                 }
-                compilerContext.statementCompiler.compile(stmt);
+                compilerContext.compileStatement(stmt);
             }
 
             compilerContext.evalReturnLocalIndex = -1;
 
             emitter.emitGetLocal(evalRetLocalIndex);
         }
-        finishProgram();
+        finishProgram(compilerContext);
     }
 
-    private void declareLexicals(VariableDeclaration declaration, boolean onlyInitializeNew) {
+    private static void declareLexicals(CompilerContext compilerContext, VariableDeclaration declaration,
+            boolean onlyInitializeNew) {
         CompilerScope scope = compilerContext.scopeManager.currentScope();
         Set<String> names = new HashSet<>();
         for (VariableDeclarator declarator : declaration.getDeclarations()) {
-            compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), names);
+            CompilerAnalysis.collectPatternBindingNames(declarator.getId(), names);
         }
         for (String name : names) {
             if (!onlyInitializeNew || scope.getLocal(name) == null) {
-                emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, scope.declareLocal(name));
+                compilerContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, scope.declareLocal(name));
             }
             if (declaration.getKind().isImmutable()) {
                 scope.markConstLocal(name);
@@ -253,9 +253,10 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
         }
     }
 
-    private void finishProgram() {
+    private static void finishProgram(CompilerContext compilerContext) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         int programResultLocalIndex = compilerContext.storeTemporary("#program_result_");
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
         emitter.emitGetLocal(programResultLocalIndex);
         emitter.emitOpcode(Opcode.RETURN);
 

@@ -30,8 +30,8 @@ final class AssignmentPatternCompiler {
     }
 
     static void compile(CompilerContext compilerContext, AssignmentPattern assignPattern) {
-        compilerContext.emitHelpers.emitDefaultValue(
+        EmitHelpers.emitDefaultValue(compilerContext,
                 assignPattern.getLeft() instanceof Identifier id ? id.getName() : null, assignPattern.getRight());
-        compilerContext.patternCompiler.compile(assignPattern.getLeft());
+        compilerContext.compilePattern(assignPattern.getLeft());
     }
 }

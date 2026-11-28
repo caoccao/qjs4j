@@ -23,36 +23,34 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 /**
  * Compiles expression AST nodes into bytecode. Dispatches to specialized expression compilers.
  */
-final class ExpressionCompiler extends AstNodeCompiler<Expression> {
-    ExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ExpressionCompiler {
+    private ExpressionCompiler() {
     }
 
-    @Override
-    void compile(Expression expr) {
+    static void compile(CompilerContext compilerContext, Expression expr) {
         if (expr instanceof Literal literal) {
             LiteralCompiler.compile(compilerContext, literal);
         } else if (expr instanceof Identifier identifier) {
-            compilerContext.identifierCompiler.compile(identifier);
+            IdentifierCompiler.compile(compilerContext, identifier);
         } else if (expr instanceof PrivateIdentifier privateIdentifier) {
             throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'",
                     privateIdentifier);
         } else if (expr instanceof BinaryExpression binExpr) {
-            compilerContext.binaryExpressionCompiler.compile(binExpr);
+            BinaryExpressionCompiler.compile(compilerContext, binExpr);
         } else if (expr instanceof UnaryExpression unaryExpr) {
-            compilerContext.unaryExpressionCompiler.compile(unaryExpr);
+            UnaryExpressionCompiler.compile(compilerContext, unaryExpr);
         } else if (expr instanceof AssignmentExpression assignExpr) {
-            compilerContext.assignmentExpressionCompiler.compile(assignExpr);
+            AssignmentExpressionCompiler.compile(compilerContext, assignExpr);
         } else if (expr instanceof ConditionalExpression condExpr) {
             ConditionalExpressionCompiler.compile(compilerContext, condExpr);
         } else if (expr instanceof CallExpression callExpr) {
-            compilerContext.callExpressionCompiler.compile(callExpr);
+            CallExpressionCompiler.compile(compilerContext, callExpr);
         } else if (expr instanceof MemberExpression memberExpr) {
-            compilerContext.memberExpressionCompiler.compile(memberExpr);
+            MemberExpressionCompiler.compile(compilerContext, memberExpr);
         } else if (expr instanceof NewExpression newExpr) {
             NewExpressionCompiler.compile(compilerContext, newExpr);
         } else if (expr instanceof FunctionExpression functionExpression) {
-            compilerContext.functionExpressionCompiler.compile(functionExpression);
+            FunctionExpressionCompiler.compile(compilerContext, functionExpression);
         } else if (expr instanceof ArrowFunctionExpression arrowExpr) {
             ArrowFunctionExpressionCompiler.compile(compilerContext, arrowExpr);
         } else if (expr instanceof AwaitExpression awaitExpr) {
@@ -66,7 +64,7 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         } else if (expr instanceof TemplateLiteral templateLiteral) {
             TemplateLiteralCompiler.compile(compilerContext, templateLiteral);
         } else if (expr instanceof TaggedTemplateExpression taggedTemplate) {
-            compilerContext.taggedTemplateExpressionCompiler.compile(taggedTemplate);
+            TaggedTemplateExpressionCompiler.compile(compilerContext, taggedTemplate);
         } else if (expr instanceof ClassExpression classExpr) {
             ClassExpressionCompiler.compile(compilerContext, classExpr);
         } else if (expr instanceof SequenceExpression seqExpr) {
@@ -76,23 +74,23 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         }
     }
 
-    void compileNamed(Expression value, String name) {
-        compile(value);
+    static void compileNamed(CompilerContext compilerContext, Expression value, String name) {
+        compile(compilerContext, value);
         if (value.isAnonymousFunction()) {
-            emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
         }
     }
 
     /** Evaluate a computed property name and perform ToPropertyKey before evaluating its value. */
-    void compilePropertyKey(Expression key) {
-        compile(key);
-        emitter.emitOpcode(Opcode.TO_PROPKEY);
+    static void compilePropertyKey(CompilerContext compilerContext, Expression key) {
+        compile(compilerContext, key);
+        compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
     }
 
     /**
      * Extract the actual assignment target from an element, unwrapping default values.
      */
-    private Expression getAssignmentTarget(Expression element) {
+    private static Expression getAssignmentTarget(Expression element) {
         if (element == null) {
             return null;
         }
@@ -108,7 +106,7 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
      * (IteratorDestructuringAssignmentEvaluation step 1a): if the target is not a pattern, evaluate it first to get the
      * reference. Returns the number of values pushed on the stack (the depth for FOR_OF_NEXT).
      */
-    int preEvaluateAssignmentTarget(Expression element) {
+    static int preEvaluateAssignmentTarget(CompilerContext compilerContext, Expression element) {
         Expression target = getAssignmentTarget(element);
         if (target == null) {
             return 0; // hole
@@ -116,14 +114,14 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         if (target instanceof MemberExpression memberExpr && !memberExpr.isOptional()) {
             if (memberExpr.getObject().isSuperIdentifier()) {
                 // Pre-evaluate super reference: this, superObj, key
-                compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
+                EmitHelpers.emitSuperPropertyReference(compilerContext, memberExpr);
                 return 3; // this, superObj, key on stack
             }
             // Pre-evaluate the object
-            compile(memberExpr.getObject());
+            compile(compilerContext, memberExpr.getObject());
             if (memberExpr.isComputed()) {
                 // Pre-evaluate the computed key
-                compile(memberExpr.getProperty());
+                compile(compilerContext, memberExpr.getProperty());
                 return 2; // obj + key on stack
             }
             return 1; // obj on stack

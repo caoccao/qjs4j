@@ -30,27 +30,22 @@ public abstract sealed class ForLoop extends Statement permits ForStatement, For
         this.body = body;
     }
 
+    @Override
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+        if (head instanceof VariableDeclaration variableDeclaration
+                && variableDeclaration.getKind() == VariableKind.VAR) {
+            collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
+        }
+        appendVarDeclarators(collectedVarDeclarators, body);
+        return collectedVarDeclarators;
+    }
+
     public Statement getBody() {
         return body;
     }
 
     public ASTNode getHead() {
         return head;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (head instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
-            }
-            if (body != null) {
-                collectedVarDeclarators.addAll(body.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
     }
 }

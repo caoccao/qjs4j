@@ -60,12 +60,9 @@ public final class TemporalPlainYearMonthConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        int referenceDay = 1;
-        if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
-            referenceDay = TemporalUtils.toIntegerThrowOnInfinity(context, args[3]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        int referenceDay = TemporalUtils.optionalIntegerArgument(context, args, 3, 1);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
         if (!isValidIsoYearMonth(isoYear, isoMonth)) {

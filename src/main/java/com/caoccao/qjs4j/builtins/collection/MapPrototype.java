@@ -147,7 +147,7 @@ public final class MapPrototype {
             return map.mapGet(key);
         }
 
-        JSValue value = JSCall.call(context, callback, JSUndefined.INSTANCE, new JSValue[]{key});
+        JSValue value = JSCall.call(context, callback, JSUndefined.INSTANCE, key);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

@@ -403,7 +403,7 @@ public final class JSPromise extends JSObject {
             return;
         }
         if (reaction.capabilityReject != null) {
-            JSCall.call(reaction.context, reaction.capabilityReject, JSUndefined.INSTANCE, new JSValue[]{reason});
+            JSCall.call(reaction.context, reaction.capabilityReject, JSUndefined.INSTANCE, reason);
         }
     }
 
@@ -413,7 +413,7 @@ public final class JSPromise extends JSObject {
             return;
         }
         if (reaction.capabilityResolve != null) {
-            JSCall.call(reaction.context, reaction.capabilityResolve, JSUndefined.INSTANCE, new JSValue[]{value});
+            JSCall.call(reaction.context, reaction.capabilityResolve, JSUndefined.INSTANCE, value);
         }
     }
 

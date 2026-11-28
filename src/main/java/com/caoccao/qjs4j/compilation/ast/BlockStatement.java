@@ -32,30 +32,24 @@ public final class BlockStatement extends Statement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        if (body == null || body.isEmpty()) {
+            return List.of();
+        }
+        List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+        for (Statement statement : body) {
+            appendVarDeclarators(collectedVarDeclarators, statement);
+        }
+        return collectedVarDeclarators;
+    }
+
+    @Override
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(body);
     }
 
     public List<Statement> getBody() {
         return body;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            if (body == null || body.isEmpty()) {
-                varDeclarators = List.of();
-            } else {
-                List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-                for (Statement statement : body) {
-                    if (statement != null) {
-                        collectedVarDeclarators.addAll(statement.getVarDeclarators());
-                    }
-                }
-                varDeclarators = collectedVarDeclarators;
-            }
-        }
-        return varDeclarators;
     }
 
     public boolean hasUseStrictDirective() {

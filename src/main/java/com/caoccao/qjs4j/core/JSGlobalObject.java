@@ -720,7 +720,7 @@ public final class JSGlobalObject {
                     if (!(returnMethod instanceof JSFunction returnFunction)) {
                         return childContext.throwTypeError("not a function");
                     }
-                    return returnFunction.call(childContext, thisObject, JSValue.NO_ARGS);
+                    return returnFunction.call(childContext, thisObject);
                 }), PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSNativeFunction iteratorConstructor = new JSNativeFunction(context, JSIterator.NAME, 0,

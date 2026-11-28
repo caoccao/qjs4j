@@ -30,12 +30,11 @@ import java.util.Set;
 /**
  * Recursive descent parser for JavaScript. Converts tokens into an Abstract Syntax Tree (AST).
  * <p>
- * This is the public facade that delegates to specialized parser classes: {@link ExpressionParser},
+ * This is the public facade that delegates to specialized parser classes: {@link ExpressionAssignmentParser},
  * {@link StatementParser}, {@link FunctionClassParser}, {@link PatternParser}, and {@link LiteralParser}. All shared
  * mutable state is held in {@link ParserContext}.
  */
 public final class Parser {
-    private final ParserDelegates delegates;
     private final ParserContext parserContext;
 
     public Parser(Lexer lexer) {
@@ -93,7 +92,6 @@ public final class Parser {
         if (allowSuperCallInEval) {
             this.parserContext.inDerivedConstructor = true;
         }
-        this.delegates = new ParserDelegates(parserContext);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing
@@ -114,7 +112,7 @@ public final class Parser {
 
     // Package-private: used by LiteralParser for nested template expression parsing
     Expression parseExpression() {
-        return delegates.expressions.parseExpression();
+        return ExpressionAssignmentParser.parseExpression(parserContext);
     }
 
     private Program parseProgram() {
@@ -129,7 +127,7 @@ public final class Parser {
         parserContext.lexer.setStrictMode(parserContext.strictMode);
 
         while (!parserContext.match(TokenType.EOF)) {
-            Statement stmt = delegates.statements.parseStatement();
+            Statement stmt = StatementParser.parseStatement(parserContext);
             if (stmt != null) {
                 body.add(stmt);
             }
@@ -138,7 +136,7 @@ public final class Parser {
         if (parserContext.moduleMode) {
             validateModuleEarlyErrors(body);
         } else {
-            delegates.declarations.validateProgramEarlyErrors(body);
+            parserContext.declarations.validateProgramEarlyErrors(body);
         }
 
         return new Program(body, parserContext.moduleMode,

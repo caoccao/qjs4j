@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.core.*;
 import java.util.*;
 
 import static com.caoccao.qjs4j.core.intl.IntlBuiltins.canonicalizeLocaleTag;
-import static com.caoccao.qjs4j.core.intl.IntlBuiltins.createDataProperty;
 import static com.caoccao.qjs4j.core.intl.IntlBuiltins.getLocaleDefaultHourCycle;
 
 /** ECMA-402 Intl.Locale construction, accessors and locale information operations. */
@@ -336,7 +335,7 @@ final class IntlLocaleBuiltins {
                 || "ps".equals(lang) || "sd".equals(lang) || "ckb".equals(lang)) {
             direction = "rtl";
         }
-        createDataProperty(result, PropertyKey.DIRECTION, new JSString(direction));
+        result.createDataProperty(PropertyKey.DIRECTION, new JSString(direction));
         return result;
     }
 
@@ -367,13 +366,13 @@ final class IntlLocaleBuiltins {
         if (firstDay < 1) {
             firstDay = getLocaleDefaultFirstDay(intlLocale.getLocale());
         }
-        createDataProperty(result, PropertyKey.FIRST_DAY, JSNumber.of(firstDay));
+        result.createDataProperty(PropertyKey.FIRST_DAY, JSNumber.of(firstDay));
 
         // Weekend days: default Sat-Sun (6, 7) for most locales
         JSArray weekend = context.createJSArray();
         weekend.push(JSNumber.of(6));
         weekend.push(JSNumber.of(7));
-        createDataProperty(result, PropertyKey.WEEKEND, weekend);
+        result.createDataProperty(PropertyKey.WEEKEND, weekend);
 
         return result;
     }

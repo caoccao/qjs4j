@@ -17,14 +17,26 @@
 package com.caoccao.qjs4j.core.temporal.format;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.rounding.TemporalRoundingMode;
 
+import java.util.function.BiFunction;
+
 /** Read both properties before validating them. Zoned and Instant formatting read a zone option in between. */
 record TemporalTimeStringOptions(String roundingMode, String smallestUnit) {
+    static <T> T readOptions(JSContext context, JSValue value, String invalidType, T defaults,
+            BiFunction<JSContext, JSObject, T> reader) {
+        JSObject options = TemporalUtils.toOptionalOptionsObject(context, value, invalidType);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return options == null ? defaults : reader.apply(context, options);
+    }
+
     static TemporalTimeStringOptions read(JSContext context, JSObject options) {
         String mode = TemporalUtils.getStringOption(context, options, "roundingMode", "trunc");
         if (context.hasPendingException()) {

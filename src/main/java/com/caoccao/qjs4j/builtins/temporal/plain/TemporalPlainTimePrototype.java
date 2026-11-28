@@ -105,19 +105,6 @@ public final class TemporalPlainTimePrototype {
                 (left, right) -> left.getIsoTime().compareTo(right.getIsoTime()) == 0);
     }
 
-    private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
-                TemporalError.INVALID_OPTIONS.message());
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionsObject == null) {
-            return TemporalPlainTimeToStringSettings.DEFAULT;
-        }
-
-        return TemporalPlainTimeToStringSettings.read(context, optionsObject);
-    }
-
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
         return TemporalTimeProperty.HOUR.read(context, thisArg, RECEIVER);
     }
@@ -186,7 +173,8 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
         JSValue optionsValue = JSValue.argumentOrUndefined(args, 0);
-        TemporalPlainTimeToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
+        TemporalPlainTimeToStringSettings toStringSettings = TemporalPlainTimeToStringSettings.read(context,
+                optionsValue);
         if (context.hasPendingException() || toStringSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -204,16 +192,12 @@ public final class TemporalPlainTimePrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainTime plainTime = RECEIVER.require(context, thisArg, "with");
-        if (plainTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
-                "Temporal error: Must specify at least one time field.");
-        if (fields == null) {
-            return JSUndefined.INSTANCE;
-        }
+        return RECEIVER.withFields(context, thisArg, args, "Temporal error: Must specify at least one time field.",
+                TemporalPlainTimePrototype::withFields);
+    }
 
+    private static JSValue withFields(JSContext context, JSTemporalPlainTime plainTime, JSObject fields,
+            JSValue[] args) {
         return TemporalPlainTimeConstructor.timeFromFields(context, fields, JSValue.argumentOrUndefined(args, 1),
                 plainTime.getIsoTime(), "Temporal error: Must specify at least one time field.");
     }

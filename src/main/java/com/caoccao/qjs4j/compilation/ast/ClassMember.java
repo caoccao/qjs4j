@@ -35,7 +35,7 @@ public abstract sealed class ClassMember<V extends Expression> extends ClassElem
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(key) || kind.in(value);
     }
 

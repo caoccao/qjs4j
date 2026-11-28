@@ -110,9 +110,9 @@ final class IntlListFormatBuiltins {
         JSObject resolvedOptions = context.createJSObject();
         // Use CreateDataProperty (defineProperty) instead of [[Set]] to avoid
         // triggering getter-only accessors on Object.prototype (per spec §9.1.6.3)
-        createDataProperty(resolvedOptions, PropertyKey.LOCALE, new JSString(listFormat.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, PropertyKey.TYPE, new JSString(listFormat.getType()));
-        createDataProperty(resolvedOptions, PropertyKey.STYLE, new JSString(listFormat.getStyle()));
+        resolvedOptions.createDataProperty(PropertyKey.LOCALE, new JSString(listFormat.getLocale().toLanguageTag()));
+        resolvedOptions.createDataProperty(PropertyKey.TYPE, new JSString(listFormat.getType()));
+        resolvedOptions.createDataProperty(PropertyKey.STYLE, new JSString(listFormat.getStyle()));
         return resolvedOptions;
     }
 
@@ -154,7 +154,7 @@ final class IntlListFormatBuiltins {
         }
 
         // Call the iterator method
-        JSValue iterator = iteratorFunc.call(context, list, JSValue.NO_ARGS);
+        JSValue iterator = iteratorFunc.call(context, list);
         if (context.hasPendingException()) {
             return result;
         }
@@ -175,7 +175,7 @@ final class IntlListFormatBuiltins {
 
         // Iterate
         while (true) {
-            JSValue nextResult = nextFunc.call(context, iterator, JSValue.NO_ARGS);
+            JSValue nextResult = nextFunc.call(context, iterator);
             if (context.hasPendingException()) {
                 return result;
             }
@@ -202,7 +202,7 @@ final class IntlListFormatBuiltins {
                 // IteratorClose: call return() if it exists
                 JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN);
                 if (returnMethod instanceof JSFunction returnFunc) {
-                    returnFunc.call(context, iterator, JSValue.NO_ARGS);
+                    returnFunc.call(context, iterator);
                 }
                 context.throwTypeError("Iterable yielded " + JSTypeConversions.toString(context, value).value()
                         + " which is not a string");

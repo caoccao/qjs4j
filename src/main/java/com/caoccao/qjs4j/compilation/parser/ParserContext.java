@@ -39,9 +39,12 @@ final class ParserContext {
             JSKeyword.SUPER, JSKeyword.SWITCH, JSKeyword.THIS, JSKeyword.THROW, JSKeyword.TRUE, JSKeyword.TRY,
             JSKeyword.TYPEOF, JSKeyword.VAR, JSKeyword.VOID, JSKeyword.WHILE, JSKeyword.WITH);
     final boolean allowNewTargetInEval;
+
     int asyncFunctionNesting;
+
     int classBodyNesting;
     Token currentToken;
+    final DeclarationEarlyErrors declarations = new DeclarationEarlyErrors(this);
     final Set<String> evalPrivateNames;
     int functionNesting;
     int generatorFunctionNesting;
@@ -58,6 +61,7 @@ final class ParserContext {
     final Set<String> moduleExportedNames = new HashSet<>();
     final Set<String> moduleLexicalNames = new HashSet<>();
     final boolean moduleMode;
+    private ModuleDeclarationParser modules;
     final Set<String> moduleVarNames = new HashSet<>();
     boolean needsArguments;
     int newTargetNesting;
@@ -71,7 +75,6 @@ final class ParserContext {
     int statementNesting;
     boolean strictMode;
     boolean superPropertyAllowed;
-
     ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode, int functionNesting,
             int asyncFunctionNesting, int generatorFunctionNesting, int newTargetNesting,
             boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval, Set<String> evalPrivateNames) {
@@ -435,6 +438,13 @@ final class ParserContext {
         return currentToken.type() == type;
     }
 
+    ModuleDeclarationParser modules() {
+        if (modules == null) {
+            modules = new ModuleDeclarationParser(this);
+        }
+        return modules;
+    }
+
     String parseBindingIdentifierName() {
         String name = currentToken.value();
         switch (currentToken.type()) {
@@ -609,28 +619,6 @@ final class ParserContext {
         if (JSKeyword.ARGUMENTS.equals(name) || JSKeyword.EVAL.equals(name)) {
             needsArguments = true;
         }
-    }
-
-    static AssignmentOperator assignmentOperator(TokenType type) {
-        return switch (type) {
-            case ASSIGN -> AssignmentOperator.ASSIGN;
-            case AND_ASSIGN -> AssignmentOperator.AND_ASSIGN;
-            case DIV_ASSIGN -> AssignmentOperator.DIV_ASSIGN;
-            case EXP_ASSIGN -> AssignmentOperator.EXP_ASSIGN;
-            case LOGICAL_AND_ASSIGN -> AssignmentOperator.LOGICAL_AND_ASSIGN;
-            case LOGICAL_OR_ASSIGN -> AssignmentOperator.LOGICAL_OR_ASSIGN;
-            case LSHIFT_ASSIGN -> AssignmentOperator.LSHIFT_ASSIGN;
-            case MINUS_ASSIGN -> AssignmentOperator.MINUS_ASSIGN;
-            case MOD_ASSIGN -> AssignmentOperator.MOD_ASSIGN;
-            case MUL_ASSIGN -> AssignmentOperator.MUL_ASSIGN;
-            case NULLISH_ASSIGN -> AssignmentOperator.NULLISH_ASSIGN;
-            case OR_ASSIGN -> AssignmentOperator.OR_ASSIGN;
-            case PLUS_ASSIGN -> AssignmentOperator.PLUS_ASSIGN;
-            case RSHIFT_ASSIGN -> AssignmentOperator.RSHIFT_ASSIGN;
-            case URSHIFT_ASSIGN -> AssignmentOperator.URSHIFT_ASSIGN;
-            case XOR_ASSIGN -> AssignmentOperator.XOR_ASSIGN;
-            default -> null;
-        };
     }
 
     static boolean isAlwaysReservedIdentifierName(String name) {

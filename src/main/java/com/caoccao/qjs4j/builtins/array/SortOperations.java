@@ -86,7 +86,7 @@ final class SortOperations {
     }
 
     static int compareWithCallback(JSContext context, JSValue comparator, JSValue left, JSValue right) {
-        JSValue result = JSCall.call(context, comparator, JSUndefined.INSTANCE, new JSValue[]{left, right});
+        JSValue result = JSCall.call(context, comparator, JSUndefined.INSTANCE, left, right);
         if (context.hasPendingException()) {
             return 0;
         }

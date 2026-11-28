@@ -41,7 +41,7 @@ final class CollectionInitializer {
         JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
             try {
-                returnFunction.call(context, iterator, JSValue.NO_ARGS);
+                returnFunction.call(context, iterator);
             } catch (RuntimeException ignored) {
                 // Per spec, the original error takes precedence over iterator close errors
             }
@@ -75,7 +75,7 @@ final class CollectionInitializer {
         JSObject iterator = iteratorRecord.iterator();
 
         while (true) {
-            JSValue result = iteratorRecord.nextMethod().call(context, iterator, JSValue.NO_ARGS);
+            JSValue result = iteratorRecord.nextMethod().call(context, iterator);
             // Failures from advancing the iterator do not close it.
             if (context.hasPendingException()) {
                 return returnAbruptResult(context, collection);

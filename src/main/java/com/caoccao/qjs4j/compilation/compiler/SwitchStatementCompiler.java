@@ -33,7 +33,7 @@ final class SwitchStatementCompiler {
         }
 
         // Compile discriminant
-        compilerContext.expressionCompiler.compile(switchStmt.getDiscriminant());
+        compilerContext.compileExpression(switchStmt.getDiscriminant());
 
         compilerContext.pushState();
         compilerContext.scopeManager.enterScope();
@@ -41,7 +41,7 @@ final class SwitchStatementCompiler {
 
         // Switch creates a lexical environment before evaluating case selectors.
         for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
-            compilerContext.statementCompiler.predeclareLexicalBindings(switchCase.getConsequent(), true);
+            StatementCompiler.predeclareLexicalBindings(compilerContext, switchCase.getConsequent(), true);
         }
 
         // BlockDeclarationInstantiation for switch case block: initialize function declarations.
@@ -49,12 +49,7 @@ final class SwitchStatementCompiler {
         // Suppress Annex B var store during hoisting — it's deferred to the source position.
         compilerContext.suppressAnnexBVarStore = true;
         for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
-            for (Statement statement : switchCase.getConsequent()) {
-                FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
-                if (functionDeclaration != null) {
-                    FunctionDeclarationCompiler.compile(compilerContext, functionDeclaration);
-                }
-            }
+            StatementCompiler.hoistBlockFunctions(compilerContext, switchCase.getConsequent());
         }
         compilerContext.suppressAnnexBVarStore = false;
 
@@ -69,7 +64,7 @@ final class SwitchStatementCompiler {
             if (switchCase.getTest() != null) {
                 // Duplicate discriminant for comparison
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.expressionCompiler.compile(switchCase.getTest());
+                compilerContext.compileExpression(switchCase.getTest());
                 compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
 
                 // If no match, skip to next test
@@ -105,18 +100,7 @@ final class SwitchStatementCompiler {
                 defaultBodyStart = compilerContext.emitter.currentOffset();
             }
 
-            boolean savedIsLastInProgram = compilerContext.isLastInProgram;
-            compilerContext.isLastInProgram = false;
-            for (Statement stmt : switchCase.getConsequent()) {
-                FunctionDeclaration hoistedFunction = stmt.unwrapLabeledFunctionDeclaration();
-                if (hoistedFunction != null) {
-                    // Per Annex B.3.3: emit the var store at the source position
-                    compilerContext.emitHelpers.emitDeferredAnnexBVarStore(hoistedFunction);
-                    continue;
-                }
-                compilerContext.statementCompiler.compile(stmt);
-            }
-            compilerContext.isLastInProgram = savedIsLastInProgram;
+            StatementCompiler.compileBlockStatements(compilerContext, switchCase.getConsequent());
         }
 
         int switchEnd = compilerContext.emitter.currentOffset();
@@ -138,7 +122,7 @@ final class SwitchStatementCompiler {
 
         compilerContext.loopManager.popLoop();
 
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }

@@ -26,22 +26,20 @@ import com.caoccao.qjs4j.vm.Opcode;
  * Compiles assignment targets (destructuring assignment LHS) into bytecode. Dispatches to dedicated compilers for
  * Identifier, MemberExpression, ArrayExpression, and ObjectExpression targets.
  */
-final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Expression> {
+final class ExpressionDestructuringAssignmentCompiler {
 
-    ExpressionDestructuringAssignmentCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private ExpressionDestructuringAssignmentCompiler() {
     }
 
-    @Override
-    void compile(Expression target) {
+    static void compile(CompilerContext compilerContext, Expression target) {
         // Stack: [value]
         // Assign value to target and pop value from stack
         if (target instanceof Identifier id) {
-            compilerContext.identifierDestructuringAssignmentCompiler.compile(id);
+            IdentifierDestructuringAssignmentCompiler.compile(compilerContext, id);
         } else if (target instanceof MemberExpression memberExpr) {
             MemberExpressionDestructuringAssignmentCompiler.compile(compilerContext, memberExpr);
         } else if (target instanceof ArrayExpression nestedArray) {
-            compilerContext.arrayExpressionDestructuringAssignmentCompiler.compile(nestedArray);
+            ArrayExpressionDestructuringAssignmentCompiler.compile(compilerContext, nestedArray);
         } else if (target instanceof ObjectExpression nestedObj) {
             ObjectExpressionDestructuringAssignmentCompiler.compile(compilerContext, nestedObj);
         } else {
@@ -49,31 +47,32 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
         }
     }
 
-    void compileFromPreEvaluated(Expression element, int depth) {
+    static void compileFromPreEvaluated(CompilerContext compilerContext, Expression element, int depth) {
         Expression target = element;
         if (element instanceof AssignmentExpression assignment
                 && assignment.getOperator() == AssignmentOperator.ASSIGN) {
             target = assignment.getLeft();
-            compilerContext.emitHelpers.emitDefaultValue(target instanceof Identifier id ? id.getName() : null,
+            EmitHelpers.emitDefaultValue(compilerContext, target instanceof Identifier id ? id.getName() : null,
                     assignment.getRight());
         }
         if (depth == 0) {
-            compile(target);
+            compile(compilerContext, target);
         } else if (target instanceof MemberExpression member) {
             MemberExpressionDestructuringAssignmentCompiler.store(compilerContext, member, true);
         }
     }
 
-    void compileIterationTarget(Expression leftExpression) {
+    static void compileIterationTarget(CompilerContext compilerContext, Expression leftExpression) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (leftExpression instanceof CallExpression) {
             emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compile(leftExpression);
+            compilerContext.compileExpression(leftExpression);
             emitter.emitOpcode(Opcode.DROP);
             emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
             emitter.emitU8(5);
             return;
         }
-        compile(leftExpression);
+        compile(compilerContext, leftExpression);
     }
 
 }

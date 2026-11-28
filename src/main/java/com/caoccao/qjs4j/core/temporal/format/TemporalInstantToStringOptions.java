@@ -29,12 +29,11 @@ public record TemporalInstantToStringOptions(TemporalFractionalSecondDigitsOptio
             TemporalFractionalSecondDigitsOption.autoOption(), TemporalRoundingMode.TRUNC, null, null);
 
     public static TemporalInstantToStringOptions read(JSContext context, JSValue optionsArg) {
-        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsArg,
-                "Temporal error: Options must be an object.");
-        if (context.hasPendingException() || optionsObject == null) {
-            return context.hasPendingException() ? null : DEFAULT;
-        }
+        return TemporalTimeStringOptions.readOptions(context, optionsArg, "Temporal error: Options must be an object.",
+                DEFAULT, TemporalInstantToStringOptions::readFields);
+    }
 
+    private static TemporalInstantToStringOptions readFields(JSContext context, JSObject optionsObject) {
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
                 .read(context, optionsObject);
         if (fractionalSecondDigitsOption == null) {

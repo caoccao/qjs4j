@@ -23,33 +23,20 @@ import java.util.List;
  * last one. Example: (a = 1, b = 2, a + b)
  */
 public final class SequenceExpression extends Expression {
-    private Boolean directEvalVarArgumentsInside;
     private final List<Expression> expressions;
 
     public SequenceExpression(List<Expression> expressions, SourceLocation location) {
         super(location);
         this.expressions = expressions;
-        directEvalVarArgumentsInside = null;
     }
 
     @Override
-    public boolean containsDirectEvalVarArguments() {
-        if (directEvalVarArgumentsInside == null) {
-            directEvalVarArgumentsInside = false;
-            if (expressions != null) {
-                for (Expression expression : expressions) {
-                    if (expression != null && expression.containsDirectEvalVarArguments()) {
-                        directEvalVarArgumentsInside = true;
-                        break;
-                    }
-                }
-            }
-        }
-        return directEvalVarArgumentsInside;
+    boolean computeDirectEvalVarArguments() {
+        return SyntaxQuery.DIRECT_EVAL_VAR_ARGUMENTS.in(expressions);
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(expressions);
     }
 

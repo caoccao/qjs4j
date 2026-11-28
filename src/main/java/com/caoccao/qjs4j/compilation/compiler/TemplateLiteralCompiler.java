@@ -60,7 +60,7 @@ final class TemplateLiteralCompiler {
 
         int argumentCount = 0;
         for (int index = 0; index < expressions.size(); index++) {
-            compilerContext.expressionCompiler.compile(expressions.get(index));
+            compilerContext.compileExpression(expressions.get(index));
             argumentCount++;
 
             if (index + 1 < quasis.size()) {

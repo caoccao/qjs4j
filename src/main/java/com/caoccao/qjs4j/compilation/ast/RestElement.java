@@ -30,20 +30,17 @@ public final class RestElement extends Pattern {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    protected List<String> computeBoundNames() {
+        return argument == null ? List.of() : argument.getBoundNames();
+    }
+
+    @Override
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(argument);
     }
 
     public Pattern getArgument() {
         return argument;
-    }
-
-    @Override
-    public List<String> getBoundNames() {
-        if (boundNames == null) {
-            boundNames = argument == null ? List.of() : argument.getBoundNames();
-        }
-        return boundNames;
     }
 
     @Override

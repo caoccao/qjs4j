@@ -24,7 +24,7 @@ import java.util.Locale;
 /**
  * Intl.Locale instance object. Getters derive from the canonical {@code tag} string per ECMA-402 spec.
  */
-public final class JSIntlLocale extends JSObject {
+public final class JSIntlLocale extends IntlLocaleObject {
     public static final String NAME = "Intl.Locale";
     private final String calendar;
     private final String caseFirst;
@@ -32,7 +32,6 @@ public final class JSIntlLocale extends JSObject {
     private final String firstDayOfWeek;
     private final String hourCycle;
     private LanguageId languageId;
-    private final Locale locale;
     private final String numberingSystem;
     private final boolean numeric;
     private final boolean numericSet;
@@ -51,8 +50,7 @@ public final class JSIntlLocale extends JSObject {
     public JSIntlLocale(JSContext context, Locale locale, String tag, String calendar, String caseFirst,
             String collation, String firstDayOfWeek, String hourCycle, String numberingSystem, boolean numeric,
             boolean numericSet) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.tag = tag;
         this.calendar = calendar;
         this.caseFirst = caseFirst;
@@ -98,10 +96,6 @@ public final class JSIntlLocale extends JSObject {
     public String getLanguage() {
         int end = tag.indexOf('-');
         return end < 0 ? tag : tag.substring(0, end);
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public String getNumberingSystem() {

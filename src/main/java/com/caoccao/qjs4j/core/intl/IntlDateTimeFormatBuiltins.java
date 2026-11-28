@@ -421,15 +421,7 @@ final class IntlDateTimeFormatBuiltins {
         if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
             return context.throwTypeError("Intl.DateTimeFormat.prototype.format called on incompatible receiver");
         }
-        JSFunction cachedBoundFormatFunction = dateTimeFormat.getBoundFormatFunction();
-        if (cachedBoundFormatFunction != null) {
-            return cachedBoundFormatFunction;
-        }
-        JSNativeFunction boundFormatFunction = new JSNativeFunction(context, "", 1, (childContext, thisValue,
-                formatArgs) -> dateTimeFormatFormat(childContext, dateTimeFormat, formatArgs));
-        context.transferPrototype(boundFormatFunction, JSFunction.NAME);
-        dateTimeFormat.setBoundFormatFunction(boundFormatFunction);
-        return boundFormatFunction;
+        return dateTimeFormat.getOrCreateBoundFunction(context, 1, IntlDateTimeFormatBuiltins::dateTimeFormatFormat);
     }
 
     static JSValue dateTimeFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -454,25 +446,24 @@ final class IntlDateTimeFormatBuiltins {
         // Property order per ECMA-402: locale, calendar, numberingSystem, timeZone,
         // hourCycle, hour12, weekday, era, year, month, day, dayPeriod,
         // hour, minute, second, fractionalSecondDigits, timeZoneName, dateStyle, timeStyle
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.LOCALE,
+        resolvedOptions.createDataProperty(PropertyKey.LOCALE,
                 new JSString(dateTimeFormat.getLocale().toLanguageTag()));
         IntlBuiltins.defineStringOption(resolvedOptions, "calendar", dateTimeFormat.getCalendar());
         if (dateTimeFormat.getNumberingSystem() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM,
+            resolvedOptions.createDataProperty(PropertyKey.NUMBERING_SYSTEM,
                     new JSString(dateTimeFormat.getNumberingSystem()));
         } else {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM, new JSString("latn"));
+            resolvedOptions.createDataProperty(PropertyKey.NUMBERING_SYSTEM, new JSString("latn"));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TIME_ZONE, new JSString(
+        resolvedOptions.createDataProperty(PropertyKey.TIME_ZONE, new JSString(
                 dateTimeFormat.getTimeZone() != null ? dateTimeFormat.getTimeZone() : ZoneId.systemDefault().getId()));
 
         // hourCycle and hour12: only present when hour component is in use
         String hourCycle = dateTimeFormat.getHourCycle();
         if (hourCycle != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.HOUR_CYCLE, new JSString(hourCycle));
+            resolvedOptions.createDataProperty(PropertyKey.HOUR_CYCLE, new JSString(hourCycle));
             boolean isHour12 = "h11".equals(hourCycle) || "h12".equals(hourCycle);
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.HOUR12,
-                    isHour12 ? JSBoolean.TRUE : JSBoolean.FALSE);
+            resolvedOptions.createDataProperty(PropertyKey.HOUR12, isHour12 ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
 
         // When dateStyle or timeStyle is set, individual component options are NOT reported
@@ -484,17 +475,17 @@ final class IntlDateTimeFormatBuiltins {
             dateTimeFormat.dateFields().defineOptions(resolvedOptions);
             dateTimeFormat.timeFields().defineOptions(resolvedOptions);
             if (dateTimeFormat.getFractionalSecondDigits() != null) {
-                IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.FRACTIONAL_SECOND_DIGITS,
+                resolvedOptions.createDataProperty(PropertyKey.FRACTIONAL_SECOND_DIGITS,
                         JSNumber.of(dateTimeFormat.getFractionalSecondDigits()));
             }
             IntlBuiltins.defineStringOption(resolvedOptions, "timeZoneName", dateTimeFormat.getTimeZoneNameOption());
         }
         if (hasDateStyle) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.DATE_STYLE,
+            resolvedOptions.createDataProperty(PropertyKey.DATE_STYLE,
                     new JSString(dateTimeFormat.getDateStyle().name().toLowerCase(Locale.ROOT)));
         }
         if (hasTimeStyle) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TIME_STYLE,
+            resolvedOptions.createDataProperty(PropertyKey.TIME_STYLE,
                     new JSString(dateTimeFormat.getTimeStyle().name().toLowerCase(Locale.ROOT)));
         }
         return resolvedOptions;

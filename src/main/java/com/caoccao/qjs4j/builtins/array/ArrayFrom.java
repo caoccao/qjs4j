@@ -65,8 +65,7 @@ final class ArrayFrom {
     }
 
     static boolean define(JSContext context, JSObject target, long index, JSValue value) {
-        if (!target.defineProperty(PropertyKey.fromIndexString(index), value, PropertyDescriptor.DataState.All)
-                && !context.hasPendingException()) {
+        if (!target.createDataProperty(PropertyKey.fromIndexString(index), value) && !context.hasPendingException()) {
             context.throwTypeError("Cannot define property " + index + " on result object");
         }
         return !context.hasPendingException();
@@ -103,7 +102,7 @@ final class ArrayFrom {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            JSValue iteratorValue = iteratorFunction.call(context, items, JSValue.NO_ARGS);
+            JSValue iteratorValue = iteratorFunction.call(context, items);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -121,7 +120,7 @@ final class ArrayFrom {
             long k = 0;
             while (true) {
                 context.checkExecutionInterrupt();
-                JSValue nextResultValue = nextFunction.call(context, iteratorObject, JSValue.NO_ARGS);
+                JSValue nextResultValue = nextFunction.call(context, iteratorObject);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -188,7 +187,7 @@ final class ArrayFrom {
     }
 
     static JSValue map(JSContext context, JSFunction mapper, JSValue thisArg, JSValue value, long index) {
-        return mapper == null ? value : mapper.call(context, thisArg, new JSValue[]{value, JSNumber.of(index)});
+        return mapper == null ? value : mapper.call(context, thisArg, value, JSNumber.of(index));
     }
 
     static JSValue of(JSContext context, JSValue thisArg, JSValue[] args) {

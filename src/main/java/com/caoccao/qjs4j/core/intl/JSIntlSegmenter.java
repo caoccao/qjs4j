@@ -25,15 +25,13 @@ import java.util.Locale;
 /**
  * Intl.Segmenter instance object.
  */
-public final class JSIntlSegmenter extends JSObject {
+public final class JSIntlSegmenter extends IntlLocaleObject {
     public static final String NAME = "Intl.Segmenter";
     private final String granularity;
-    private final Locale locale;
     private final JSObject segmentsPrototype;
 
     public JSIntlSegmenter(JSContext context, Locale locale, String granularity, JSObject segmentsPrototype) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.granularity = granularity;
         this.segmentsPrototype = segmentsPrototype;
     }
@@ -56,10 +54,6 @@ public final class JSIntlSegmenter extends JSObject {
 
     public String getGranularity() {
         return granularity;
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public boolean isWordGranularity() {

@@ -28,7 +28,7 @@ public final class ReturnStatement extends Statement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(argument);
     }
 

@@ -419,7 +419,7 @@ public final class TypedArrayPrototype {
                 return context.getPendingException();
             }
             if (joinFn instanceof JSFunction fn) {
-                JSValue result = fn.call(context, thisArg, JSValue.NO_ARGS);
+                JSValue result = fn.call(context, thisArg);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

@@ -68,15 +68,7 @@ final class IntlCollatorBuiltins {
             return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
         }
         // Return the cached bound compare function, creating it on first access
-        JSFunction cached = collator.getBoundCompareFunction();
-        if (cached != null) {
-            return cached;
-        }
-        JSNativeFunction boundCompare = new JSNativeFunction(context, "", 2,
-                (ctx, thisVal, compareArgs) -> collatorCompare(ctx, collator, compareArgs));
-        context.transferPrototype(boundCompare, JSFunction.NAME);
-        collator.setBoundCompareFunction(boundCompare);
-        return boundCompare;
+        return collator.getOrCreateBoundFunction(context, 2, IntlCollatorBuiltins::collatorCompare);
     }
 
     static JSValue collatorResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -84,14 +76,14 @@ final class IntlCollatorBuiltins {
             return context.throwTypeError("Intl.Collator.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, PropertyKey.LOCALE, new JSString(collator.getResolvedLocaleTag()));
-        createDataProperty(resolvedOptions, PropertyKey.USAGE, new JSString(collator.getUsage()));
-        createDataProperty(resolvedOptions, PropertyKey.SENSITIVITY, new JSString(collator.getSensitivity()));
-        createDataProperty(resolvedOptions, PropertyKey.IGNORE_PUNCTUATION,
+        resolvedOptions.createDataProperty(PropertyKey.LOCALE, new JSString(collator.getResolvedLocaleTag()));
+        resolvedOptions.createDataProperty(PropertyKey.USAGE, new JSString(collator.getUsage()));
+        resolvedOptions.createDataProperty(PropertyKey.SENSITIVITY, new JSString(collator.getSensitivity()));
+        resolvedOptions.createDataProperty(PropertyKey.IGNORE_PUNCTUATION,
                 JSBoolean.valueOf(collator.getIgnorePunctuation()));
-        createDataProperty(resolvedOptions, PropertyKey.COLLATION, new JSString(collator.getCollation()));
-        createDataProperty(resolvedOptions, PropertyKey.NUMERIC, JSBoolean.valueOf(collator.getNumeric()));
-        createDataProperty(resolvedOptions, PropertyKey.CASE_FIRST, new JSString(collator.getCaseFirst()));
+        resolvedOptions.createDataProperty(PropertyKey.COLLATION, new JSString(collator.getCollation()));
+        resolvedOptions.createDataProperty(PropertyKey.NUMERIC, JSBoolean.valueOf(collator.getNumeric()));
+        resolvedOptions.createDataProperty(PropertyKey.CASE_FIRST, new JSString(collator.getCaseFirst()));
         return resolvedOptions;
     }
 

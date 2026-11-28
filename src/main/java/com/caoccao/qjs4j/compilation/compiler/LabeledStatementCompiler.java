@@ -22,9 +22,8 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 /**
  * Compiles labeled statement AST nodes into bytecode.
  */
-final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
-    LabeledStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class LabeledStatementCompiler {
+    private LabeledStatementCompiler() {
     }
 
     /**
@@ -32,8 +31,8 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
      * label;' jumps past the labeled body. For labeled loops (while/for/for-in/for-of), the label is attached to the
      * loop's LoopContext so labeled break/continue work on the loop.
      */
-    @Override
-    void compile(LabeledStatement labeledStmt) {
+    static void compile(CompilerContext compilerContext, LabeledStatement labeledStmt) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         String labelName = labeledStmt.getLabel().getName();
         Statement body = labeledStmt.getBody();
 
@@ -50,7 +49,7 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
                 || body instanceof ForInStatement || body instanceof ForOfStatement) {
             // Push a labeled loop context; the loop compilation will use loopStack.peek()
             // We need to wrap the loop compilation to attach the label
-            compileLabeledLoop(labelName, body);
+            compileLabeledLoop(compilerContext, labelName, body);
         } else {
             // Regular labeled statement: only 'break label;' is valid (not continue)
             LoopContext labelContext = new LoopContext(emitter.currentOffset(),
@@ -61,7 +60,7 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
 
             // Body can be null for empty statements (label: ;)
             if (body != null) {
-                compilerContext.statementCompiler.compileNestedStatement(body);
+                StatementCompiler.compileNestedStatement(compilerContext, body);
             }
 
             // Patch all break positions to jump here
@@ -77,10 +76,10 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
      * Compile a labeled loop: the label is attached to the loop's LoopContext. This is needed so that 'break label;'
      * and 'continue label;' work on the loop.
      */
-    private void compileLabeledLoop(String labelName, Statement loopStmt) {
+    private static void compileLabeledLoop(CompilerContext compilerContext, String labelName, Statement loopStmt) {
         // We temporarily store the label name so the loop compilation methods can pick it up
         compilerContext.loopManager.setPendingLabel(labelName);
-        compilerContext.statementCompiler.compile(loopStmt);
+        compilerContext.compileStatement(loopStmt);
         compilerContext.loopManager.clearPendingLabel();
     }
 }

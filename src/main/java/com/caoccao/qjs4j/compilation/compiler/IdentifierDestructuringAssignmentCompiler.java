@@ -23,24 +23,23 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles Identifier destructuring assignment targets into bytecode.
  */
-final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Identifier> {
+final class IdentifierDestructuringAssignmentCompiler {
 
-    IdentifierDestructuringAssignmentCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private IdentifierDestructuringAssignmentCompiler() {
     }
 
-    @Override
-    void compile(Identifier id) {
+    static void compile(CompilerContext compilerContext, Identifier id) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // Stack: [value]
         // Assign value to identifier and pop value from stack
         String name = id.getName();
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
         if (localIndex == null && JSArguments.NAME.equals(name)) {
-            localIndex = ensureImplicitArgumentsLocalBinding();
+            localIndex = ensureImplicitArgumentsLocalBinding(compilerContext);
         }
         if (localIndex != null) {
             if (compilerContext.scopeManager.isLocalBindingConst(name)) {
-                compilerContext.emitHelpers.emitConstAssignmentErrorForLocal(name, localIndex);
+                EmitHelpers.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
                 return;
             }
             if (compilerContext.tdzLocals.contains(name)) {
@@ -52,7 +51,7 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
             Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
             if (capturedIndex != null) {
                 if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
-                    compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(name, capturedIndex);
+                    EmitHelpers.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
                     return;
                 }
                 emitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
@@ -63,7 +62,7 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
         }
     }
 
-    private Integer ensureImplicitArgumentsLocalBinding() {
+    private static Integer ensureImplicitArgumentsLocalBinding(CompilerContext compilerContext) {
         if (!compilerContext.hasEnclosingArgumentsBinding) {
             return null;
         }

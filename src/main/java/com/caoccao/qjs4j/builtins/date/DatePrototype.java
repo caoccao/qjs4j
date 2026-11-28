@@ -325,7 +325,7 @@ public final class DatePrototype {
                 return context.getPendingException();
             }
             if (method instanceof JSFunction function) {
-                JSValue result = function.call(context, object, JSValue.NO_ARGS);
+                JSValue result = function.call(context, object);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -555,7 +555,7 @@ public final class DatePrototype {
         if (!(method instanceof JSFunction function)) {
             return context.throwTypeError("object needs toISOString method");
         }
-        return function.call(context, obj, JSValue.NO_ARGS);
+        return function.call(context, obj);
     }
 
     public static JSValue toLocaleDateString(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -418,15 +418,7 @@ final class IntlNumberFormatBuiltins {
         if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
             return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
         }
-        JSFunction cachedBoundFormatFunction = numberFormat.getBoundFormatFunction();
-        if (cachedBoundFormatFunction != null) {
-            return cachedBoundFormatFunction;
-        }
-        JSNativeFunction boundFormatFunction = new JSNativeFunction(context, "", 1,
-                (childContext, thisValue, formatArgs) -> numberFormatFormat(childContext, numberFormat, formatArgs));
-        context.transferPrototype(boundFormatFunction, JSFunction.NAME);
-        numberFormat.setBoundFormatFunction(boundFormatFunction);
-        return boundFormatFunction;
+        return numberFormat.getOrCreateBoundFunction(context, 1, IntlNumberFormatBuiltins::numberFormatFormat);
     }
 
     static JSValue numberFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -464,25 +456,21 @@ final class IntlNumberFormatBuiltins {
                     .throwTypeError("Intl.NumberFormat.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.LOCALE,
-                new JSString(numberFormat.getLocale().toLanguageTag()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM,
+        resolvedOptions.createDataProperty(PropertyKey.LOCALE, new JSString(numberFormat.getLocale().toLanguageTag()));
+        resolvedOptions.createDataProperty(PropertyKey.NUMBERING_SYSTEM,
                 new JSString(numberFormat.getNumberingSystem()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.STYLE, new JSString(numberFormat.getStyle()));
+        resolvedOptions.createDataProperty(PropertyKey.STYLE, new JSString(numberFormat.getStyle()));
         if ("currency".equals(numberFormat.getStyle()) && numberFormat.getCurrency() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.CURRENCY,
-                    new JSString(numberFormat.getCurrency()));
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.CURRENCY_DISPLAY,
+            resolvedOptions.createDataProperty(PropertyKey.CURRENCY, new JSString(numberFormat.getCurrency()));
+            resolvedOptions.createDataProperty(PropertyKey.CURRENCY_DISPLAY,
                     new JSString(numberFormat.getCurrencyDisplay()));
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.CURRENCY_SIGN,
-                    new JSString(numberFormat.getCurrencySign()));
+            resolvedOptions.createDataProperty(PropertyKey.CURRENCY_SIGN, new JSString(numberFormat.getCurrencySign()));
         }
         if ("unit".equals(numberFormat.getStyle()) && numberFormat.getUnit() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.UNIT, new JSString(numberFormat.getUnit()));
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.UNIT_DISPLAY,
-                    new JSString(numberFormat.getUnitDisplay()));
+            resolvedOptions.createDataProperty(PropertyKey.UNIT, new JSString(numberFormat.getUnit()));
+            resolvedOptions.createDataProperty(PropertyKey.UNIT_DISPLAY, new JSString(numberFormat.getUnitDisplay()));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.MINIMUM_INTEGER_DIGITS,
+        resolvedOptions.createDataProperty(PropertyKey.MINIMUM_INTEGER_DIGITS,
                 JSNumber.of(numberFormat.getMinimumIntegerDigits()));
         if (numberFormat.getUseSignificantDigits()) {
             defineDigitRange(resolvedOptions, true, numberFormat.getMinimumSignificantDigits(),
@@ -492,26 +480,23 @@ final class IntlNumberFormatBuiltins {
                     numberFormat.getMaximumFractionDigits());
         }
         if ("false".equals(numberFormat.getUseGroupingMode())) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.USE_GROUPING, JSBoolean.FALSE);
+            resolvedOptions.createDataProperty(PropertyKey.USE_GROUPING, JSBoolean.FALSE);
         } else {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.USE_GROUPING,
+            resolvedOptions.createDataProperty(PropertyKey.USE_GROUPING,
                     new JSString(numberFormat.getUseGroupingMode()));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NOTATION,
-                new JSString(numberFormat.getNotation()));
+        resolvedOptions.createDataProperty(PropertyKey.NOTATION, new JSString(numberFormat.getNotation()));
         if ("compact".equals(numberFormat.getNotation()) && numberFormat.getCompactDisplay() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.COMPACT_DISPLAY,
+            resolvedOptions.createDataProperty(PropertyKey.COMPACT_DISPLAY,
                     new JSString(numberFormat.getCompactDisplay()));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.SIGN_DISPLAY,
-                new JSString(numberFormat.getSignDisplay()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.ROUNDING_INCREMENT,
+        resolvedOptions.createDataProperty(PropertyKey.SIGN_DISPLAY, new JSString(numberFormat.getSignDisplay()));
+        resolvedOptions.createDataProperty(PropertyKey.ROUNDING_INCREMENT,
                 JSNumber.of(numberFormat.getRoundingIncrement()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.ROUNDING_MODE,
-                new JSString(numberFormat.getRoundingMode()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.ROUNDING_PRIORITY,
+        resolvedOptions.createDataProperty(PropertyKey.ROUNDING_MODE, new JSString(numberFormat.getRoundingMode()));
+        resolvedOptions.createDataProperty(PropertyKey.ROUNDING_PRIORITY,
                 new JSString(numberFormat.getRoundingPriority()));
-        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TRAILING_ZERO_DISPLAY,
+        resolvedOptions.createDataProperty(PropertyKey.TRAILING_ZERO_DISPLAY,
                 new JSString(numberFormat.getTrailingZeroDisplay()));
         return resolvedOptions;
     }

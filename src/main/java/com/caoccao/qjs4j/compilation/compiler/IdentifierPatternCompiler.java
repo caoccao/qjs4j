@@ -25,22 +25,21 @@ import java.util.Deque;
  * Compiles Identifier pattern assignments into bytecode. Handles var/let/const declarations, global scope, TDZ,
  * with-objects, and pre-resolved binding references.
  */
-final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
+final class IdentifierPatternCompiler {
 
-    IdentifierPatternCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private IdentifierPatternCompiler() {
     }
 
-    @Override
-    void compile(Identifier id) {
+    static void compile(CompilerContext compilerContext, Identifier id) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // Stack: [value]
         // Assign value to identifier binding
         String varName = id.getName();
-        if (emitAssignmentUsingPreResolvedBindingReference(varName)) {
+        if (emitAssignmentUsingPreResolvedBindingReference(compilerContext, varName)) {
             // Assignment consumed by a cached ResolveBinding reference.
         } else if (compilerContext.useExistingBindingInParentScopes
                 && compilerContext.withObjectManager.hasActiveWithObject()) {
-            compilerContext.assignmentExpressionCompiler.emitIdentifierReference(varName);
+            AssignmentExpressionCompiler.emitIdentifierReference(compilerContext, varName);
             emitter.emitStoreValueBelowReference();
         } else if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
             // TDZ local: let/const was pre-declared as a local for TDZ enforcement
@@ -88,7 +87,9 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
         }
     }
 
-    private boolean emitAssignmentUsingPreResolvedBindingReference(String variableName) {
+    private static boolean emitAssignmentUsingPreResolvedBindingReference(CompilerContext compilerContext,
+            String variableName) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         Deque<CompilerContext.PreResolvedReference> references = compilerContext.preResolvedBindingReferences
                 .get(variableName);
         if (references == null || references.isEmpty()) {

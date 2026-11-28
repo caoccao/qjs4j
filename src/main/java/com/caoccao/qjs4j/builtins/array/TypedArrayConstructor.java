@@ -60,7 +60,7 @@ public final class TypedArrayConstructor {
             return context.getPendingException();
         }
         if (iteratorFunction != null) {
-            JSValue iterator = iteratorFunction.call(context, items, JSValue.NO_ARGS);
+            JSValue iterator = iteratorFunction.call(context, items);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

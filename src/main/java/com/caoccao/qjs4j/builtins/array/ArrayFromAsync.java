@@ -43,8 +43,7 @@ final class ArrayFromAsync {
     private void appendIterableValue(JSAsyncIterator iterator, JSValue value, JSPromise completion) {
         if (target instanceof JSArray array) {
             array.push(value);
-        } else if (!target.defineProperty(PropertyKey.fromIndexString(index), value,
-                PropertyDescriptor.DataState.All)) {
+        } else if (!target.createDataProperty(PropertyKey.fromIndexString(index), value)) {
             iterator.close();
             context.processMicrotasks();
             JSValue error = context.throwTypeError("Cannot define property " + index + " on result object");
@@ -172,7 +171,7 @@ final class ArrayFromAsync {
                     return;
                 }
                 if (method != null) {
-                    JSValue iterator = method.call(context, arrayLike, JSValue.NO_ARGS);
+                    JSValue iterator = method.call(context, arrayLike);
                     if (rejectPending()) {
                         return;
                     }
@@ -286,8 +285,8 @@ final class ArrayFromAsync {
             JSValue thenMethod = obj.get(PropertyKey.THEN);
             if (thenMethod instanceof JSFunction thenFunc) {
                 JSPromise promise = context.createJSPromise();
-                thenFunc.call(context, value, new JSValue[]{promise.fulfillHandler(context, "resolve"),
-                        promise.rejectHandler(context, "reject")});
+                thenFunc.call(context, value, promise.fulfillHandler(context, "resolve"),
+                        promise.rejectHandler(context, "reject"));
                 return promise;
             }
         }

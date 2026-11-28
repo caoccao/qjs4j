@@ -32,16 +32,13 @@ public final class AssignmentPattern extends Pattern {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
-        return kind.in(left) || kind.in(right);
+    protected List<String> computeBoundNames() {
+        return left == null ? List.of() : left.getBoundNames();
     }
 
     @Override
-    public List<String> getBoundNames() {
-        if (boundNames == null) {
-            boundNames = left == null ? List.of() : left.getBoundNames();
-        }
-        return boundNames;
+    boolean containsSuspension(SyntaxQuery kind) {
+        return kind.in(left) || kind.in(right);
     }
 
     public Pattern getLeft() {

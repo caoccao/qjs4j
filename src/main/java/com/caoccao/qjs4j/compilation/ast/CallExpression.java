@@ -24,7 +24,6 @@ import java.util.List;
  * Represents a function call expression.
  */
 public final class CallExpression extends InvocationExpression {
-    private Boolean directEvalVarArgumentsInside;
     private final boolean optional;
     private final boolean optionalChainInside;
     private final boolean partOfOptionalChain;
@@ -36,7 +35,6 @@ public final class CallExpression extends InvocationExpression {
         this.partOfOptionalChain = partOfOptionalChain;
         // See MemberExpression: cached so the parser's per-link question costs O(1).
         this.optionalChainInside = optional || callee.containsOptionalChain();
-        directEvalVarArgumentsInside = null;
     }
 
     public CallExpression(Expression callee, List<Expression> arguments, boolean optional, SourceLocation location) {
@@ -44,16 +42,12 @@ public final class CallExpression extends InvocationExpression {
     }
 
     @Override
-    public boolean containsDirectEvalVarArguments() {
-        if (directEvalVarArgumentsInside == null) {
-            List<Expression> arguments = getArguments();
-            directEvalVarArgumentsInside = getCallee() instanceof Identifier calleeIdentifier
-                    && JSKeyword.EVAL.equals(calleeIdentifier.getName()) && arguments != null && !arguments.isEmpty()
-                    && arguments.get(0) instanceof Literal firstArgumentLiteral
-                    && firstArgumentLiteral.getValue() instanceof String evalSourceString
-                    && evalSourceString.contains("var arguments");
-        }
-        return directEvalVarArgumentsInside;
+    boolean computeDirectEvalVarArguments() {
+        List<Expression> arguments = getArguments();
+        return getCallee() instanceof Identifier calleeIdentifier && JSKeyword.EVAL.equals(calleeIdentifier.getName())
+                && arguments != null && !arguments.isEmpty() && arguments.get(0) instanceof Literal firstArgumentLiteral
+                && firstArgumentLiteral.getValue() instanceof String evalSourceString
+                && evalSourceString.contains("var arguments");
     }
 
     @Override

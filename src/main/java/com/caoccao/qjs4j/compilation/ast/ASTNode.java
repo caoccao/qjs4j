@@ -24,47 +24,69 @@ import java.util.List;
 public abstract sealed class ASTNode
         permits Pattern, Statement, ModuleItem, Program, RestParameter, VariableDeclarator, TryStatement.CatchClause,
         SwitchStatement.SwitchCase, ClassElement, ObjectProperty, ImportSpecifier, ExportSpecifier {
-    protected Boolean awaitInside;
+    private byte cachedQueries;
     private final SourceLocation location;
-    protected Boolean yieldInside;
 
     protected ASTNode(SourceLocation location) {
         this.location = location;
-        this.awaitInside = null;
-        this.yieldInside = null;
     }
 
     public final boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = containsSuspension(Suspension.AWAIT);
-        }
-        return awaitInside;
+        return SyntaxQuery.AWAIT.in(this);
     }
 
     /** Leaves and function boundaries do not suspend the enclosing evaluation. */
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return false;
     }
 
     public final boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = containsSuspension(Suspension.YIELD);
-        }
-        return yieldInside;
+        return SyntaxQuery.YIELD.in(this);
     }
 
     public final SourceLocation getLocation() {
         return location;
     }
 
-    enum Suspension {
+    enum SyntaxQuery {
         /** An await expression or a for-await-of loop. */
-        AWAIT,
+        AWAIT(1),
+        /** Direct eval that can introduce a var arguments binding. */
+        DIRECT_EVAL_VAR_ARGUMENTS(16),
         /** A yield expression. */
-        YIELD;
+        YIELD(4);
+
+        private final int found;
+        // Each query has a known bit and a result bit. A single byte holds all three cached answers.
+        private final int known;
+
+        SyntaxQuery(int known) {
+            this.known = known;
+            found = known << 1;
+        }
+
+        void cache(ASTNode node, boolean result) {
+            node.cachedQueries = (byte) ((node.cachedQueries & ~found) | known | (result ? found : 0));
+        }
+
+        Boolean cachedResult(ASTNode node) {
+            int bits = node.cachedQueries;
+            return (bits & known) == 0 ? null : Boolean.valueOf((bits & found) != 0);
+        }
 
         boolean in(ASTNode node) {
-            return node != null && (this == AWAIT ? node.containsAwait() : node.containsYield());
+            if (node == null) {
+                return false;
+            }
+            Boolean cached = cachedResult(node);
+            if (cached != null) {
+                return cached;
+            }
+            boolean result = this == DIRECT_EVAL_VAR_ARGUMENTS
+                    ? node instanceof Expression expression && expression.computeDirectEvalVarArguments()
+                    : node.containsSuspension(this);
+            cache(node, result);
+            return result;
         }
 
         boolean in(List<? extends ASTNode> nodes) {

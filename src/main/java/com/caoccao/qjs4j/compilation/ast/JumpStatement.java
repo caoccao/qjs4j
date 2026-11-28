@@ -26,7 +26,7 @@ public abstract sealed class JumpStatement extends Statement permits BreakStatem
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(label);
     }
 

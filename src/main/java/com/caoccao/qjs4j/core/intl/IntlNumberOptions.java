@@ -37,10 +37,10 @@ final class IntlNumberOptions {
     }
 
     static void defineDigitRange(JSObject options, boolean significant, int minimum, int maximum) {
-        IntlBuiltins.createDataProperty(options,
+        options.createDataProperty(
                 PropertyKey.fromString(significant ? "minimumSignificantDigits" : "minimumFractionDigits"),
                 JSNumber.of(minimum));
-        IntlBuiltins.createDataProperty(options,
+        options.createDataProperty(
                 PropertyKey.fromString(significant ? "maximumSignificantDigits" : "maximumFractionDigits"),
                 JSNumber.of(maximum));
     }

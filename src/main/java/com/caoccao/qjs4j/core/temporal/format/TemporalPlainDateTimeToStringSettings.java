@@ -29,15 +29,11 @@ public record TemporalPlainDateTimeToStringSettings(String calendarNameOption, T
             "auto", null, TemporalRoundingMode.TRUNC, true, -1, 1L);
 
     public static TemporalPlainDateTimeToStringSettings read(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
-                TemporalError.INVALID_OPTIONS.message());
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionsObject == null) {
-            return TemporalPlainDateTimeToStringSettings.DEFAULT;
-        }
+        return TemporalTimeStringOptions.readOptions(context, optionsValue, TemporalError.INVALID_OPTIONS.message(),
+                DEFAULT, TemporalPlainDateTimeToStringSettings::readFields);
+    }
 
+    private static TemporalPlainDateTimeToStringSettings readFields(JSContext context, JSObject optionsObject) {
         String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsObject);
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;

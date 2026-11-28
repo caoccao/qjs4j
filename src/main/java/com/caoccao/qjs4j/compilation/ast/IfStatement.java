@@ -35,7 +35,15 @@ public final class IfStatement extends Statement {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+        appendVarDeclarators(collectedVarDeclarators, consequent);
+        appendVarDeclarators(collectedVarDeclarators, alternate);
+        return collectedVarDeclarators;
+    }
+
+    @Override
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(test) || kind.in(consequent) || kind.in(alternate);
     }
 
@@ -49,21 +57,6 @@ public final class IfStatement extends Statement {
 
     public Expression getTest() {
         return test;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (consequent != null) {
-                collectedVarDeclarators.addAll(consequent.getVarDeclarators());
-            }
-            if (alternate != null) {
-                collectedVarDeclarators.addAll(alternate.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
     }
 
 }

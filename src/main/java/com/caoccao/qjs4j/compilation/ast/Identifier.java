@@ -30,11 +30,8 @@ public final class Identifier extends Expression {
     }
 
     @Override
-    public List<String> getBoundNames() {
-        if (boundNames == null) {
-            boundNames = List.of(name);
-        }
-        return boundNames;
+    protected List<String> computeBoundNames() {
+        return List.of(name);
     }
 
     public String getName() {

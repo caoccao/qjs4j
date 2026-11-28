@@ -198,14 +198,14 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         // Normal case: function with only body (no parameters)
         result = functionConstructor.call("return 42;");
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
-            JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+            JSValue callResult = func.call(context, JSUndefined.INSTANCE);
             assertNumberValue(callResult, 42.0);
         });
 
         // Normal case: function with empty body
         result = functionConstructor.call();
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
-            JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+            JSValue callResult = func.call(context, JSUndefined.INSTANCE);
             assertThat(callResult).isEqualTo(JSUndefined.INSTANCE);
         });
 

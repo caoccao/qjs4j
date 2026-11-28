@@ -25,9 +25,9 @@ final class ImportExpressionCompiler {
     }
 
     static void compile(CompilerContext compilerContext, ImportExpression importExpr) {
-        compilerContext.expressionCompiler.compile(importExpr.getSource());
+        compilerContext.compileExpression(importExpr.getSource());
         if (importExpr.getOptions() != null) {
-            compilerContext.expressionCompiler.compile(importExpr.getOptions());
+            compilerContext.compileExpression(importExpr.getOptions());
         } else if (importExpr.isDefer()) {
             compilerContext.emitter.emitPushConstant(JSImportDeferMarker.VALUE);
         } else {

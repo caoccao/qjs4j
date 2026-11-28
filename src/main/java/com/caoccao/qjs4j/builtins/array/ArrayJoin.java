@@ -137,7 +137,7 @@ final class ArrayJoin {
         if (!JSTypeChecking.isCallable(method)) {
             return context.throwTypeError("toLocaleString is not a function");
         }
-        return JSCall.call(context, method, element,
-                new JSValue[]{JSValue.argumentOrUndefined(args, 0), JSValue.argumentOrUndefined(args, 1)});
+        return JSCall.call(context, method, element, JSValue.argumentOrUndefined(args, 0),
+                JSValue.argumentOrUndefined(args, 1));
     }
 }

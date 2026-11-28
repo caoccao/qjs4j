@@ -30,7 +30,7 @@ import java.util.*;
 /**
  * Intl.NumberFormat instance object.
  */
-public final class JSIntlNumberFormat extends JSObject {
+public final class JSIntlNumberFormat extends IntlBoundFunctionObject {
     private static final BigDecimal DECIMAL_ONE_HALF = new BigDecimal("0.5");
     private static final CompactScale[] ENGLISH_SCALES = {new CompactScale(1_000_000, "M", " million"),
             new CompactScale(1_000, "K", " thousand")};
@@ -45,12 +45,10 @@ public final class JSIntlNumberFormat extends JSObject {
     public static final String NAME = "Intl.NumberFormat";
     private static final CompactScale[] TAIWANESE_CHINESE_SCALES = {new CompactScale(100_000_000, "億"),
             new CompactScale(10_000, "萬")};
-    private JSFunction boundFormatFunction;
     private final String compactDisplay;
     private final String currency;
     private final String currencyDisplay;
     private final String currencySign;
-    private final Locale locale;
     private final int maximumFractionDigits;
     private final int maximumSignificantDigits;
     private final int minimumFractionDigits;
@@ -93,8 +91,7 @@ public final class JSIntlNumberFormat extends JSObject {
             String unitDisplay, String signDisplay, String roundingMode, String numberingSystem, String notation,
             String compactDisplay, String currencyDisplay, String currencySign, int roundingIncrement,
             String roundingPriority, String trailingZeroDisplay) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.style = style;
         this.currency = currency;
         this.useGroupingMode = useGroupingMode != null ? useGroupingMode : "auto";
@@ -880,7 +877,7 @@ public final class JSIntlNumberFormat extends JSObject {
     }
 
     public JSFunction getBoundFormatFunction() {
-        return boundFormatFunction;
+        return boundFunction;
     }
 
     public String getCompactDisplay() {
@@ -897,10 +894,6 @@ public final class JSIntlNumberFormat extends JSObject {
 
     public String getCurrencySign() {
         return currencySign;
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public int getMaximumFractionDigits() {
@@ -1143,7 +1136,7 @@ public final class JSIntlNumberFormat extends JSObject {
     }
 
     public void setBoundFormatFunction(JSFunction boundFormatFunction) {
-        this.boundFormatFunction = boundFormatFunction;
+        boundFunction = boundFormatFunction;
     }
 
     private boolean shouldAddPlusForSpecialValue(double value) {

@@ -32,7 +32,7 @@ public abstract sealed class InvocationExpression extends Expression permits New
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
+    boolean containsSuspension(SyntaxQuery kind) {
         return kind.in(callee) || kind.in(arguments);
     }
 

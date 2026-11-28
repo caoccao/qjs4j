@@ -32,7 +32,6 @@ final class OrdinaryFunctionCompiler {
     static <T extends ASTNode & OrdinaryFunctionNode> JSBytecodeFunction compile(CompilerContext compilerContext,
             T node, boolean forceNonConstructor) {
         boolean declaration = node instanceof FunctionDeclaration;
-        FunctionExpressionCompiler parameters = compilerContext.functionExpressionCompiler;
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = compilerContext.newFunctionCompiler(node.getLocation());
@@ -41,11 +40,11 @@ final class OrdinaryFunctionCompiler {
         // Enter function scope and add parameters as locals
         functionContext.enterFunctionScope(node.isAsync(), node.isGenerator());
         // Inherit class inner name so eval() inside nested functions can resolve it.
-        parameters.inheritClassInnerNameCapture(functionContext);
-        Set<String> enclosingParameterScopeFunctionNames = parameters
-                .inheritParameterScopeFunctionNameCapture(functionContext);
-        parameters.inheritVisibleLexicalCapturesForDirectEvalInBody(functionContext, node.getBody(),
-                node.getFunctionParams().hasNonSimpleParameters());
+        FunctionExpressionCompiler.inheritClassInnerNameCapture(compilerContext, functionContext);
+        Set<String> enclosingParameterScopeFunctionNames = FunctionExpressionCompiler
+                .inheritParameterScopeFunctionNameCapture(compilerContext, functionContext);
+        FunctionExpressionCompiler.inheritVisibleLexicalCapturesForDirectEvalInBody(compilerContext, functionContext,
+                node.getBody(), node.getFunctionParams().hasNonSimpleParameters());
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -54,10 +53,10 @@ final class OrdinaryFunctionCompiler {
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> destructuringParams = parameters.declareParameters(node.getParams(), functionContext,
-                parameterSlotIndexes);
+        List<int[]> destructuringParams = FunctionExpressionCompiler.declareParameters(node.getParams(),
+                functionContext, parameterSlotIndexes);
         if (node.needsArguments()) {
-            parameters.declareAndInitializeImplicitArgumentsBinding(functionContext);
+            FunctionExpressionCompiler.declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
         // ES2024 15.2.5: the BindingIdentifier of a named function expression is bound in a
@@ -75,8 +74,8 @@ final class OrdinaryFunctionCompiler {
             String selfName = node.getId().getName();
             boolean conflictsWithParameter = node.getFunctionParams().bindsName(selfName);
             if (!conflictsWithParameter) {
-                selfNameShadowedByBodyDeclaration = functionContext.compilerAnalysis
-                        .bodyDeclaresBinding(node.getBody().getBody(), selfName);
+                selfNameShadowedByBodyDeclaration = CompilerAnalysis.bodyDeclaresBinding(node.getBody().getBody(),
+                        selfName);
                 selfNameLocalIndex = functionContext.scopeManager.currentScope().declareLocal(selfName);
                 // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
                 // is an immutable binding. Following QuickJS add_func_var:
@@ -103,8 +102,8 @@ final class OrdinaryFunctionCompiler {
                     node.getId().getName());
         }
 
-        parameters.initializeParameters(functionCompiler, node, parameterSlotIndexes, destructuringParams,
-                node.isGenerator());
+        FunctionExpressionCompiler.initializeParameters(compilerContext, functionCompiler, node, parameterSlotIndexes,
+                destructuringParams, node.isGenerator());
 
         // The parameter environment is fully built by now, so anything the body declares under the
         // function's own name takes over that name in a slot of its own. Bytecode emitted above for
@@ -157,7 +156,7 @@ final class OrdinaryFunctionCompiler {
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
 
-        compilerContext.emitHelpers.emitCapturedValues(functionCompiler, function);
+        EmitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
         compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
         return function;

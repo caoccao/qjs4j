@@ -28,11 +28,11 @@ final class NewExpressionCompiler {
     static void compile(CompilerContext compilerContext, NewExpression newExpr) {
         boolean hasSpread = newExpr.getArguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
 
-        compilerContext.expressionCompiler.compile(newExpr.getCallee());
+        compilerContext.compileExpression(newExpr.getCallee());
 
         if (hasSpread) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitHelpers.emitArgumentsArrayWithSpread(newExpr.getArguments());
+            EmitHelpers.emitArgumentsArrayWithSpread(compilerContext, newExpr.getArguments());
             // A frame stopped at a `new` reports the position of the `new` keyword, as V8 does.
             compilerContext.emitter.emitSourcePosition(newExpr.getLocation());
             compilerContext.emitter.emitCallDescription(CallPrinter.describeCallee(newExpr.getCallee()));
@@ -41,7 +41,7 @@ final class NewExpressionCompiler {
         }
 
         for (Expression arg : newExpr.getArguments()) {
-            compilerContext.expressionCompiler.compile(arg);
+            compilerContext.compileExpression(arg);
         }
         compilerContext.emitter.emitSourcePosition(newExpr.getLocation());
         compilerContext.emitter.emitCallDescription(CallPrinter.describeCallee(newExpr.getCallee()));

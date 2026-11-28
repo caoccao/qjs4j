@@ -22,13 +22,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.List;
 
-final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTemplateExpression> {
-    TaggedTemplateExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class TaggedTemplateExpressionCompiler {
+    private TaggedTemplateExpressionCompiler() {
     }
 
-    @Override
-    void compile(TaggedTemplateExpression taggedTemplate) {
+    static void compile(CompilerContext compilerContext, TaggedTemplateExpression taggedTemplate) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         boolean isTailCall = compilerContext.emitTailCalls;
         compilerContext.emitTailCalls = false;
 
@@ -44,14 +43,14 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
         if (taggedTemplate.getTag() instanceof MemberExpression memberExpr) {
             // For method calls: obj.method`template`
             // We need to preserve obj as the 'this' value: Stack: -> receiver function
-            compilerContext.callExpressionCompiler.emitMemberCalleeWithReceiver(memberExpr, false);
+            CallExpressionCompiler.emitMemberCalleeWithReceiver(compilerContext, memberExpr, false);
 
             // SWAP converts obj/func to func/obj for internalHandleCall and locks property chain
             emitter.emitOpcode(Opcode.SWAP);
         } else {
             // Regular function call: func`template`
             // Compile the tag function first (will be the callee)
-            compilerContext.expressionCompiler.compile(taggedTemplate.getTag());
+            compilerContext.compileExpression(taggedTemplate.getTag());
 
             // Add undefined as receiver/thisArg
             emitter.emitOpcode(Opcode.UNDEFINED);
@@ -59,11 +58,11 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
 
         // QuickJS behavior: each call site uses a stable, frozen template object.
         // Build it once in the constant pool and pass it as the first argument.
-        emitter.emitPushConstant(createTaggedTemplateObject(template));
+        emitter.emitPushConstant(createTaggedTemplateObject(compilerContext, template));
 
         // Add substitution expressions as additional arguments
         for (Expression expr : expressions) {
-            compilerContext.expressionCompiler.compile(expr);
+            compilerContext.compileExpression(expr);
         }
 
         // Call the tag function
@@ -78,7 +77,7 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
         }
     }
 
-    private JSArray createTaggedTemplateObject(TemplateLiteral template) {
+    private static JSArray createTaggedTemplateObject(CompilerContext compilerContext, TemplateLiteral template) {
         List<String> cookedQuasis = template.getQuasis();
         List<String> rawQuasis = template.getRawQuasis();
         int segmentCount = rawQuasis.size();

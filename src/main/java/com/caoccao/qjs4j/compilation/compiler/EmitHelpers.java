@@ -35,19 +35,15 @@ import java.util.Set;
  * patterns such as iterator close, captured values, method calls, and using disposal.
  */
 final class EmitHelpers {
-    private final CompilerContext compilerContext;
-    private final BytecodeEmitter emitter;
 
-    EmitHelpers(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
-        emitter = compilerContext.emitter;
+    private EmitHelpers() {
     }
 
-    int beginUsingScope(boolean hasUsing) {
+    static int beginUsingScope(CompilerContext compilerContext, boolean hasUsing) {
         if (!hasUsing) {
             return -1;
         }
-        int handler = emitter.emitJump(Opcode.CATCH);
+        int handler = compilerContext.emitter.emitJump(Opcode.CATCH);
         compilerContext.scopeManager.currentScope().setUsingCatchJumpPosition(handler);
         return handler;
     }
@@ -66,7 +62,8 @@ final class EmitHelpers {
      * @param shortCircuitTail
      *            emitted on the short-circuit path only, after {@code undefined} is pushed, or null for none
      */
-    void compileOptionalChain(Runnable body, Runnable shortCircuitTail) {
+    static void compileOptionalChain(CompilerContext compilerContext, Runnable body, Runnable shortCircuitTail) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         List<Integer> savedOptionalChainJumps = compilerContext.optionalChainJumps;
         List<Integer> optionalChainJumps = new ArrayList<>();
         compilerContext.optionalChainJumps = optionalChainJumps;
@@ -97,11 +94,11 @@ final class EmitHelpers {
      * @param target
      *            the object or callee
      */
-    void compileOptionalChainLinkTarget(Expression link, Expression target) {
+    static void compileOptionalChainLinkTarget(CompilerContext compilerContext, Expression link, Expression target) {
         if (link.isPartOfOptionalChain() && target.isPartOfOptionalChain()) {
             compilerContext.optionalChainLink = target;
         }
-        compilerContext.expressionCompiler.compile(target);
+        compilerContext.compileExpression(target);
     }
 
     /**
@@ -112,21 +109,22 @@ final class EmitHelpers {
      *            the member or call expression
      * @return true when it joins the chain being compiled
      */
-    boolean consumeOptionalChainLink(Expression expression) {
+    static boolean consumeOptionalChainLink(CompilerContext compilerContext, Expression expression) {
         boolean joinsOptionalChain = compilerContext.optionalChainLink == expression;
         compilerContext.optionalChainLink = null;
         return joinsOptionalChain;
     }
 
-    void emitAbruptCompletionIteratorClose() {
+    static void emitAbruptCompletionIteratorClose(CompilerContext compilerContext) {
         for (LoopContext loopContext : compilerContext.loopManager) {
             if (loopContext.hasIterator) {
-                emitLoopIteratorClose(loopContext);
+                emitLoopIteratorClose(compilerContext, loopContext);
             }
         }
     }
 
-    void emitActiveFinallyGosubs() {
+    static void emitActiveFinallyGosubs(CompilerContext compilerContext) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
         Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
         while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
@@ -147,7 +145,8 @@ final class EmitHelpers {
      * property). In function scope, uses PUT_LOCAL to the function-scope local (bypassing the block-scoped lexical
      * binding).
      */
-    void emitAnnexBVarStore(String functionName) {
+    static void emitAnnexBVarStore(CompilerContext compilerContext, String functionName) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (compilerContext.inGlobalScope) {
             emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
         } else {
@@ -161,7 +160,8 @@ final class EmitHelpers {
         }
     }
 
-    void emitArgumentsArrayWithSpread(List<Expression> arguments) {
+    static void emitArgumentsArrayWithSpread(CompilerContext compilerContext, List<Expression> arguments) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitIntOperand(Opcode.ARRAY_FROM, 0);
 
         boolean hasSpread = arguments.stream().anyMatch(arg -> arg instanceof SpreadElement);
@@ -170,11 +170,11 @@ final class EmitHelpers {
         emitter.emitIntOperand(Opcode.PUSH_I32, 0);
         for (Expression arg : arguments) {
             if (arg instanceof SpreadElement spreadElement) {
-                compilerContext.expressionCompiler.compile(spreadElement.getArgument());
+                compilerContext.compileExpression(spreadElement.getArgument());
                 emitter.emitSourcePosition(spreadElement.getArgument().getLocation());
                 emitter.emitOpcode(Opcode.APPEND);
             } else {
-                compilerContext.expressionCompiler.compile(arg);
+                compilerContext.compileExpression(arg);
                 emitter.emitArrayElement();
             }
         }
@@ -191,7 +191,8 @@ final class EmitHelpers {
      * <p>
      * Stack: unchanged
      */
-    void emitAsyncIteratorReturn(int iteratorLocal) {
+    static void emitAsyncIteratorReturn(CompilerContext compilerContext, int iteratorLocal) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitGetLocal(iteratorLocal);
         emitter.emitOpcode(Opcode.UNDEFINED);
         emitter.emitOpcode(Opcode.UNDEFINED);
@@ -213,7 +214,7 @@ final class EmitHelpers {
      * create VarRef objects directly from the parent frame at runtime. This enables reference-based closure capture
      * (mutations visible across closures).
      */
-    void emitCapturedValues(BytecodeCompiler nestedCompiler, JSBytecodeFunction templateFunction) {
+    static void emitCapturedValues(BytecodeCompiler nestedCompiler, JSBytecodeFunction templateFunction) {
         int captureCount = nestedCompiler.context().captureResolver.getCapturedBindingCount();
         if (captureCount == 0) {
             return;
@@ -239,7 +240,9 @@ final class EmitHelpers {
      * so attributes and DefinePropertyOrThrow semantics match ECMAScript class semantics. Stack before: ... obj Stack
      * after: ... obj (method added to obj)
      */
-    void emitClassMethodDefinition(MethodDefinition method, JSBytecodeFunction methodFunc, String methodName) {
+    static void emitClassMethodDefinition(CompilerContext compilerContext, MethodDefinition method,
+            JSBytecodeFunction methodFunc, String methodName) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         String kind = method.getKind();
         boolean isComputedKey = method.isComputed() && !(method.getKey() instanceof Literal);
         // Class definitions must create fresh function objects per evaluation.
@@ -247,16 +250,16 @@ final class EmitHelpers {
         if (isComputedKey) {
             // Per ES2024 10.2.1, all parts of a class are strict mode code.
             if (compilerContext.inClassBody) {
-                compilerContext.functionExpressionCompiler.emitStrictClassBodyExpression(method.getKey());
+                FunctionExpressionCompiler.emitStrictClassBodyExpression(compilerContext, method.getKey());
             } else {
-                compilerContext.expressionCompiler.compile(method.getKey());
+                compilerContext.compileExpression(method.getKey());
             }
         } else if (method.getKey() instanceof Identifier) {
             emitter.emitPushConstant(new JSString(methodName));
         } else {
             // For Literal keys (numeric, null, string), compile the expression directly
             // to preserve the correct type (e.g., JSNumber for numeric property names)
-            compilerContext.expressionCompiler.compile(method.getKey());
+            compilerContext.compileExpression(method.getKey());
         }
 
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, methodFunc);
@@ -277,32 +280,32 @@ final class EmitHelpers {
      * Emit CLOSE_LOC opcodes for variables in a pattern. Recursively handles Identifier, ArrayPattern, ObjectPattern,
      * AssignmentPattern, and RestElement.
      */
-    void emitCloseLocForPattern(Pattern pattern) {
+    static void emitCloseLocForPattern(CompilerContext compilerContext, Pattern pattern) {
         if (pattern instanceof Identifier id) {
             Integer localIdx = compilerContext.scopeManager.findLocalInScopes(id.getName());
             if (localIdx != null) {
-                emitter.emitIntOperand(Opcode.CLOSE_LOC, localIdx);
+                compilerContext.emitter.emitIntOperand(Opcode.CLOSE_LOC, localIdx);
             }
         } else if (pattern instanceof ArrayPattern arrayPattern) {
             for (Pattern element : arrayPattern.getElements()) {
                 if (element != null) {
-                    emitCloseLocForPattern(element);
+                    emitCloseLocForPattern(compilerContext, element);
                 }
             }
         } else if (pattern instanceof ObjectPattern objectPattern) {
             for (ObjectPatternProperty property : objectPattern.getProperties()) {
                 if (property.getValue() != null) {
-                    emitCloseLocForPattern(property.getValue());
+                    emitCloseLocForPattern(compilerContext, property.getValue());
                 }
             }
             if (objectPattern.getRestElement() != null) {
-                emitCloseLocForPattern(objectPattern.getRestElement());
+                emitCloseLocForPattern(compilerContext, objectPattern.getRestElement());
             }
         } else if (pattern instanceof AssignmentPattern assignmentPattern) {
-            emitCloseLocForPattern(assignmentPattern.getLeft());
+            emitCloseLocForPattern(compilerContext, assignmentPattern.getLeft());
         } else if (pattern instanceof RestElement restElement) {
             if (restElement.getArgument() != null) {
-                emitCloseLocForPattern(restElement.getArgument());
+                emitCloseLocForPattern(compilerContext, restElement.getArgument());
             }
         }
     }
@@ -311,13 +314,14 @@ final class EmitHelpers {
      * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration. Used at the end of for-loop iteration
      * bodies to freeze VarRefs for per-iteration binding.
      */
-    void emitCloseLocForPattern(VariableDeclaration varDecl) {
+    static void emitCloseLocForPattern(CompilerContext compilerContext, VariableDeclaration varDecl) {
         for (VariableDeclarator decl : varDecl.getDeclarations()) {
-            emitCloseLocForPattern(decl.getId());
+            emitCloseLocForPattern(compilerContext, decl.getId());
         }
     }
 
-    void emitConditionalVarInit(String name) {
+    static void emitConditionalVarInit(CompilerContext compilerContext, String name) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
         emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
         emitter.emitOpcode(Opcode.IN);
@@ -327,29 +331,32 @@ final class EmitHelpers {
         emitter.patchJumpToHere(skipJump);
     }
 
-    void emitConstAssignmentError(String name) {
+    static void emitConstAssignmentError(CompilerContext compilerContext, String name) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitOpcode(Opcode.DROP);
         emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name);
         emitter.emitU8(0);
     }
 
-    void emitConstAssignmentErrorForCaptured(String name, int capturedIndex) {
+    static void emitConstAssignmentErrorForCaptured(CompilerContext compilerContext, String name, int capturedIndex) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, capturedIndex);
         emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitHelpers.emitConstAssignmentError(name);
+        EmitHelpers.emitConstAssignmentError(compilerContext, name);
     }
 
-    void emitConstAssignmentErrorForLocal(String name, int localIndex) {
+    static void emitConstAssignmentErrorForLocal(CompilerContext compilerContext, String name, int localIndex) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitIntOperand(Opcode.GET_LOC_CHECK, localIndex);
         emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitHelpers.emitConstAssignmentError(name);
+        EmitHelpers.emitConstAssignmentError(compilerContext, name);
     }
 
-    void emitCurrentScopeUsingDisposal() {
-        emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
+    static void emitCurrentScopeUsingDisposal(CompilerContext compilerContext) {
+        emitScopeUsingDisposal(compilerContext, compilerContext.scopeManager.currentScope());
     }
 
-    void emitDefaultParameterInit(BytecodeCompiler functionCompiler, FunctionParams functionParams,
+    static void emitDefaultParameterInit(BytecodeCompiler functionCompiler, FunctionParams functionParams,
             List<Integer> parameterSlotIndexes, ASTNode ast) {
         List<Pattern> params = functionParams.params();
         List<Expression> defaults = functionParams.defaults();
@@ -397,7 +404,7 @@ final class EmitHelpers {
                 // DROP - drop the duplicated arg value (it was undefined)
                 functionContext.emitter.emitOpcode(Opcode.DROP);
                 // Compile the default expression
-                functionContext.expressionCompiler.compile(defaultExpr);
+                functionContext.compileExpression(defaultExpr);
                 if (params.get(i) instanceof Identifier parameterIdentifier && defaultExpr.isAnonymousFunction()) {
                     functionContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, parameterIdentifier.getName());
                 }
@@ -418,12 +425,13 @@ final class EmitHelpers {
     }
 
     /** Stack: value -> value, evaluating the initializer only for undefined. */
-    void emitDefaultValue(String inferredName, Expression initializer) {
+    static void emitDefaultValue(CompilerContext compilerContext, String inferredName, Expression initializer) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitOpcode(Opcode.DUP);
         emitter.emitOpcode(Opcode.IS_UNDEFINED);
         int skip = emitter.emitJump(Opcode.IF_FALSE);
         emitter.emitOpcode(Opcode.DROP);
-        compilerContext.expressionCompiler.compile(initializer);
+        compilerContext.compileExpression(initializer);
         if (inferredName != null && initializer.isAnonymousFunction()) {
             emitter.emitOpcodeAtom(Opcode.SET_NAME, inferredName);
         }
@@ -435,7 +443,7 @@ final class EmitHelpers {
      * function value to the enclosing var-scope binding. Per spec, this happens when the FunctionDeclaration is
      * evaluated, not when hoisted.
      */
-    void emitDeferredAnnexBVarStore(FunctionDeclaration functionDeclaration) {
+    static void emitDeferredAnnexBVarStore(CompilerContext compilerContext, FunctionDeclaration functionDeclaration) {
         if (functionDeclaration.getId() == null) {
             return;
         }
@@ -449,18 +457,21 @@ final class EmitHelpers {
         // Load the function from its block-scope local, then store in var scope
         Integer blockLocalIndex = compilerContext.scopeManager.findLocalInScopes(functionName);
         if (blockLocalIndex != null) {
-            emitter.emitGetLocal(blockLocalIndex);
-            emitAnnexBVarStore(functionName);
+            compilerContext.emitter.emitGetLocal(blockLocalIndex);
+            emitAnnexBVarStore(compilerContext, functionName);
         }
     }
 
-    void emitDropIteratorState() {
+    static void emitDropIteratorState(CompilerContext compilerContext) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitOpcode(Opcode.DROP); // catch offset
         emitter.emitOpcode(Opcode.DROP); // next method
         emitter.emitOpcode(Opcode.DROP); // iterator
     }
 
-    void emitGetSuperValue(MemberExpression memberExpr, boolean keepReceiverForCall) {
+    static void emitGetSuperValue(CompilerContext compilerContext, MemberExpression memberExpr,
+            boolean keepReceiverForCall) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         // Stack start: []
         // Push current this as receiver for super property resolution.
         emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -473,14 +484,14 @@ final class EmitHelpers {
             // BEFORE GetSuperBase(). This ensures side effects in the key expression
             // (e.g. modifying the prototype chain) are visible when the super base
             // is resolved. Stack: [this] -> [this, key, superBase] -> SWAP -> [this, superBase, key]
-            emitSuperPropertyKey(memberExpr);
+            emitSuperPropertyKey(compilerContext, memberExpr);
             emitter.emitSuperBase();
             emitter.emitOpcode(Opcode.SWAP);
         } else {
             // For non-computed super.prop, the key is a static identifier with no side effects.
             // Resolve super base first, then push key.
             emitter.emitSuperBase();
-            emitSuperPropertyKey(memberExpr);
+            emitSuperPropertyKey(compilerContext, memberExpr);
         }
         emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
     }
@@ -490,28 +501,30 @@ final class EmitHelpers {
      * when labeled break/continue crosses for-of loop boundaries, to properly close inner iterators whose cleanup code
      * would otherwise be skipped. Following QuickJS close_scopes pattern for iterator cleanup.
      */
-    void emitIteratorCloseForLoopsUntil(LoopContext target) {
+    static void emitIteratorCloseForLoopsUntil(CompilerContext compilerContext, LoopContext target) {
         for (LoopContext loopCtx : compilerContext.loopManager) {
             if (loopCtx == target) {
                 break;
             }
             if (loopCtx.hasIterator) {
-                emitLoopIteratorClose(loopCtx);
+                emitLoopIteratorClose(compilerContext, loopCtx);
             }
         }
     }
 
-    void emitIteratorCloseUnlessDone(int doneLocal) {
+    static void emitIteratorCloseUnlessDone(CompilerContext compilerContext, int doneLocal) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitGetLocal(doneLocal);
         int exhausted = emitter.emitJump(Opcode.IF_TRUE);
         emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
         int end = emitter.emitJump(Opcode.GOTO);
         emitter.patchJumpToHere(exhausted);
-        emitDropIteratorState();
+        emitDropIteratorState(compilerContext);
         emitter.patchJumpToHere(end);
     }
 
-    void emitIteratorRestArray(int targetDepth) {
+    static void emitIteratorRestArray(CompilerContext compilerContext, int targetDepth) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitIntOperand(Opcode.ARRAY_FROM, 0);
         emitter.emitIntOperand(Opcode.PUSH_I32, 0);
 
@@ -531,10 +544,10 @@ final class EmitHelpers {
      * Close a loop's iterator: {@code ITERATOR_CLOSE}, followed for a {@code for await} loop by the awaited
      * {@code return()}.
      */
-    void emitLoopIteratorClose(LoopContext loopContext) {
-        emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+    static void emitLoopIteratorClose(CompilerContext compilerContext, LoopContext loopContext) {
+        compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
         if (loopContext.asyncIteratorLocal >= 0) {
-            emitAsyncIteratorReturn(loopContext.asyncIteratorLocal);
+            emitAsyncIteratorReturn(compilerContext, loopContext.asyncIteratorLocal);
         }
     }
 
@@ -545,19 +558,23 @@ final class EmitHelpers {
      * @param memberExpr
      *            the member expression
      */
-    void emitMemberSourcePosition(MemberExpression memberExpr) {
-        emitter.emitSourcePosition(
+    static void emitMemberSourcePosition(CompilerContext compilerContext, MemberExpression memberExpr) {
+        compilerContext.emitter.emitSourcePosition(
                 memberExpr.isComputed() ? memberExpr.getLocation() : memberExpr.getProperty().getLocation());
     }
 
-    void emitMethodCallOnLocalObject(int localIndex, String methodName, int argCount) {
+    static void emitMethodCallOnLocalObject(CompilerContext compilerContext, int localIndex, String methodName,
+            int argCount) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitGetLocal(localIndex);
         emitter.emitOpcodeAtom(Opcode.GET_FIELD2, methodName);
         emitter.emitOpcode(Opcode.SWAP);
         emitter.emitIntOperand(Opcode.CALL, argCount);
     }
 
-    void emitMethodCallWithSingleArgOnLocalObject(int localIndex, String methodName) {
+    static void emitMethodCallWithSingleArgOnLocalObject(CompilerContext compilerContext, int localIndex,
+            String methodName) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         int argLocalIndex = compilerContext.storeTemporary("#using_arg_");
 
         emitter.emitGetLocal(localIndex);
@@ -567,7 +584,8 @@ final class EmitHelpers {
         emitter.emitIntOperand(Opcode.CALL, 1);
     }
 
-    void emitNextDestructuringValue(int depth, int doneLocal) {
+    static void emitNextDestructuringValue(CompilerContext compilerContext, int depth, int doneLocal) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitIntOperand(Opcode.FOR_OF_NEXT, depth);
         if (doneLocal >= 0) {
             emitter.emitOpcode(Opcode.DUP);
@@ -576,7 +594,8 @@ final class EmitHelpers {
         emitter.emitOpcode(Opcode.DROP);
     }
 
-    void emitNonComputedPublicFieldKey(Expression key) {
+    static void emitNonComputedPublicFieldKey(CompilerContext compilerContext, Expression key) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (key instanceof Identifier id) {
             emitter.emitPushConstant(new JSString(id.getName()));
             return;
@@ -611,7 +630,8 @@ final class EmitHelpers {
      * @param dropCount
      *            how many values the short-circuit path drops, the tested value included
      */
-    void emitOptionalChainTest(int dropCount) {
+    static void emitOptionalChainTest(CompilerContext compilerContext, int dropCount) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitOpcode(Opcode.DUP);
         emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
         int jumpToNext = emitter.emitJump(Opcode.IF_FALSE);
@@ -623,28 +643,29 @@ final class EmitHelpers {
         emitter.patchJumpToHere(jumpToNext);
     }
 
-    void emitPrivateSymbol(PrivateIdentifier privateIdentifier) {
+    static void emitPrivateSymbol(CompilerContext compilerContext, PrivateIdentifier privateIdentifier) {
         JSSymbol symbol = compilerContext.privateSymbol(privateIdentifier);
         if (symbol == null) {
             throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'",
                     privateIdentifier);
         }
 
-        emitter.emitPushConstant(symbol);
+        compilerContext.emitter.emitPushConstant(symbol);
     }
 
-    void emitScopeUsingDisposal(CompilerScope scope) {
+    static void emitScopeUsingDisposal(CompilerContext compilerContext, CompilerScope scope) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         Integer usingStackLocalIndex = scope.getUsingStackLocalIndex();
         if (usingStackLocalIndex == null) {
             return;
         }
 
         if (scope.isUsingStackAsync()) {
-            emitMethodCallOnLocalObject(usingStackLocalIndex, "disposeAsync", 0);
+            emitMethodCallOnLocalObject(compilerContext, usingStackLocalIndex, "disposeAsync", 0);
             emitter.emitOpcode(Opcode.AWAIT);
             emitter.emitOpcode(Opcode.DROP);
         } else {
-            emitMethodCallOnLocalObject(usingStackLocalIndex, "dispose", 0);
+            emitMethodCallOnLocalObject(compilerContext, usingStackLocalIndex, "dispose", 0);
             emitter.emitOpcode(Opcode.DROP);
         }
     }
@@ -653,7 +674,8 @@ final class EmitHelpers {
      * Emit disposal with a caught exception passed as an argument. Stack on entry: [caught_exception] The caught
      * exception is passed to dispose/disposeAsync so it can compose SuppressedErrors.
      */
-    void emitScopeUsingDisposalWithException(CompilerScope scope) {
+    static void emitScopeUsingDisposalWithException(CompilerContext compilerContext, CompilerScope scope) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         Integer usingStackLocalIndex = scope.getUsingStackLocalIndex();
         if (usingStackLocalIndex == null) {
             // No using stack - just re-throw the caught exception
@@ -702,33 +724,35 @@ final class EmitHelpers {
         emitter.patchJumpToHere(skipRethrowJump);
     }
 
-    void emitSuperPropertyKey(MemberExpression memberExpr) {
+    static void emitSuperPropertyKey(CompilerContext compilerContext, MemberExpression memberExpr) {
         if (memberExpr.isComputed()) {
-            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+            compilerContext.compileExpression(memberExpr.getProperty());
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
-            emitter.emitPushConstant(new JSString(propId.getName()));
+            compilerContext.emitter.emitPushConstant(new JSString(propId.getName()));
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
             throw new JSCompilerException("super private fields are not supported", privateIdentifier);
         } else {
-            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+            compilerContext.compileExpression(memberExpr.getProperty());
         }
     }
 
     /** Stack: ... -> ... this superBase propertyKey. Computed keys are evaluated before GetSuperBase. */
-    void emitSuperPropertyReference(MemberExpression member) {
+    static void emitSuperPropertyReference(CompilerContext compilerContext, MemberExpression member) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         emitter.emitOpcode(Opcode.PUSH_THIS);
         if (member.isComputed()) {
-            emitSuperPropertyKey(member);
+            emitSuperPropertyKey(compilerContext, member);
         }
         emitter.emitSuperBase();
         if (member.isComputed()) {
             emitter.emitOpcode(Opcode.SWAP);
         } else {
-            emitSuperPropertyKey(member);
+            emitSuperPropertyKey(compilerContext, member);
         }
     }
 
-    void emitUsingDisposalsForScopeDepthGreaterThan(int targetScopeDepth) {
+    static void emitUsingDisposalsForScopeDepthGreaterThan(CompilerContext compilerContext, int targetScopeDepth) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         for (CompilerScope scope : compilerContext.scopeManager) {
             if (scope.getScopeDepth() > targetScopeDepth) {
                 // If scope has a CATCH handler on the stack (from using declaration),
@@ -738,12 +762,13 @@ final class EmitHelpers {
                     emitter.emitOpcode(Opcode.NIP_CATCH);
                     emitter.emitOpcode(Opcode.DROP);
                 }
-                emitScopeUsingDisposal(scope);
+                emitScopeUsingDisposal(compilerContext, scope);
             }
         }
     }
 
-    int ensureUsingStackLocal(boolean asyncUsingDeclaration, ASTNode ast) {
+    static int ensureUsingStackLocal(CompilerContext compilerContext, boolean asyncUsingDeclaration, ASTNode ast) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         CompilerScope scope = compilerContext.scopeManager.currentScope();
         Integer existingLocalIndex = scope.getUsingStackLocalIndex();
         if (existingLocalIndex != null) {
@@ -767,9 +792,10 @@ final class EmitHelpers {
     }
 
     /** Dispose on both normal and abrupt completion, preserving a block result when present. */
-    void finishUsingScope(int handler, boolean hasCompletionValue) {
+    static void finishUsingScope(CompilerContext compilerContext, int handler, boolean hasCompletionValue) {
+        BytecodeEmitter emitter = compilerContext.emitter;
         if (handler < 0) {
-            emitCurrentScopeUsingDisposal();
+            emitCurrentScopeUsingDisposal(compilerContext);
             return;
         }
         if (!hasCompletionValue) {
@@ -779,23 +805,11 @@ final class EmitHelpers {
         if (!hasCompletionValue) {
             emitter.emitOpcode(Opcode.DROP);
         }
-        emitCurrentScopeUsingDisposal();
+        emitCurrentScopeUsingDisposal(compilerContext);
         int end = emitter.emitJump(Opcode.GOTO);
         emitter.patchJumpToHere(handler);
-        emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+        emitScopeUsingDisposalWithException(compilerContext, compilerContext.scopeManager.currentScope());
         emitter.patchJumpToHere(end);
-    }
-
-    int startArrayDestructuring(String doneLocalPrefix, boolean hasRest) {
-        emitter.emitOpcode(Opcode.FOR_OF_START);
-        if (hasRest) {
-            return -1;
-        }
-        int doneLocal = compilerContext.scopeManager.currentScope()
-                .declareLocal(doneLocalPrefix + emitter.currentOffset());
-        emitter.emitOpcode(Opcode.PUSH_FALSE);
-        emitter.emitPutLocal(doneLocal);
-        return doneLocal;
     }
 
     static boolean hasUsingDeclarations(java.util.List<Statement> statements) {
@@ -805,5 +819,18 @@ final class EmitHelpers {
             }
         }
         return false;
+    }
+
+    static int startArrayDestructuring(CompilerContext compilerContext, String doneLocalPrefix, boolean hasRest) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        emitter.emitOpcode(Opcode.FOR_OF_START);
+        if (hasRest) {
+            return -1;
+        }
+        int doneLocal = compilerContext.scopeManager.currentScope()
+                .declareLocal(doneLocalPrefix + emitter.currentOffset());
+        emitter.emitOpcode(Opcode.PUSH_FALSE);
+        emitter.emitPutLocal(doneLocal);
+        return doneLocal;
     }
 }

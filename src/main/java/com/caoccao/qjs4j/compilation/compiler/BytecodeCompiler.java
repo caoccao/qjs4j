@@ -30,8 +30,8 @@ import java.util.Map;
  * <p>
  * This is the public facade that delegates to specialized compiler classes: {@link ExpressionCompiler},
  * {@link StatementCompiler}, {@link FunctionDeclarationCompiler}, {@link ClassDeclarationCompiler},
- * {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}. All shared mutable state and delegate
- * references are held in {@link CompilerContext}.
+ * {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}. Shared compilation state is held in
+ * {@link CompilerContext}.
  */
 public final class BytecodeCompiler {
     private final CompilerContext compilerContext;
@@ -57,7 +57,7 @@ public final class BytecodeCompiler {
      */
     public Bytecode compile(ASTNode ast) {
         if (ast instanceof Program program) {
-            compilerContext.programCompiler.compile(program);
+            ProgramCompiler.compile(compilerContext, program);
         } else {
             throw new JSCompilerException("Expected Program node", ast);
         }

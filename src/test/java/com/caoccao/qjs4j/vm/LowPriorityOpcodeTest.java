@@ -49,7 +49,7 @@ public class LowPriorityOpcodeTest extends OpcodeTest {
             JSBytecodeFunction closure = (JSBytecodeFunction) result;
             assertThat(closure.getCapturedThisArg()).isSameAs(receiver);
             assertThat(closure.getPrototype()).isSameAs(template.getPrototype());
-            assertNumberValue(closure.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS), 42);
+            assertNumberValue(closure.call(context, JSUndefined.INSTANCE), 42);
         }
     }
 

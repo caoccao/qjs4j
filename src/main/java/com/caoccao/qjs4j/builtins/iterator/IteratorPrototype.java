@@ -223,7 +223,7 @@ public final class IteratorPrototype {
                     if (!(returnMethod instanceof JSFunction returnFunc)) {
                         return childContext.throwTypeError("not a function");
                     }
-                    return returnFunc.call(childContext, wrappedIterator, JSValue.NO_ARGS);
+                    return returnFunc.call(childContext, wrappedIterator);
                 });
 
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Wrap");
@@ -304,7 +304,7 @@ public final class IteratorPrototype {
             if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
                 return context.throwTypeError("not a function");
             }
-            JSValue iterValue = iteratorFunction.call(context, callThis, JSValue.NO_ARGS);
+            JSValue iterValue = iteratorFunction.call(context, callThis);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -659,7 +659,7 @@ public final class IteratorPrototype {
         if (internalNext == null) {
             return context.throwTypeError("Iterator.prototype.next called on non-iterator");
         }
-        return internalNext.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
+        return internalNext.call(context, wrapOrHelperIteratorObject);
     }
 
     public static JSValue wrapOrHelperReturn(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -670,7 +670,7 @@ public final class IteratorPrototype {
         if (internalReturn == null) {
             return completed(context);
         }
-        return internalReturn.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
+        return internalReturn.call(context, wrapOrHelperIteratorObject);
     }
 
     /**

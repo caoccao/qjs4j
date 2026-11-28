@@ -67,7 +67,7 @@ public final class AsyncIteratorPrototype {
 
         JSValue returnResult;
         try {
-            returnResult = returnFunction.call(context, iteratorObject, new JSValue[]{JSUndefined.INSTANCE});
+            returnResult = returnFunction.call(context, iteratorObject, JSUndefined.INSTANCE);
         } catch (JSException e) {
             resultPromise.reject(e.getErrorValue());
             return resultPromise;

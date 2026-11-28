@@ -27,7 +27,7 @@ import java.util.Map;
 /**
  * Intl.ListFormat instance object. Uses CLDR-based patterns for locale-specific list formatting.
  */
-public final class JSIntlListFormat extends JSObject {
+public final class JSIntlListFormat extends IntlLocaleObject {
     private static final ListPatterns COMMA = ListPatterns.uniform(", ");
     private static final ListPatterns EMPTY = ListPatterns.uniform("");
 
@@ -80,13 +80,11 @@ public final class JSIntlListFormat extends JSObject {
         registerStyles("fr|unit", new ListPatterns(", ", ", ", ", ", " et "), COMMA, SPACE);
     }
 
-    private final Locale locale;
     private final String style;
     private final String type;
 
     public JSIntlListFormat(JSContext context, Locale locale, String style, String type) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.style = style;
         this.type = type;
     }
@@ -106,10 +104,6 @@ public final class JSIntlListFormat extends JSObject {
             result.append(patterns.separator(index, count)).append(values.get(index));
         }
         return result.toString();
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public ListPatterns getPatterns() {

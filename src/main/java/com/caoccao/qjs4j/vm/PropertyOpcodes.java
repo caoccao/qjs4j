@@ -46,7 +46,7 @@ final class PropertyOpcodes {
                 JSFunction accessor = write ? descriptor.getSetter() : descriptor.getGetter();
                 if (accessor != null) {
                     if (!write) {
-                        return accessor.call(vm.context, object, JSValue.NO_ARGS);
+                        return accessor.call(vm.context, object);
                     }
                     accessor.call(vm.context, object, vm.singleArg(value));
                     return value;

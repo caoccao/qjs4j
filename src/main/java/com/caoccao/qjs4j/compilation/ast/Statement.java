@@ -27,11 +27,14 @@ public abstract sealed class Statement extends ASTNode permits ExpressionStateme
         WhileLoop, ForLoop, ReturnStatement, JumpStatement, ThrowStatement, TryStatement, SwitchStatement,
         WithStatement, DebuggerStatement, VariableDeclaration, LabeledStatement, Declaration {
 
-    protected List<VariableDeclarator> varDeclarators;
+    private List<VariableDeclarator> varDeclarators;
 
     protected Statement(SourceLocation location) {
         super(location);
-        this.varDeclarators = null;
+    }
+
+    protected List<VariableDeclarator> computeVarDeclarators() {
+        return List.of();
     }
 
     public boolean containsVarArguments() {
@@ -46,7 +49,7 @@ public abstract sealed class Statement extends ASTNode permits ExpressionStateme
 
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
-            varDeclarators = List.of();
+            varDeclarators = computeVarDeclarators();
         }
         return varDeclarators;
     }
@@ -64,5 +67,11 @@ public abstract sealed class Statement extends ASTNode permits ExpressionStateme
             return labeledStatement.getBody().unwrapLabeledFunctionDeclaration();
         }
         return null;
+    }
+
+    protected static void appendVarDeclarators(List<VariableDeclarator> declarations, Statement statement) {
+        if (statement != null) {
+            declarations.addAll(statement.getVarDeclarators());
+        }
     }
 }

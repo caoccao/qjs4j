@@ -55,12 +55,9 @@ public final class TemporalPlainMonthDayConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        int referenceYear = DEFAULT_REFERENCE_ISO_YEAR;
-        if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
-            referenceYear = TemporalUtils.toIntegerThrowOnInfinity(context, args[3]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        int referenceYear = TemporalUtils.optionalIntegerArgument(context, args, 3, DEFAULT_REFERENCE_ISO_YEAR);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
         IsoDate isoDate = new IsoDate(referenceYear, isoMonth, isoDay);

@@ -24,7 +24,6 @@ import java.util.function.Predicate;
  * Represents a binary expression.
  */
 public final class BinaryExpression extends Expression {
-    private Boolean directEvalVarArgumentsInside;
     private final Expression left;
     private final BinaryOperator operator;
     private final Expression right;
@@ -34,26 +33,39 @@ public final class BinaryExpression extends Expression {
         this.operator = operator;
         this.left = left;
         this.right = right;
-        directEvalVarArgumentsInside = null;
     }
 
     @Override
-    public boolean containsDirectEvalVarArguments() {
-        if (directEvalVarArgumentsInside == null) {
-            containsAlongLeftSpine(this, (node, value) -> node.directEvalVarArgumentsInside = value,
-                    Expression::containsDirectEvalVarArguments);
+    boolean computeDirectEvalVarArguments() {
+        return containsAlongLeftSpine(SyntaxQuery.DIRECT_EVAL_VAR_ARGUMENTS);
+    }
+
+    /**
+     * Evaluates a cached, short-circuiting "contains" test over a left-associative chain without recursing down its
+     * left spine. Chains such as {@code a + b + c + ...} nest on the left, so a recursive walk needs one Java frame per
+     * operand and overflows the stack for generated code with thousands of operands.
+     */
+    private boolean containsAlongLeftSpine(SyntaxQuery query) {
+        ArrayList<BinaryExpression> spine = new ArrayList<>();
+        Expression current = this;
+        while (current instanceof BinaryExpression binaryExpression) {
+            spine.add(binaryExpression);
+            current = binaryExpression.left;
         }
-        return directEvalVarArgumentsInside;
+        boolean result = query.in(current);
+        for (int i = spine.size() - 1; i >= 0; i--) {
+            BinaryExpression binaryExpression = spine.get(i);
+            if (!result && query.in(binaryExpression.right)) {
+                result = true;
+            }
+            query.cache(binaryExpression, result);
+        }
+        return result;
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
-        if (kind == Suspension.AWAIT) {
-            containsAlongLeftSpine(this, (node, value) -> node.awaitInside = value, Expression::containsAwait);
-            return awaitInside;
-        }
-        containsAlongLeftSpine(this, (node, value) -> node.yieldInside = value, Expression::containsYield);
-        return yieldInside;
+    boolean containsSuspension(SyntaxQuery kind) {
+        return containsAlongLeftSpine(kind);
     }
 
     public Expression getLeft() {
@@ -74,29 +86,6 @@ public final class BinaryExpression extends Expression {
             return right.hasTailCallInTailPosition();
         }
         return false;
-    }
-
-    /**
-     * Evaluates a cached, short-circuiting "contains" test over a left-associative chain without recursing down its
-     * left spine. Chains such as {@code a + b + c + ...} nest on the left, so a recursive walk needs one Java frame per
-     * operand and overflows the stack for generated code with thousands of operands.
-     */
-    private static void containsAlongLeftSpine(BinaryExpression root, BiConsumer<BinaryExpression, Boolean> setCache,
-            Predicate<Expression> test) {
-        ArrayList<BinaryExpression> spine = new ArrayList<>();
-        Expression current = root;
-        while (current instanceof BinaryExpression binaryExpression) {
-            spine.add(binaryExpression);
-            current = binaryExpression.left;
-        }
-        boolean result = test.test(current);
-        for (int i = spine.size() - 1; i >= 0; i--) {
-            BinaryExpression binaryExpression = spine.get(i);
-            if (!result && test.test(binaryExpression.right)) {
-                result = true;
-            }
-            setCache.accept(binaryExpression, result);
-        }
     }
 
 }

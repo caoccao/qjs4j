@@ -103,7 +103,7 @@ public non-sealed class JSObject implements JSValue {
         }
         // A pre-existing pending exception does not imply that this setter failed.
         JSValue before = context.getPendingException();
-        setter.call(context, receiver, new JSValue[]{value});
+        setter.call(context, receiver, value);
         JSValue after = context.getPendingException();
         return after == null || after == before;
     }
@@ -135,6 +135,11 @@ public non-sealed class JSObject implements JSValue {
         shape.compact();
 
         this.propertyValues = newValues;
+    }
+
+    /** CreateDataProperty defines an own, writable, enumerable and configurable data property. */
+    public boolean createDataProperty(PropertyKey key, JSValue value) {
+        return defineProperty(key, value, PropertyDescriptor.DataState.All);
     }
 
     /**
@@ -1264,7 +1269,7 @@ public non-sealed class JSObject implements JSValue {
                     JSContext propertyAccessContext = this.context;
                     try {
                         // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                        JSValue result = getter.call(propertyAccessContext, receiver, JSValue.NO_ARGS);
+                        JSValue result = getter.call(propertyAccessContext, receiver);
                         // Check if getter threw an exception - return the error value or undefined
                         if (propertyAccessContext.hasPendingException()) {
                             // Cross-realm: propagate exception to receiver's context
@@ -1740,7 +1745,7 @@ public non-sealed class JSObject implements JSValue {
             }
             return false;
         }
-        return receiver.defineProperty(key, value, PropertyDescriptor.DataState.All);
+        return receiver.createDataProperty(key, value);
     }
 
     /**
@@ -1838,7 +1843,7 @@ public non-sealed class JSObject implements JSValue {
                         // success whenever an exception was already pending on entry, which
                         // swallowed the setter's own failure.
                         JSValue exceptionBefore = context == null ? null : context.getPendingException();
-                        setter.call(context, primitiveReceiver, new JSValue[]{value});
+                        setter.call(context, primitiveReceiver, value);
                         JSValue exceptionAfter = context == null ? null : context.getPendingException();
                         return exceptionAfter == null || exceptionAfter == exceptionBefore;
                     }

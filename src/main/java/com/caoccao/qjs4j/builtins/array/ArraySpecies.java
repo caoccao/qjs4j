@@ -124,7 +124,7 @@ final class ArraySpecies {
     }
 
     static boolean define(JSContext context, JSObject target, long index, JSValue value) {
-        if (target.defineProperty(PropertyKey.fromIndexString(index), value, PropertyDescriptor.DataState.All)) {
+        if (target.createDataProperty(PropertyKey.fromIndexString(index), value)) {
             return true;
         }
         if (!context.hasPendingException()) {

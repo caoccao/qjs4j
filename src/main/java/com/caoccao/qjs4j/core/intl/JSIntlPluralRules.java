@@ -29,9 +29,8 @@ import java.util.Locale;
 /**
  * Intl.PluralRules instance object.
  */
-public final class JSIntlPluralRules extends JSObject {
+public final class JSIntlPluralRules extends IntlLocaleObject {
     public static final String NAME = "Intl.PluralRules";
-    private final Locale locale;
     private final int maximumFractionDigits;
     private final Integer maximumSignificantDigits;
     private final int minimumFractionDigits;
@@ -43,8 +42,7 @@ public final class JSIntlPluralRules extends JSObject {
     public JSIntlPluralRules(JSContext context, Locale locale, String type, String notation, int minimumIntegerDigits,
             int minimumFractionDigits, int maximumFractionDigits, Integer minimumSignificantDigits,
             Integer maximumSignificantDigits) {
-        super(context);
-        this.locale = locale;
+        super(context, locale);
         this.type = type;
         this.notation = notation;
         this.minimumIntegerDigits = minimumIntegerDigits;
@@ -66,10 +64,6 @@ public final class JSIntlPluralRules extends JSObject {
         }
         decimal = decimal.setScale(maximumFractionDigits, RoundingMode.HALF_UP).stripTrailingZeros();
         return decimal.setScale(Math.max(minimumFractionDigits, decimal.scale()));
-    }
-
-    public Locale getLocale() {
-        return locale;
     }
 
     public int getMaximumFractionDigits() {

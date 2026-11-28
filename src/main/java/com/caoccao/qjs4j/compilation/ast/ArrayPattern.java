@@ -31,24 +31,21 @@ public final class ArrayPattern extends Pattern {
     }
 
     @Override
-    boolean containsSuspension(Suspension kind) {
-        return kind.in(elements);
+    protected List<String> computeBoundNames() {
+        List<String> collectedBoundNames = new ArrayList<>();
+        if (elements != null) {
+            for (Pattern element : elements) {
+                if (element != null) {
+                    collectedBoundNames.addAll(element.getBoundNames());
+                }
+            }
+        }
+        return List.copyOf(collectedBoundNames);
     }
 
     @Override
-    public List<String> getBoundNames() {
-        if (boundNames == null) {
-            List<String> collectedBoundNames = new ArrayList<>();
-            if (elements != null) {
-                for (Pattern element : elements) {
-                    if (element != null) {
-                        collectedBoundNames.addAll(element.getBoundNames());
-                    }
-                }
-            }
-            boundNames = List.copyOf(collectedBoundNames);
-        }
-        return boundNames;
+    boolean containsSuspension(SyntaxQuery kind) {
+        return kind.in(elements);
     }
 
     public List<Pattern> getElements() {
