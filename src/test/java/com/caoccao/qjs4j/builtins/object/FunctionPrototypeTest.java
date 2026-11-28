@@ -69,13 +69,12 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         apply.expectNumber(15.0, JSUndefined.INSTANCE, arrayLikeObject);
 
         // Edge case: apply with non-array arguments
-        JSValue result = callBuiltin(FunctionPrototype::apply, testFunc, JSUndefined.INSTANCE, "not an array");
-        assertTypeError(result);
+        var applyMethod = nativeMethod(FunctionPrototype::apply);
+        assertTypeError(applyMethod.call(testFunc, JSUndefined.INSTANCE, "not an array"));
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on non-function
-        result = callBuiltin(FunctionPrototype::apply, new JSString("not a function"));
-        assertTypeError(result);
+        assertTypeError(applyMethod.call("not a function"));
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -104,26 +103,24 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         JSBoundFunction boundFunc = result.asBoundFunction().orElseThrow();
 
         // Call the bound function
-        JSValue callResult = boundFunc.call(context, JSUndefined.INSTANCE, nativeArguments(3));
-        assertNumberValue(callResult, 16.0); // 10
-                                             // +
-                                             // 1
-                                             // +
-                                             // 2
-                                             // +
-                                             // 3
+        assertNumberValue(boundFunc.call(context, JSUndefined.INSTANCE, nativeArguments(3)), 16.0); // 10
+        // +
+        // 1
+        // +
+        // 2
+        // +
+        // 3
 
         // Normal case: bind with no pre-bound arguments
         result = bindMethod.call(boundThis);
         boundFunc = result.asBoundFunction().orElseThrow();
 
-        callResult = boundFunc.call(context, JSUndefined.INSTANCE, nativeArguments(5));
-        assertNumberValue(callResult, 15.0); // 10
-                                             // +
-                                             // 5
+        assertNumberValue(boundFunc.call(context, JSUndefined.INSTANCE, nativeArguments(5)), 15.0); // 10
+        // +
+        // 5
 
         // Edge case: called on non-function
-        result = callBuiltin(FunctionPrototype::bind, new JSString("not a function"));
+        result = callBuiltin(FunctionPrototype::bind, "not a function");
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -148,7 +145,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         call.expectNumber(0.0);
 
         // Edge case: called on non-function
-        assertTypeError(callBuiltin(FunctionPrototype::call, new JSString("not a function")));
+        assertTypeError(callBuiltin(FunctionPrototype::call, "not a function"));
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -191,7 +188,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testFunctionConstructor() {
         // Normal case: function with parameters and body
-        var functionConstructor = builtin(FunctionConstructor::call, JSUndefined.INSTANCE);
+        var functionConstructor = builtin(FunctionConstructor::call);
         JSValue result = functionConstructor.call("a", "b", "return a + b;");
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, nativeArguments(2, 3));
@@ -221,7 +218,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
         // Edge case: syntax error in function body
         result = functionConstructor.call("a", "return a +"); // Incomplete expression
-        assertPendingSyntaxError(context, result);
+        assertPendingSyntaxError(result);
     }
 
     @Test
@@ -308,18 +305,16 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         // Normal case: function with length
         JSFunction testFunc = new JSNativeFunction(context, "test", 3,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = callBuiltin(FunctionPrototype::getLength, testFunc);
-        assertNumberValue(result, 3.0);
+        var getLength = nativeMethod(FunctionPrototype::getLength);
+        assertNumberValue(getLength.call(testFunc), 3.0);
 
         // Normal case: function with zero length
         JSFunction zeroFunc = new JSNativeFunction(context, "zero", 0,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        result = callBuiltin(FunctionPrototype::getLength, zeroFunc);
-        assertNumberValue(result, 0.0);
+        assertNumberValue(getLength.call(zeroFunc), 0.0);
 
         // Edge case: called on non-function
-        result = callBuiltin(FunctionPrototype::getLength, new JSString("not a function"));
-        assertTypeError(result);
+        assertTypeError(getLength.call("not a function"));
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -328,18 +323,16 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         // Normal case: function with name
         JSFunction testFunc = new JSNativeFunction(context, "myFunction", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = callBuiltin(FunctionPrototype::getName, testFunc);
-        assertStringValue(result, "myFunction");
+        var getName = nativeMethod(FunctionPrototype::getName);
+        assertStringValue(getName.call(testFunc), "myFunction");
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction(context, "", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        result = callBuiltin(FunctionPrototype::getName, anonFunc);
-        assertStringValue(result, "");
+        assertStringValue(getName.call(anonFunc), "");
 
         // Edge case: called on non-function
-        result = callBuiltin(FunctionPrototype::getName, new JSString("not a function"));
-        assertTypeError(result);
+        assertTypeError(getName.call("not a function"));
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -417,18 +410,16 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         // Normal case: function with name (QuickJS format)
         JSFunction testFunc = new JSNativeFunction(context, "testFunction", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = callBuiltin(FunctionPrototype::toString_, testFunc);
-        assertStringValue(result, "function testFunction() { [native code] }");
+        var toString_ = nativeMethod(FunctionPrototype::toString_);
+        assertStringValue(toString_.call(testFunc), "function testFunction() { [native code] }");
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction(context, "", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        result = callBuiltin(FunctionPrototype::toString_, anonFunc);
-        assertStringValue(result, "function () { [native code] }");
+        assertStringValue(toString_.call(anonFunc), "function () { [native code] }");
 
         // Edge case: called on non-function
-        result = callBuiltin(FunctionPrototype::toString_, new JSString("not a function"));
-        assertTypeError(result);
+        assertTypeError(toString_.call("not a function"));
         assertThat(context.getPendingException()).isNotNull();
         context.clearPendingException(); // Clear the exception before next test
 

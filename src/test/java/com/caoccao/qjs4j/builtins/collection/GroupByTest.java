@@ -55,10 +55,10 @@ class GroupByTest extends BaseTest {
             assertThat(empty.asObject().orElseThrow().getOwnPropertyKeys()).isEmpty();
         }
 
-        assertPendingTypeError(context, groupBy.call(context, items));
-        assertPendingTypeError(context, groupBy.call(context, JSNull.INSTANCE, callback));
-        assertPendingTypeError(context, groupBy.call(context, new JSNumber(1), callback));
-        assertPendingTypeError(context, groupBy.call(context, items, new JSString("not function")));
+        assertPendingTypeError(groupBy.call(context, items));
+        assertPendingTypeError(groupBy.call(context, JSNull.INSTANCE, callback));
+        assertPendingTypeError(groupBy.call(context, new JSNumber(1), callback));
+        assertPendingTypeError(groupBy.call(context, items, new JSString("not function")));
     }
 
     enum GroupBy {

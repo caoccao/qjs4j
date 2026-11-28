@@ -42,7 +42,7 @@ final class ArrayCopy {
             return null;
         }
         for (long i = 0; i < count; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = ArrayLikeElements.getPresent(context, object, start + i);
             if (context.hasPendingException()) {
                 return null;
@@ -76,7 +76,7 @@ final class ArrayCopy {
             return context.getPendingException();
         }
         for (int i = 2; i < args.length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             result.append(args[i]);
         }
         long suffix = start + deleteCount;
@@ -145,7 +145,7 @@ final class ArrayCopy {
 
         // Step 8: Repeat, while k < final
         for (long i = range.start(); i < range.end(); i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             PropertyKey key = PropertyKey.fromIndexString(i);
             if (!setOrThrow(context, obj, key, value)) {
                 return context.getPendingException();
@@ -184,7 +184,7 @@ final class ArrayCopy {
         long step = backwards ? -1 : 1;
         long end = backwards ? -1 : count;
         for (long i = backwards ? count - 1 : 0; i != end; i += step) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (!copyOrDeleteElement(context, object, PropertyKey.fromIndexString(from + i),
                     PropertyKey.fromIndexString(to + i))) {
                 return false;
@@ -244,7 +244,7 @@ final class ArrayCopy {
 
         for (long lower = 0, upper = length - 1; lower < upper; lower++, upper--) {
 
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             PropertyKey lowerKey = PropertyKey.fromIndexString(lower);
             PropertyKey upperKey = PropertyKey.fromIndexString(upper);
 
@@ -393,7 +393,7 @@ final class ArrayCopy {
             return context.getPendingException();
         }
         for (long i = newLen; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (!deleteOrThrow(context, obj, PropertyKey.fromIndexString(i))) {
                 return context.getPendingException();
             }
@@ -468,7 +468,7 @@ final class ArrayCopy {
         if (!result.copy(context, obj, 0, index, 1)) {
             return context.getPendingException();
         }
-        context.getVirtualMachine().checkExecutionInterruptForNative();
+        context.checkExecutionInterrupt();
         result.append(args[1]);
         return result.copy(context, obj, index + 1, length - index - 1, 1)
                 ? result.finish(context)
@@ -477,7 +477,7 @@ final class ArrayCopy {
 
     private static boolean writeArguments(JSContext context, JSObject object, long target, JSValue[] args, int first) {
         for (int i = first; i < args.length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (!setOrThrow(context, object, PropertyKey.fromIndexString(target++), args[i])) {
                 return false;
             }
@@ -505,7 +505,7 @@ final class ArrayCopy {
 
         boolean copy(JSContext context, JSObject source, long start, long count, int step) {
             for (long i = 0; i < count; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 JSValue value = ArrayPrototype.getElement(context, source, start);
                 if (context.hasPendingException()) {
                     return false;

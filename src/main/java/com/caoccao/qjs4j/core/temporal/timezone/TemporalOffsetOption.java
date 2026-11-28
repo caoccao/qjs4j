@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core.temporal.timezone;
 
+import com.caoccao.qjs4j.core.temporal.TemporalOptionNames;
+import java.util.Map;
+
 /**
  * Temporal offset option enum for controlling how a provided UTC offset is handled during ZonedDateTime operations.
  */
@@ -25,6 +28,8 @@ public enum TemporalOffsetOption {
     REJECT("reject"),
     USE("use");
 
+    private static final Map<String, TemporalOffsetOption> BY_NAME = TemporalOptionNames.index(values(),
+            option -> option.jsName);
     private final String jsName;
 
     TemporalOffsetOption(String jsName) {
@@ -42,15 +47,6 @@ public enum TemporalOffsetOption {
      * Parses a JS offset option string. Returns {@code null} if not recognized.
      */
     public static TemporalOffsetOption fromString(String text) {
-        if (text == null) {
-            return null;
-        }
-        return switch (text) {
-            case "prefer" -> PREFER;
-            case "use" -> USE;
-            case "ignore" -> IGNORE;
-            case "reject" -> REJECT;
-            default -> null;
-        };
+        return BY_NAME.get(text);
     }
 }

@@ -32,19 +32,14 @@ public final class JSBigUint64Array extends JSBigIntTypedArray {
      * Create a BigUint64Array view on an existing buffer.
      */
     public JSBigUint64Array(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length);
+        super(context, buffer, byteOffset, length, TypedArrayKind.BIGUINT64);
     }
 
     /**
      * Create a BigUint64Array with a new buffer.
      */
     public JSBigUint64Array(JSContext context, long length) {
-        super(context, length);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.BIGUINT64;
+        super(context, length, TypedArrayKind.BIGUINT64);
     }
 
     @Override

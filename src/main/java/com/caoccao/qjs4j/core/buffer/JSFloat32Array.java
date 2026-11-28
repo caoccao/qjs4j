@@ -31,19 +31,14 @@ public final class JSFloat32Array extends JSTypedArray {
      * Create a Float32Array view on an existing buffer.
      */
     public JSFloat32Array(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
+        super(context, buffer, byteOffset, length, TypedArrayKind.FLOAT32);
     }
 
     /**
      * Create a Float32Array with a new buffer.
      */
     public JSFloat32Array(JSContext context, long length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.FLOAT32;
+        super(context, length, TypedArrayKind.FLOAT32);
     }
 
     @Override

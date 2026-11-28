@@ -40,15 +40,15 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     private void assertStringIterator(JSNativeCallback method, String first, String second) {
-        JSIterator iterator = method.call(context, newStringMap(), JSValue.NO_ARGS).asIterator().orElseThrow();
+        JSIterator iterator = callBuiltin(method, newStringMap()).asIterator().orElseThrow();
         JSArray values = JSIteratorHelper.toArray(context, iterator);
         assertThat(values.getLength()).isEqualTo(2);
         assertStringValue(values.get(0), first);
         assertStringValue(values.get(1), second);
 
-        JSIterator empty = method.call(context, new JSMap(context), JSValue.NO_ARGS).asIterator().orElseThrow();
+        JSIterator empty = callBuiltin(method, new JSMap(context)).asIterator().orElseThrow();
         assertThat(JSIteratorHelper.toArray(context, empty).getLength()).isZero();
-        assertPendingTypeError(context, method.call(context, new JSString("not map"), JSValue.NO_ARGS));
+        assertPendingTypeError(callBuiltin(method, "not map"));
     }
 
     private JSMap newStringMap() {
@@ -92,11 +92,12 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap map = newStringMap();
 
         // Normal case: clear map
-        assertThat(callBuiltin(MapPrototype::clear, map).isUndefined()).isTrue();
+        var clearMethod = nativeMethod(MapPrototype::clear);
+        assertThat(clearMethod.call(map).isUndefined()).isTrue();
         assertThat(map.size()).isEqualTo(0);
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::clear, new JSString("not map")));
+        assertPendingTypeError(clearMethod.call("not map"));
     }
 
     @Test
@@ -156,7 +157,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         delete.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::delete, new JSString("not map"), "key"));
+        assertPendingTypeError(callBuiltin(MapPrototype::delete, "not map", "key"));
     }
 
     @Test
@@ -404,13 +405,12 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty map
         JSMap emptyMap = new JSMap(context);
-        result = callBuiltin(MapPrototype::entries, emptyMap);
-        iterator = result.asIterator().orElseThrow();
+        iterator = callBuiltin(MapPrototype::entries, emptyMap).asIterator().orElseThrow();
         JSObject emptyResult = iterator.next();
         assertThat((Boolean) emptyResult.get("done").toJavaObject()).isTrue();
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::entries, new JSString("not map")));
+        assertPendingTypeError(callBuiltin(MapPrototype::entries, "not map"));
     }
 
     @Test
@@ -548,13 +548,13 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(resultStr.contains("key2:value2")).isTrue();
 
         // Edge case: no callback function
-        assertPendingTypeError(context, forEachMethod.call());
+        assertPendingTypeError(forEachMethod.call());
 
         // Edge case: non-function callback
-        assertPendingTypeError(context, forEachMethod.call("not function"));
+        assertPendingTypeError(forEachMethod.call("not function"));
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::forEach, new JSString("not map"), callback));
+        assertPendingTypeError(callBuiltin(MapPrototype::forEach, "not map", callback));
     }
 
     @Test
@@ -771,19 +771,16 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: existing key
         var get = builtin(MapPrototype::get, map);
-        JSValue result = get.call("key1");
-        assertStringValue(result, "value1");
+        assertStringValue(get.call("key1"), "value1");
 
         // Normal case: non-existing key
-        result = get.call("key2");
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(get.call("key2").isUndefined()).isTrue();
 
         // Normal case: no arguments
-        result = get.call();
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(get.call().isUndefined()).isTrue();
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::get, new JSString("not map"), "key"));
+        assertPendingTypeError(callBuiltin(MapPrototype::get, "not map", "key"));
     }
 
     @Test
@@ -834,17 +831,15 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty map
         var getSize = builtin(MapPrototype::getSize, map);
-        JSValue result = getSize.call();
-        assertNumberValue(result, 0.0);
+        assertNumberValue(getSize.call(), 0.0);
 
         // Normal case: map with entries
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
-        result = getSize.call();
-        assertNumberValue(result, 2.0);
+        assertNumberValue(getSize.call(), 2.0);
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::getSize, new JSString("not map")));
+        assertPendingTypeError(callBuiltin(MapPrototype::getSize, "not map"));
 
         assertIntegerWithJavet("new Map().size", "var a = new Map(); a.set('a', 1); a.size");
     }
@@ -882,7 +877,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         has.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::has, new JSString("not map"), "key"));
+        assertPendingTypeError(callBuiltin(MapPrototype::has, "not map", "key"));
     }
 
     @Test
@@ -1106,8 +1101,8 @@ public class MapPrototypeTest extends BaseJavetTest {
         iterable.set(PropertyKey.SYMBOL_ITERATOR,
                 new JSNativeFunction(context, "[Symbol.iterator]", 0, (childContext, thisArg, args) -> iterator));
 
-        JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();
-        JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
+        JSObject mapPrototype = context.getGlobalObject().get("Map").asObject().orElseThrow().get("prototype")
+                .asObject().orElseThrow();
         JSValue originalSet = mapPrototype.get("set");
         mapPrototype.set("set", new JSNativeFunction(context, "set", 2,
                 (childContext, thisArg, args) -> childContext.throwError("boom")));
@@ -1158,9 +1153,7 @@ public class MapPrototypeTest extends BaseJavetTest {
                 m.set(3, 'c');
                 out.push(it.next().value);
                 out.push(it.next().value);
-                JSON.stringify(out)""");
-
-        assertStringWithJavet("""
+                JSON.stringify(out)""", """
                 const m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
                 const it = m.keys();
                 const out = [];
@@ -1357,25 +1350,22 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: set key-value pair
         var setMethod = builtin(MapPrototype::set, map);
-        JSValue result = setMethod.call("key", "value");
-        assertThat(result).isEqualTo(map); // Should return the map
+        assertThat(setMethod.call("key", "value")).isEqualTo(map); // Should return the map
         assertThat(map.size()).isEqualTo(1);
         assertStringValue(map.mapGet(new JSString("key")), "value");
 
         // Normal case: update existing key
-        result = setMethod.call("key", "newValue");
-        assertThat(result).isEqualTo(map);
+        assertThat(setMethod.call("key", "newValue")).isEqualTo(map);
         assertThat(map.size()).isEqualTo(1);
         assertStringValue(map.mapGet(new JSString("key")), "newValue");
 
         // Normal case: set with undefined value
-        result = setMethod.call("key2");
-        assertThat(result).isEqualTo(map);
+        assertThat(setMethod.call("key2")).isEqualTo(map);
         assertThat(map.size()).isEqualTo(2);
         assertThat(map.mapGet(new JSString("key2")).isUndefined()).isTrue();
 
         // Edge case: called on non-Map
-        assertPendingTypeError(context, callBuiltin(MapPrototype::set, new JSString("not map"), "key", "value"));
+        assertPendingTypeError(callBuiltin(MapPrototype::set, "not map", "key", "value"));
     }
 
     @Test

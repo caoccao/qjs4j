@@ -65,7 +65,7 @@ public final class RegExpCompiler {
                         context.codePoints[context.pos] == ')' ? "Unmatched ')'" : "Unexpected character in pattern");
             }
             // End with MATCH opcode
-            buffer.appendU8(RegExpOpcode.MATCH.getCode());
+            context.emit(RegExpOpcode.MATCH);
 
             return new RegExpBytecode(buffer.toByteArray(), context.flags, context.captures.count(),
                     // Registers this pattern actually allocated. The matcher saves them on every
@@ -112,26 +112,23 @@ public final class RegExpCompiler {
         switch (ch) {
             case '^' -> {
                 context.lastAtomCanRepeat = false;
-                context.buffer.appendU8(context.isMultiline()
-                        ? RegExpOpcode.LINE_START_M.getCode()
-                        : RegExpOpcode.LINE_START.getCode());
+                context.emit(context.isMultiline() ? RegExpOpcode.LINE_START_M : RegExpOpcode.LINE_START);
                 context.pos++;
             }
 
             case '$' -> {
                 context.lastAtomCanRepeat = false;
-                context.buffer.appendU8(
-                        context.isMultiline() ? RegExpOpcode.LINE_END_M.getCode() : RegExpOpcode.LINE_END.getCode());
+                context.emit(context.isMultiline() ? RegExpOpcode.LINE_END_M : RegExpOpcode.LINE_END);
                 context.pos++;
             }
 
             case '.' -> {
                 if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                    context.emit(RegExpOpcode.PREV);
                 }
-                context.buffer.appendU8(context.isDotAll() ? RegExpOpcode.ANY.getCode() : RegExpOpcode.DOT.getCode());
+                context.emit(context.isDotAll() ? RegExpOpcode.ANY : RegExpOpcode.DOT);
                 if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                    context.emit(RegExpOpcode.PREV);
                 }
                 context.pos++;
             }
@@ -239,31 +236,31 @@ public final class RegExpCompiler {
                 compileLiteralChar(context, readCharacterEscape(context, ch), isBackwardDirection);
             case 'd', 'D', 'w', 'W', 's', 'S' -> {
                 if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                    context.emit(RegExpOpcode.PREV);
                 }
                 if (ch == 's' || ch == 'S') {
-                    context.buffer.appendU8((ch == 's' ? RegExpOpcode.SPACE : RegExpOpcode.NOT_SPACE).getCode());
+                    context.emit(ch == 's' ? RegExpOpcode.SPACE : RegExpOpcode.NOT_SPACE);
                 } else {
                     boolean inverted = ch == 'D' || ch == 'W';
-                    context.buffer.appendU8((inverted ? RegExpOpcode.NOT_RANGE : RegExpOpcode.RANGE).getCode());
+                    context.emit(inverted ? RegExpOpcode.NOT_RANGE : RegExpOpcode.RANGE);
                     RegExpCharacterClass.emitRangePayload(context,
                             RegExpCharacterClass.characterClassRanges(context, Character.toLowerCase(ch)));
                 }
                 if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                    context.emit(RegExpOpcode.PREV);
                 }
             }
             case 'b' -> {
                 // \b - match word boundary
-                context.buffer.appendU8(context.isIgnoreCase() && context.isUnicodeMode()
-                        ? RegExpOpcode.WORD_BOUNDARY_I.getCode()
-                        : RegExpOpcode.WORD_BOUNDARY.getCode());
+                context.emit(context.isIgnoreCase() && context.isUnicodeMode()
+                        ? RegExpOpcode.WORD_BOUNDARY_I
+                        : RegExpOpcode.WORD_BOUNDARY);
             }
             case 'B' -> {
                 // \B - match non-word boundary
-                context.buffer.appendU8(context.isIgnoreCase() && context.isUnicodeMode()
-                        ? RegExpOpcode.NOT_WORD_BOUNDARY_I.getCode()
-                        : RegExpOpcode.NOT_WORD_BOUNDARY.getCode());
+                context.emit(context.isIgnoreCase() && context.isUnicodeMode()
+                        ? RegExpOpcode.NOT_WORD_BOUNDARY_I
+                        : RegExpOpcode.NOT_WORD_BOUNDARY);
             }
             case 'k' -> {
                 // AnnexB: In non-unicode mode with no named capture groups,
@@ -415,9 +412,7 @@ public final class RegExpCompiler {
         if (isCapturing) {
             groupIndex = context.captures.add(captureName);
             // Save start
-            context.buffer.appendU8(
-                    isBackwardDirection ? RegExpOpcode.SAVE_END.getCode() : RegExpOpcode.SAVE_START.getCode());
-            context.buffer.appendU16(groupIndex);
+            context.emitU16(isBackwardDirection ? RegExpOpcode.SAVE_END : RegExpOpcode.SAVE_START, groupIndex);
         }
 
         // Compile group contents
@@ -425,9 +420,7 @@ public final class RegExpCompiler {
 
         if (isCapturing) {
             // Save end
-            context.buffer.appendU8(
-                    isBackwardDirection ? RegExpOpcode.SAVE_START.getCode() : RegExpOpcode.SAVE_END.getCode());
-            context.buffer.appendU16(groupIndex);
+            context.emitU16(isBackwardDirection ? RegExpOpcode.SAVE_START : RegExpOpcode.SAVE_END, groupIndex);
         }
 
         if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
@@ -449,7 +442,7 @@ public final class RegExpCompiler {
         }
         int target = context.emitForwardJump(start);
         compileDisjunction(context, backward);
-        context.buffer.appendU8(match.getCode());
+        context.emit(match);
         context.patchJumpToHere(target);
         if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
             throw new RegExpSyntaxException("Unterminated group");
@@ -459,14 +452,12 @@ public final class RegExpCompiler {
 
     private void compilePattern(CompileContext context) {
         // Save start of capture group 0
-        context.buffer.appendU8(RegExpOpcode.SAVE_START.getCode());
-        context.buffer.appendU16(0); // Capture group 0
+        context.emitU16(RegExpOpcode.SAVE_START, 0); // Capture group 0
 
         compileDisjunction(context, false);
 
         // Save end of capture group 0
-        context.buffer.appendU8(RegExpOpcode.SAVE_END.getCode());
-        context.buffer.appendU16(0); // Capture group 0
+        context.emitU16(RegExpOpcode.SAVE_END, 0); // Capture group 0
     }
 
     private void compileTerm(CompileContext context, boolean isBackwardDirection) {
@@ -592,23 +583,19 @@ public final class RegExpCompiler {
 
     static void compileLiteralChar(CompileContext context, int ch) {
         if (ch <= 0xFFFF) {
-            context.buffer
-                    .appendU8(context.isIgnoreCase() ? RegExpOpcode.CHAR_I.getCode() : RegExpOpcode.CHAR.getCode());
-            context.buffer.appendU16(ch);
+            context.emitU16(context.isIgnoreCase() ? RegExpOpcode.CHAR_I : RegExpOpcode.CHAR, ch);
         } else {
-            context.buffer
-                    .appendU8(context.isIgnoreCase() ? RegExpOpcode.CHAR32_I.getCode() : RegExpOpcode.CHAR32.getCode());
-            context.buffer.appendU32(ch);
+            context.emitU32(context.isIgnoreCase() ? RegExpOpcode.CHAR32_I : RegExpOpcode.CHAR32, ch);
         }
     }
 
     static void compileLiteralChar(CompileContext context, int ch, boolean isBackwardDirection) {
         if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+            context.emit(RegExpOpcode.PREV);
         }
         compileLiteralChar(context, ch);
         if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+            context.emit(RegExpOpcode.PREV);
         }
     }
 
@@ -621,8 +608,7 @@ public final class RegExpCompiler {
         } else {
             opcode = context.isIgnoreCase() ? RegExpOpcode.BACK_REFERENCE_I : RegExpOpcode.BACK_REFERENCE;
         }
-        context.buffer.appendU8(opcode.getCode());
-        context.buffer.appendU16(group);
+        context.emitU16(opcode, group);
     }
 
     static final class CompileContext {
@@ -668,11 +654,30 @@ public final class RegExpCompiler {
             return true;
         }
 
-        int emitForwardJump(RegExpOpcode opcode) {
+        void emit(RegExpOpcode opcode) {
             buffer.appendU8(opcode.getCode());
+        }
+
+        int emitForwardJump(RegExpOpcode opcode) {
+            emit(opcode);
             int operand = buffer.size();
             buffer.appendU32(0);
             return operand;
+        }
+
+        void emitU16(RegExpOpcode opcode, int operand) {
+            emit(opcode);
+            buffer.appendU16(operand);
+        }
+
+        void emitU32(RegExpOpcode opcode, int operand) {
+            emit(opcode);
+            buffer.appendU32(operand);
+        }
+
+        void emitU8(RegExpOpcode opcode, int operand) {
+            emit(opcode);
+            buffer.appendU8(operand);
         }
 
         boolean isDotAll() {

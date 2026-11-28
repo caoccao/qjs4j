@@ -58,7 +58,7 @@ final class ArraySpecies {
 
         // Steps 3-4: Process O (this) and each argument
         for (int i = -1; i < args.length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = (i < 0) ? obj : args[i];
 
             // Step 4a: Let spreadable be ? IsConcatSpreadable(E)
@@ -81,7 +81,7 @@ final class ArraySpecies {
 
                 for (long k = 0; k < elementLength; k++, resultIndex++) {
 
-                    context.getVirtualMachine().checkExecutionInterruptForNative();
+                    context.checkExecutionInterrupt();
                     JSValue value = ArrayLikeElements.getPresent(context, elementObj, k);
                     if (context.hasPendingException()
                             || value != null && !appendConcat(context, resultObj, resultIndex, value)) {
@@ -175,7 +175,7 @@ final class ArraySpecies {
     private static long internalFlattenIntoObject(JSContext context, JSObject source, long sourceLen, int depth,
             JSObject target, long targetIndex, JSValue mapper, JSValue mapperThis) {
         for (long i = 0; i < sourceLen; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = ArrayLikeElements.getPresent(context, source, i);
             if (context.hasPendingException()) {
                 return targetIndex;
@@ -254,7 +254,7 @@ final class ArraySpecies {
         long resultIndex = 0;
         for (long i = 0; i < length; i++) {
 
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = elements.getPresent(i);
             if (context.hasPendingException()) {
                 return context.getPendingException();

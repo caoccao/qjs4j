@@ -41,8 +41,8 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'text'.anchor('')");
 
         // Test quote escaping
-        assertThat(callBuiltin(StringPrototype::anchor, new JSString("test"), "my\"anchor")).isInstanceOfSatisfying(
-                JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("<a name=\"my&quot;anchor\">test</a>"));
+        assertThat(callBuiltin(StringPrototype::anchor, "test", "my\"anchor")).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("<a name=\"my&quot;anchor\">test</a>"));
     }
 
     @Test
@@ -81,12 +81,11 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = callBuiltin(StringPrototype::charAt, empty, 0);
-        assertStringValue(result, "");
+        var charAtMethod = nativeMethod(StringPrototype::charAt);
+        assertStringValue(charAtMethod.call(empty, 0), "");
 
         // Non-string thisArg
-        result = callBuiltin(StringPrototype::charAt, new JSNumber(42), 0);
-        assertStringValue(result, "4");
+        assertStringValue(charAtMethod.call(42, 0), "4");
     }
 
     @Test
@@ -211,8 +210,7 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'text'.fontcolor('')");
 
         // Test quote escaping
-        assertThat(callBuiltin(StringPrototype::fontcolor, new JSString("test"), "\"red\"")).isInstanceOfSatisfying(
-                JSString.class,
+        assertThat(callBuiltin(StringPrototype::fontcolor, "test", "\"red\"")).isInstanceOfSatisfying(JSString.class,
                 jsStr -> assertThat(jsStr.value()).isEqualTo("<font color=\"&quot;red&quot;\">test</font>"));
     }
 
@@ -233,20 +231,16 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(str.value().length()).isEqualTo(11);
 
         // Chinese characters
-        JSString chinese = new JSString("你好世界");
-        assertThat(chinese.value().length()).isEqualTo(4);
+        assertThat(new JSString("你好世界").value().length()).isEqualTo(4);
 
         // Emoji characters
-        JSString emoji = new JSString("😀🌟🚀");
-        assertThat(emoji.value().length()).isEqualTo(6); // Each emoji is 2 code units
+        assertThat(new JSString("😀🌟🚀").value().length()).isEqualTo(6); // Each emoji is 2 code units
 
         // Mixed
-        JSString mixed = new JSString("Hello 你好 😀");
-        assertThat(mixed.value().length()).isEqualTo(11); // H e l l o 你 好 😀 (2 for 😀)
+        assertThat(new JSString("Hello 你好 😀").value().length()).isEqualTo(11); // H e l l o 你 好 😀 (2 for 😀)
 
         // Empty string
-        JSString empty = new JSString("");
-        assertThat(empty.value().length()).isEqualTo(0);
+        assertThat(new JSString("").value().length()).isEqualTo(0);
 
         JSValue nonString = new JSNumber(123);
         assertThat(callBuiltin(StringPrototype::getLength, nonString).asNumber().map(JSNumber::value).orElseThrow())
@@ -263,20 +257,20 @@ public class StringPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testHtmlMethodArgumentChecks() {
-        callBuiltin(StringPrototype::blink, JSUndefined.INSTANCE);
-        assertPendingException(context);
+        callFunction(StringPrototype::blink);
+        assertPendingException();
 
-        callBuiltin(StringPrototype::anchor, new JSString("x"));
-        assertPendingException(context);
+        callBuiltin(StringPrototype::anchor, "x");
+        assertPendingException();
 
-        callBuiltin(StringPrototype::fontcolor, new JSString("x"));
-        assertPendingException(context);
+        callBuiltin(StringPrototype::fontcolor, "x");
+        assertPendingException();
 
-        callBuiltin(StringPrototype::fontsize, new JSString("x"));
-        assertPendingException(context);
+        callBuiltin(StringPrototype::fontsize, "x");
+        assertPendingException();
 
-        callBuiltin(StringPrototype::link, new JSString("x"));
-        assertPendingException(context);
+        callBuiltin(StringPrototype::link, "x");
+        assertPendingException();
     }
 
     @Test
@@ -331,11 +325,12 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'hello\\uD83D\\uDE00world'.isWellFormed()");
 
         // Test unpaired surrogates
-        JSValue result = callBuiltin(StringPrototype::isWellFormed, new JSString("hello\uD800world"));
-        assertThat(result).isInstanceOfSatisfying(JSBoolean.class, jsBool -> assertThat(jsBool.value()).isFalse());
+        var isWellFormed = nativeMethod(StringPrototype::isWellFormed);
+        assertThat(isWellFormed.call("hello\uD800world")).isInstanceOfSatisfying(JSBoolean.class,
+                jsBool -> assertThat(jsBool.value()).isFalse());
 
-        result = callBuiltin(StringPrototype::isWellFormed, new JSString("\uDFFFtest"));
-        assertThat(result).isInstanceOfSatisfying(JSBoolean.class, jsBool -> assertThat(jsBool.value()).isFalse());
+        assertThat(isWellFormed.call("\uDFFFtest")).isInstanceOfSatisfying(JSBoolean.class,
+                jsBool -> assertThat(jsBool.value()).isFalse());
     }
 
     @Test
@@ -371,10 +366,9 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "''.link('url')", "'text'.link('')");
 
         // Test quote escaping
-        JSValue result = StringPrototype.link(context, new JSString("test"),
-                stringArgs("http://example.com?q=\"hello\""));
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value())
-                .isEqualTo("<a href=\"http://example.com?q=&quot;hello&quot;\">test</a>"));
+        assertThat(StringPrototype.link(context, new JSString("test"), stringArgs("http://example.com?q=\"hello\"")))
+                .isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value())
+                        .isEqualTo("<a href=\"http://example.com?q=&quot;hello&quot;\">test</a>"));
     }
 
     @Test
@@ -464,22 +458,21 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'abc'.normalize('NFKD')");
 
         // Test that Angstrom sign normalizes correctly
-        JSValue result = callBuiltin(StringPrototype::normalize, new JSString("\u212B"), "NFC");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
+        var normalizeMethod = nativeMethod(StringPrototype::normalize);
+        assertThat(normalizeMethod.call("\u212B", "NFC")).isInstanceOfSatisfying(JSString.class, jsStr -> {
             // Both \u212B (Angstrom) and \u00C5 (A with ring) normalize to \u00C5 in NFC
             assertThat(jsStr.value()).isEqualTo("\u00C5");
         });
 
         // Test NFD produces decomposed form
-        result = callBuiltin(StringPrototype::normalize, new JSString("\u00C5"), "NFD");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
+        assertThat(normalizeMethod.call("\u00C5", "NFD")).isInstanceOfSatisfying(JSString.class, jsStr -> {
             // \u00C5 decomposes to A (\u0041) + combining ring above (\u030A)
             assertThat(jsStr.value()).isEqualTo("\u0041\u030A");
         });
 
         // Test undefined form defaults to NFC
-        JSValue result1 = callBuiltin(StringPrototype::normalize, new JSString("\u212B"), JSUndefined.INSTANCE);
-        JSValue result2 = callBuiltin(StringPrototype::normalize, new JSString("\u212B"), "NFC");
+        JSValue result1 = normalizeMethod.call("\u212B", JSUndefined.INSTANCE);
+        JSValue result2 = normalizeMethod.call("\u212B", "NFC");
         assertThat(result1).isInstanceOfSatisfying(JSString.class,
                 jsStr1 -> assertThat(result2).isInstanceOfSatisfying(JSString.class,
                         jsStr2 -> assertThat(jsStr1.value()).isEqualTo(jsStr2.value())));
@@ -563,12 +556,13 @@ public class StringPrototypeTest extends BaseJavetTest {
         repeat.expectString("hello world", 1);
 
         // Negative count
-        callBuiltin(StringPrototype::repeat, str, -1);
-        assertPendingException(context);
+        var repeatMethod = nativeMethod(StringPrototype::repeat);
+        repeatMethod.call(str, -1);
+        assertPendingException();
 
         // Empty string
         JSString empty = new JSString("");
-        assertStringValue(callBuiltin(StringPrototype::repeat, empty, 3), "");
+        assertStringValue(repeatMethod.call(empty, 3), "");
     }
 
     @Test
@@ -591,17 +585,15 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testReplaceAll() {
         // Normal case
-        JSValue result = callBuiltin(StringPrototype::replaceAll, str, "o", "x");
-        assertStringValue(result, "hellx wxrld");
+        var replaceAll = nativeMethod(StringPrototype::replaceAll);
+        assertStringValue(replaceAll.call(str, "o", "x"), "hellx wxrld");
 
         // No match
-        result = callBuiltin(StringPrototype::replaceAll, str, "test", "universe");
-        assertStringValue(result, "hello world");
+        assertStringValue(replaceAll.call(str, "test", "universe"), "hello world");
 
         // Empty string
         JSString empty = new JSString("");
-        result = callBuiltin(StringPrototype::replaceAll, empty, "", "test");
-        assertStringValue(result, "test");
+        assertStringValue(replaceAll.call(empty, "", "test"), "test");
     }
 
     @Test
@@ -746,32 +738,30 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSplit() {
         // Normal case
-        JSValue result = callBuiltin(StringPrototype::split, str, " ");
+        var split = nativeMethod(StringPrototype::split);
+        JSValue result = split.call(str, " ");
         JSArray arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(2);
         assertStringElements(arr, 0, "hello", "world");
 
         // No separator
-        result = callBuiltin(StringPrototype::split, str);
-        arr = result.asArray().orElseThrow();
+        arr = split.call(str).asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(1);
         assertStringValue(arr.get(0), "hello world");
 
         // Empty separator
-        result = callBuiltin(StringPrototype::split, str, "");
-        arr = result.asArray().orElseThrow();
+        arr = split.call(str, "").asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(11); // "h","e","l","l","o"," ","w","o","r","l","d"
 
         // Limit
-        result = callBuiltin(StringPrototype::split, str, " ", 1);
+        result = split.call(str, " ", 1);
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(1);
         assertStringValue(arr.get(0), "hello");
 
         // Empty string
         JSString empty = new JSString("");
-        result = callBuiltin(StringPrototype::split, empty, " ");
-        arr = result.asArray().orElseThrow();
+        arr = split.call(empty, " ").asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(1);
         assertStringValue(arr.get(0), "");
     }
@@ -888,25 +878,20 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = callBuiltin(StringPrototype::substr, empty, 0);
-        assertStringValue(result, "");
+        assertStringValue(callBuiltin(StringPrototype::substr, empty, 0), "");
 
         // Chinese characters
         JSString chinese = new JSString("你好世界");
         var substrMethod = builtin(StringPrototype::substr, chinese);
-        result = substrMethod.call(0, 2);
-        assertStringValue(result, "你好");
+        assertStringValue(substrMethod.call(0, 2), "你好");
 
-        result = substrMethod.call(1, 2);
-        assertStringValue(result, "好世");
+        assertStringValue(substrMethod.call(1, 2), "好世");
 
         // Emoji characters
         JSString emoji = new JSString("😀🌟🚀");
-        result = callBuiltin(StringPrototype::substr, emoji, 0, 2);
-        assertStringValue(result, "😀");
+        assertStringValue(callBuiltin(StringPrototype::substr, emoji, 0, 2), "😀");
 
-        result = callBuiltin(StringPrototype::substr, emoji, 2, 2);
-        assertStringValue(result, "🌟");
+        assertStringValue(callBuiltin(StringPrototype::substr, emoji, 2, 2), "🌟");
     }
 
     @Test
@@ -918,21 +903,22 @@ public class StringPrototypeTest extends BaseJavetTest {
             return new JSNumber(1);
         }));
 
-        callBuiltin(StringPrototype::substr, new JSString(""), new JSSymbol("x"), lenValueOf);
+        var substr = nativeMethod(StringPrototype::substr);
+        substr.call("", new JSSymbol("x"), lenValueOf);
         assertThat(lengthCallCount[0]).isEqualTo(0);
-        assertPendingException(context);
+        assertPendingException();
 
         lengthCallCount[0] = 0;
         JSObject startValueOf = context.createJSObject();
         startValueOf.set("valueOf",
                 new JSNativeFunction(context, "valueOf", 0, (ctx, thisArg, args) -> ctx.throwError("x")));
 
-        callBuiltin(StringPrototype::substr, new JSString(""), startValueOf, lenValueOf);
+        substr.call("", startValueOf, lenValueOf);
         assertThat(lengthCallCount[0]).isEqualTo(0);
-        assertPendingException(context);
+        assertPendingException();
 
-        callBuiltin(StringPrototype::substr, new JSString(""), 0, new JSSymbol("x"));
-        assertPendingException(context);
+        substr.call("", 0, new JSSymbol("x"));
+        assertPendingException();
     }
 
     @Test
@@ -954,25 +940,20 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = callBuiltin(StringPrototype::substring, empty, 0);
-        assertStringValue(result, "");
+        assertStringValue(callBuiltin(StringPrototype::substring, empty, 0), "");
 
         // Chinese characters
         JSString chinese = new JSString("你好世界");
         var substringMethod = builtin(StringPrototype::substring, chinese);
-        result = substringMethod.call(0, 2);
-        assertStringValue(result, "你好");
+        assertStringValue(substringMethod.call(0, 2), "你好");
 
-        result = substringMethod.call(1, 3);
-        assertStringValue(result, "好世");
+        assertStringValue(substringMethod.call(1, 3), "好世");
 
         // Emoji characters
         JSString emoji = new JSString("😀🌟🚀");
-        result = callBuiltin(StringPrototype::substring, emoji, 0, 2);
-        assertStringValue(result, "😀");
+        assertStringValue(callBuiltin(StringPrototype::substring, emoji, 0, 2), "😀");
 
-        result = callBuiltin(StringPrototype::substring, emoji, 2, 4);
-        assertStringValue(result, "🌟");
+        assertStringValue(callBuiltin(StringPrototype::substring, emoji, 2, 4), "🌟");
     }
 
     @Test
@@ -1016,7 +997,7 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'ABC123'.toLocaleLowerCase()");
 
         // Test with locale parameter (currently ignored, but should work)
-        assertStringValue(callBuiltin(StringPrototype::toLocaleLowerCase, new JSString("HELLO"), "en-US"), "hello");
+        assertStringValue(callBuiltin(StringPrototype::toLocaleLowerCase, "HELLO", "en-US"), "hello");
     }
 
     @Test
@@ -1026,44 +1007,40 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'abc123'.toLocaleUpperCase()");
 
         // Test with locale parameter (currently ignored, but should work)
-        assertStringValue(callBuiltin(StringPrototype::toLocaleUpperCase, new JSString("hello"), "en-US"), "HELLO");
+        assertStringValue(callBuiltin(StringPrototype::toLocaleUpperCase, "hello", "en-US"), "HELLO");
     }
 
     @Test
     public void testToLowerCase() {
         JSString upper = new JSString("HELLO WORLD");
-        JSValue result = callBuiltin(StringPrototype::toLowerCase, upper);
-        assertStringValue(result, "hello world");
+        var toLowerCase = nativeMethod(StringPrototype::toLowerCase);
+        assertStringValue(toLowerCase.call(upper), "hello world");
 
         // Already lower
-        result = callBuiltin(StringPrototype::toLowerCase, str);
-        assertStringValue(result, "hello world");
+        assertStringValue(toLowerCase.call(str), "hello world");
 
         // Mixed
         JSString mixed = new JSString("HeLLo WoRLd");
-        result = callBuiltin(StringPrototype::toLowerCase, mixed);
-        assertStringValue(result, "hello world");
+        assertStringValue(toLowerCase.call(mixed), "hello world");
 
         // Empty string
         JSString empty = new JSString("");
-        result = callBuiltin(StringPrototype::toLowerCase, empty);
-        assertStringValue(result, "");
+        assertStringValue(toLowerCase.call(empty), "");
     }
 
     @Test
     public void testToString() {
         // Normal case
-        JSValue result = callBuiltin(StringPrototype::toString_, str);
-        assertStringValue(result, "hello world");
+        var toString_ = nativeMethod(StringPrototype::toString_);
+        assertStringValue(toString_.call(str), "hello world");
 
         // Empty string
         JSString empty = new JSString("");
-        result = callBuiltin(StringPrototype::toString_, empty);
-        assertStringValue(result, "");
+        assertStringValue(toString_.call(empty), "");
 
         // Non-string thisArg
         try {
-            callBuiltin(StringPrototype::toString_, new JSNumber(42));
+            toString_.call(42);
         } catch (Exception e) {
             assertThat(e.getMessage())
                     .isEqualTo("TypeError: String.prototype.toString requires that 'this' be a String");
@@ -1073,23 +1050,20 @@ public class StringPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToUpperCase() {
-        JSValue result = callBuiltin(StringPrototype::toUpperCase, str);
-        assertStringValue(result, "HELLO WORLD");
+        var toUpperCase = nativeMethod(StringPrototype::toUpperCase);
+        assertStringValue(toUpperCase.call(str), "HELLO WORLD");
 
         // Already upper
         JSString upper = new JSString("HELLO WORLD");
-        result = callBuiltin(StringPrototype::toUpperCase, upper);
-        assertStringValue(result, "HELLO WORLD");
+        assertStringValue(toUpperCase.call(upper), "HELLO WORLD");
 
         // Mixed
         JSString mixed = new JSString("HeLLo WoRLd");
-        result = callBuiltin(StringPrototype::toUpperCase, mixed);
-        assertStringValue(result, "HELLO WORLD");
+        assertStringValue(toUpperCase.call(mixed), "HELLO WORLD");
 
         // Empty string
         JSString empty = new JSString("");
-        result = callBuiltin(StringPrototype::toUpperCase, empty);
-        assertStringValue(result, "");
+        assertStringValue(toUpperCase.call(empty), "");
     }
 
     @Test
@@ -1100,37 +1074,32 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'hello\\uD83D\\uDE00world'.toWellFormed()");
 
         // Test unpaired surrogates get replaced with U+FFFD
-        JSValue result = callBuiltin(StringPrototype::toWellFormed, new JSString("hello\uD800world"));
-        assertStringValue(result, "hello\uFFFDworld");
+        var toWellFormed = nativeMethod(StringPrototype::toWellFormed);
+        assertStringValue(toWellFormed.call("hello\uD800world"), "hello\uFFFDworld");
 
-        result = callBuiltin(StringPrototype::toWellFormed, new JSString("\uDFFFtest"));
-        assertStringValue(result, "\uFFFDtest");
+        assertStringValue(toWellFormed.call("\uDFFFtest"), "\uFFFDtest");
 
         // Already well-formed should return same string
         JSString wellFormed = new JSString("hello");
-        result = callBuiltin(StringPrototype::toWellFormed, wellFormed);
-        assertThat(result).isSameAs(wellFormed);
+        assertThat(toWellFormed.call(wellFormed)).isSameAs(wellFormed);
     }
 
     @Test
     public void testTrim() {
         JSString spaced = new JSString("  hello world  ");
-        JSValue result = callBuiltin(StringPrototype::trim, spaced);
-        assertStringValue(result, "hello world");
+        var trim = nativeMethod(StringPrototype::trim);
+        assertStringValue(trim.call(spaced), "hello world");
 
         // No spaces
-        result = callBuiltin(StringPrototype::trim, str);
-        assertStringValue(result, "hello world");
+        assertStringValue(trim.call(str), "hello world");
 
         // Only spaces
         JSString spaces = new JSString("   ");
-        result = callBuiltin(StringPrototype::trim, spaces);
-        assertStringValue(result, "");
+        assertStringValue(trim.call(spaces), "");
 
         // Empty string
         JSString empty = new JSString("");
-        result = callBuiltin(StringPrototype::trim, empty);
-        assertStringValue(result, "");
+        assertStringValue(trim.call(empty), "");
     }
 
     @Test

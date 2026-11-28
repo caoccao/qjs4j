@@ -30,25 +30,36 @@ import java.util.Optional;
  * Temporal units with explicit ranks from largest (YEAR) to smallest (NANOSECOND).
  */
 public enum TemporalUnit {
-    DAY("day", 3),
-    HOUR("hour", 4),
-    MICROSECOND("microsecond", 8),
-    MILLISECOND("millisecond", 7),
-    MINUTE("minute", 5),
-    MONTH("month", 1),
-    NANOSECOND("nanosecond", 9),
-    SECOND("second", 6),
-    WEEK("week", 2),
-    YEAR("year", 0);
+    DAY("day", 3, TemporalConstants.BI_DAY_NANOSECONDS, -1),
+    HOUR("hour", 4, TemporalConstants.BI_HOUR_NANOSECONDS, 24),
+    MICROSECOND("microsecond", 8, TemporalConstants.BI_MICROSECOND_NANOSECONDS, 1000),
+    MILLISECOND("millisecond", 7, TemporalConstants.BI_MILLISECOND_NANOSECONDS, 1000),
+    MINUTE("minute", 5, TemporalConstants.BI_MINUTE_NANOSECONDS, 60),
+    MONTH("month", 1, BigInteger.ZERO, -1),
+    NANOSECOND("nanosecond", 9, BigInteger.ONE, 1000),
+    SECOND("second", 6, TemporalConstants.BI_SECOND_NANOSECONDS, 60),
+    WEEK("week", 2, TemporalConstants.BI_WEEK_NANOSECONDS, -1),
+    YEAR("year", 0, BigInteger.ZERO, -1);
 
     /** Property access order for a Temporal duration-like object. */
     public static final List<TemporalUnit> DURATION_PROPERTY_ORDER = List.of(DAY, HOUR, MICROSECOND, MILLISECOND,
             MINUTE, MONTH, NANOSECOND, SECOND, WEEK, YEAR);
     private final PropertyKey durationProperty;
+    private final BigInteger fixedNanoseconds;
     private final String jsName;
+    private final int maximumSubDayIncrement;
+    private final long nanosecondFactor;
     private final int rank;
+    private final long solarDayDivisor;
 
-    TemporalUnit(String jsName, int rank) {
+    TemporalUnit(String jsName, int rank, BigInteger fixedNanoseconds, int maximumSubDayIncrement) {
+        this.fixedNanoseconds = fixedNanoseconds;
+        this.maximumSubDayIncrement = maximumSubDayIncrement;
+        nanosecondFactor = fixedNanoseconds.signum() == 0
+                || fixedNanoseconds.compareTo(TemporalConstants.BI_DAY_NANOSECONDS) > 0
+                        ? 0
+                        : fixedNanoseconds.longValueExact();
+        solarDayDivisor = nanosecondFactor == 0 ? -1 : TemporalConstants.DAY_NANOSECONDS / nanosecondFactor;
         this.jsName = jsName;
         this.durationProperty = PropertyKey.fromString(jsName + "s");
         this.rank = rank;
@@ -108,17 +119,7 @@ public enum TemporalUnit {
 
     /** Length of a fixed unit, including a seven-day week. Calendar months and years have no fixed length. */
     public BigInteger fixedNanoseconds() {
-        return switch (this) {
-            case WEEK -> TemporalConstants.BI_WEEK_NANOSECONDS;
-            case DAY -> TemporalConstants.BI_DAY_NANOSECONDS;
-            case HOUR -> TemporalConstants.BI_HOUR_NANOSECONDS;
-            case MINUTE -> TemporalConstants.BI_MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.BI_SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.BI_MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> BigInteger.ONE;
-            default -> BigInteger.ZERO;
-        };
+        return fixedNanoseconds;
     }
 
     /**
@@ -126,12 +127,7 @@ public enum TemporalUnit {
      * millisecond/microsecond/nanosecond -> 1000. Returns -1 for non-sub-day units.
      */
     public long getMaximumSubDayIncrement() {
-        return switch (this) {
-            case HOUR -> 24L;
-            case MINUTE, SECOND -> 60L;
-            case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
-            default -> -1L;
-        };
+        return maximumSubDayIncrement;
     }
 
     /**
@@ -139,16 +135,7 @@ public enum TemporalUnit {
      * MONTH, WEEK.
      */
     public long getNanosecondFactor() {
-        return switch (this) {
-            case DAY -> TemporalConstants.DAY_NANOSECONDS;
-            case HOUR -> TemporalConstants.HOUR_NANOSECONDS;
-            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> 1L;
-            default -> 0L;
-        };
+        return nanosecondFactor;
     }
 
     /**
@@ -156,16 +143,7 @@ public enum TemporalUnit {
      * Returns -1 for YEAR, MONTH, WEEK.
      */
     public long getSolarDayDivisor() {
-        return switch (this) {
-            case DAY -> 1L;
-            case HOUR -> TemporalConstants.SOLAR_DAY_HOURS;
-            case MINUTE -> TemporalConstants.SOLAR_DAY_MINUTES;
-            case SECOND -> TemporalConstants.SOLAR_DAY_SECONDS;
-            case MILLISECOND -> TemporalConstants.SOLAR_DAY_MILLISECONDS;
-            case MICROSECOND -> TemporalConstants.SOLAR_DAY_MICROSECONDS;
-            case NANOSECOND -> TemporalConstants.SOLAR_DAY_NANOSECONDS;
-            default -> -1L;
-        };
+        return solarDayDivisor;
     }
 
     /**
@@ -187,14 +165,7 @@ public enum TemporalUnit {
      * millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1. Returns 1 for other units.
      */
     public long getStringRoundingIncrementNanoseconds() {
-        return switch (this) {
-            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> 1L;
-            default -> 1L;
-        };
+        return rank >= MINUTE.rank ? nanosecondFactor : 1;
     }
 
     /**
@@ -242,36 +213,14 @@ public enum TemporalUnit {
     }
 
     public long moveByWholeCalendarUnits(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        int direction = endDateTime.isBefore(startDateTime) ? -1 : 1;
         long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime);
-        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
-        if (!endDateTime.isBefore(startDateTime)) {
-            while (boundaryDateTime.isAfter(endDateTime)) {
-                unitCount--;
-                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
-            }
-            while (true) {
-                long nextUnitCount = unitCount + 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
-                if (nextDateTime.isAfter(endDateTime)) {
-                    break;
-                }
-                unitCount = nextUnitCount;
-                boundaryDateTime = nextDateTime;
-            }
-        } else {
-            while (boundaryDateTime.isBefore(endDateTime)) {
-                unitCount++;
-                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
-            }
-            while (true) {
-                long nextUnitCount = unitCount - 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
-                if (nextDateTime.isBefore(endDateTime)) {
-                    break;
-                }
-                unitCount = nextUnitCount;
-                boundaryDateTime = nextDateTime;
-            }
+        while (Integer.signum(addCalendarUnits(startDateTime, unitCount).compareTo(endDateTime)) == direction) {
+            unitCount -= direction;
+        }
+        while (Integer
+                .signum(addCalendarUnits(startDateTime, unitCount + direction).compareTo(endDateTime)) != direction) {
+            unitCount += direction;
         }
         return unitCount;
     }
@@ -287,67 +236,29 @@ public enum TemporalUnit {
             return 0L;
         }
 
-        int direction = startToEndNanoseconds.signum();
+        int direction = startToEndNanoseconds.signum() < 0 ? -1 : 1;
         long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime);
-        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
-        if (direction >= 0) {
-            while (true) {
-                BigInteger boundaryToEndNanoseconds = nanosecondsBetween(context, boundaryDateTime, endDateTime,
-                        relativeToOption);
-                if (context.hasPendingException()) {
-                    return unitCount;
-                }
-                if (boundaryToEndNanoseconds.signum() >= 0) {
-                    break;
-                }
-                unitCount--;
-                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+        while (true) {
+            LocalDateTime boundary = addCalendarUnits(startDateTime, unitCount);
+            BigInteger remaining = nanosecondsBetween(context, boundary, endDateTime, relativeToOption);
+            if (context.hasPendingException()) {
+                return unitCount;
             }
-            while (true) {
-                long nextUnitCount = unitCount + 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
-                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime,
-                        relativeToOption);
-                if (context.hasPendingException()) {
-                    return unitCount;
-                }
-                if (nextToEndNanoseconds.signum() < 0) {
-                    break;
-                }
-                unitCount = nextUnitCount;
-                boundaryDateTime = nextDateTime;
+            if (isWithinCalendarBoundary(direction, remaining, boundary, endDateTime)) {
+                break;
             }
-        } else {
-            while (true) {
-                BigInteger boundaryToEndNanoseconds = nanosecondsBetween(context, boundaryDateTime, endDateTime,
-                        relativeToOption);
-                if (context.hasPendingException()) {
-                    return unitCount;
-                }
-                if (boundaryToEndNanoseconds.signum() < 0
-                        || (boundaryToEndNanoseconds.signum() == 0 && boundaryDateTime.equals(endDateTime))) {
-                    break;
-                }
-                unitCount++;
-                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
-            }
-            while (true) {
-                long nextUnitCount = unitCount - 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
-                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime,
-                        relativeToOption);
-                if (context.hasPendingException()) {
-                    return unitCount;
-                }
-                if (nextToEndNanoseconds.signum() > 0
-                        || (nextToEndNanoseconds.signum() == 0 && !nextDateTime.equals(endDateTime))) {
-                    break;
-                }
-                unitCount = nextUnitCount;
-                boundaryDateTime = nextDateTime;
-            }
+            unitCount -= direction;
         }
-        return unitCount;
+        while (true) {
+            long next = unitCount + direction;
+            LocalDateTime boundary = addCalendarUnits(startDateTime, next);
+            BigInteger remaining = nanosecondsBetween(context, boundary, endDateTime, relativeToOption);
+            if (context.hasPendingException()
+                    || !isWithinCalendarBoundary(direction, remaining, boundary, endDateTime)) {
+                return unitCount;
+            }
+            unitCount = next;
+        }
     }
 
     public long moveByWholeFixedUnits(LocalDateTime startDateTime, LocalDateTime endDateTime) {
@@ -396,6 +307,16 @@ public enum TemporalUnit {
             case "nanosecond", "nanoseconds" -> NANOSECOND;
             default -> null;
         });
+    }
+
+    private static boolean isWithinCalendarBoundary(int direction, BigInteger remaining, LocalDateTime boundary,
+            LocalDateTime end) {
+        if (remaining.signum() != 0) {
+            return remaining.signum() == direction;
+        }
+        // Across a skipped hour, distinct wall times can resolve to the same instant.
+        // When moving backwards the boundary must also have reached the local end time.
+        return direction > 0 || boundary.equals(end);
     }
 
     private static BigInteger nanosecondsBetween(JSContext context, LocalDateTime startDateTime,

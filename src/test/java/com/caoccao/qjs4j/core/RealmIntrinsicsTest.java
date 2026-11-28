@@ -27,9 +27,9 @@ class RealmIntrinsicsTest extends BaseTest {
         JSArray array = context.createJSArray();
         array.set(PropertyKey.CONSTRUCTOR, JSUndefined.INSTANCE);
         for (JSObject original : new JSObject[]{array, context.createJSObject()}) {
-            JSArray largest = context.createJSArraySpecies(original, 0xFFFFFFFFL).asArray().orElseThrow();
-            assertThat(largest.getLength()).isEqualTo(0xFFFFFFFFL);
-            assertPendingRangeError(context, context.createJSArraySpecies(original, 0x1_0000_0000L));
+            assertThat(context.createJSArraySpecies(original, 0xFFFFFFFFL).asArray().orElseThrow().getLength())
+                    .isEqualTo(0xFFFFFFFFL);
+            assertPendingRangeError(context.createJSArraySpecies(original, 0x1_0000_0000L));
         }
     }
 

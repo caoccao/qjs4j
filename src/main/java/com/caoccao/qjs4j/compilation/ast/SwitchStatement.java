@@ -99,7 +99,7 @@ public final class SwitchStatement extends Statement {
                     }
                 }
             }
-            return new SourceLocation(0, 0, 0, 0);
+            return SourceLocation.UNKNOWN;
         }
     }
 

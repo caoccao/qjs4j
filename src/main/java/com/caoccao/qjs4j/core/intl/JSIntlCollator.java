@@ -113,7 +113,7 @@ public final class JSIntlCollator extends JSObject {
         int secondaryResult = 0;
         int tertiaryResult = 0;
         while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             i = skipIgnorable(left, i);
             j = skipIgnorable(right, j);
             if (i >= left.length() && j >= right.length()) {

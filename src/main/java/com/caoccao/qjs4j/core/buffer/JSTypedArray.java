@@ -41,10 +41,10 @@ public sealed abstract class JSTypedArray extends JSObject
     protected final IJSArrayBuffer buffer;
     protected final long byteLength;
     protected final long byteOffset;
-    protected final int bytesPerElement;
     private JSByteBuffer cachedBackingBuffer;
     private long cachedByteLength = -1;
     private JSByteBuffer cachedJSByteBuffer;
+    private final TypedArrayKind kind;
     protected final long length;
     protected final boolean trackRab;
 
@@ -52,8 +52,9 @@ public sealed abstract class JSTypedArray extends JSObject
      * Create a TypedArray view on an existing ArrayBuffer or SharedArrayBuffer.
      */
     protected JSTypedArray(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length,
-            int bytesPerElement) {
+            TypedArrayKind kind) {
         super(context);
+        int bytesPerElement = kind.bytesPerElement;
         if (buffer == null) {
             throw new JSTypeErrorException("Cannot create TypedArray on null buffer");
         }
@@ -61,7 +62,7 @@ public sealed abstract class JSTypedArray extends JSObject
             throw new JSTypeErrorException("ArrayBuffer is detached");
         }
 
-        this.bytesPerElement = bytesPerElement;
+        this.kind = kind;
 
         // Validate and normalize byteOffset
         if (byteOffset < 0 || byteOffset % bytesPerElement != 0) {
@@ -101,15 +102,16 @@ public sealed abstract class JSTypedArray extends JSObject
     /**
      * Create a TypedArray with a new buffer of the given length.
      */
-    protected JSTypedArray(JSContext context, long length, int bytesPerElement) {
+    protected JSTypedArray(JSContext context, long length, TypedArrayKind kind) {
         super(context);
+        int bytesPerElement = kind.bytesPerElement;
         if (length < 0) {
             throw new JSRangeErrorException("invalid length");
         }
         if (length > JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH / bytesPerElement) {
             throw new JSRangeErrorException("invalid array buffer length");
         }
-        this.bytesPerElement = bytesPerElement;
+        this.kind = kind;
         this.length = length;
         this.byteLength = length * bytesPerElement;
         this.byteOffset = 0;
@@ -155,7 +157,7 @@ public sealed abstract class JSTypedArray extends JSObject
     }
 
     protected final JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return elementKind().rawViews.create(context, buffer, byteOffset, length);
+        return kind.rawViews.create(context, buffer, byteOffset, length);
     }
 
     /**
@@ -227,8 +229,6 @@ public sealed abstract class JSTypedArray extends JSObject
         return result;
     }
 
-    abstract TypedArrayKind elementKind();
-
     @Override
     public PropertyKey[] enumerableKeys() {
         List<PropertyKey> result = elementKeys();
@@ -275,7 +275,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * effective byte length.
      */
     public long getByteLength() {
-        return trackRab ? getLength() * bytesPerElement : byteLength;
+        return trackRab ? getLength() * kind.bytesPerElement : byteLength;
     }
 
     /**
@@ -289,7 +289,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * Get the number of bytes per element.
      */
     public int getBytesPerElement() {
-        return bytesPerElement;
+        return kind.bytesPerElement;
     }
 
     /**
@@ -306,7 +306,7 @@ public sealed abstract class JSTypedArray extends JSObject
         if (index < 0 || index >= currentLength) {
             return JSUndefined.INSTANCE;
         }
-        JSByteBuffer view = bufferView(buffer.getBuffer(), currentLength * bytesPerElement);
+        JSByteBuffer view = bufferView(buffer.getBuffer(), currentLength * kind.bytesPerElement);
         return readJSElement(view, index);
     }
 
@@ -327,13 +327,13 @@ public sealed abstract class JSTypedArray extends JSObject
         // Detached buffers report zero bytes. A fixed-length view outside a resized buffer has no elements.
         long available = buffer.getByteLength() - byteOffset;
         if (trackRab) {
-            return Math.max(0L, available) / bytesPerElement;
+            return Math.max(0L, available) / kind.bytesPerElement;
         }
         return byteLength <= available ? length : 0;
     }
 
     public final String getObjectTag() {
-        return elementKind().objectTag;
+        return kind.objectTag;
     }
 
     /**
@@ -375,7 +375,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * getter.
      */
     public final String getTypedArrayName() {
-        return elementKind().name;
+        return kind.name;
     }
 
     /**
@@ -434,7 +434,7 @@ public sealed abstract class JSTypedArray extends JSObject
     }
 
     public final boolean isAtomicsReadableAndWriteable() {
-        return elementKind().atomic;
+        return kind.atomic;
     }
 
     /**
@@ -443,7 +443,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * @return true when this typed array is a valid Atomics write target
      */
     public final boolean isAtomicsWriteable() {
-        return elementKind().waitable;
+        return kind.waitable;
     }
 
     /**
@@ -563,7 +563,7 @@ public sealed abstract class JSTypedArray extends JSObject
      */
     public final void setElement(long index, double value) {
         checkIndex(index);
-        elementKind().writeNumber(getByteBuffer(), index, value);
+        kind.writeNumber(getByteBuffer(), index, value);
     }
 
     /**
@@ -641,7 +641,7 @@ public sealed abstract class JSTypedArray extends JSObject
         end = JSArrayBuffer.sliceIndex(end, currentLength);
 
         long newLength = Math.max(end - begin, 0);
-        long newByteOffset = byteOffset + begin * bytesPerElement;
+        long newByteOffset = byteOffset + begin * kind.bytesPerElement;
 
         return createView(buffer, newByteOffset, newLength);
     }

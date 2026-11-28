@@ -21,9 +21,7 @@ public final class ExportSpecifier extends ASTNode {
     private final Identifier local;
 
     public ExportSpecifier(Identifier local, Identifier exported) {
-        super(local != null
-                ? local.getLocation()
-                : (exported != null ? exported.getLocation() : new SourceLocation(0, 0, 0, 0)));
+        super(SourceLocation.firstOf(local, exported));
         this.local = local;
         this.exported = exported;
     }

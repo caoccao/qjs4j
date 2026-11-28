@@ -32,7 +32,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         for (int length : new int[]{16, 32, 8}) {
             JSArrayBuffer source = new JSArrayBuffer(context, 16);
             JSValue[] args = length == 16 ? JSValue.NO_ARGS : numberArgs(length);
-            JSArrayBuffer target = transfer.call(context, source, args).asArrayBuffer().orElseThrow();
+            JSArrayBuffer target = callBuiltin(transfer, source, args).asArrayBuffer().orElseThrow();
             assertThat(target.getByteLength()).isEqualTo(length);
             assertThat(target.isDetached()).isFalse();
             assertThat(target.isResizable()).isFalse();
@@ -40,34 +40,31 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         }
 
         JSArrayBuffer source = new JSArrayBuffer(context, 16, 64);
-        JSArrayBuffer target = transfer.call(context, source, nativeArguments(24)).asArrayBuffer().orElseThrow();
+        JSArrayBuffer target = callBuiltin(transfer, source, 24).asArrayBuffer().orElseThrow();
         assertThat(target.getByteLength()).isEqualTo(24);
         assertThat(target.getMaxByteLength()).isEqualTo(fixed ? 24 : 64);
         assertThat(target.isResizable()).isEqualTo(!fixed);
         assertThat(source.isDetached()).isTrue();
-        assertPendingTypeError(context, transfer.call(context, source, JSValue.NO_ARGS));
-        assertPendingTypeError(context, transfer.call(context, new JSString("not a buffer"), JSValue.NO_ARGS));
+        assertPendingTypeError(callBuiltin(transfer, source));
+        assertPendingTypeError(callBuiltin(transfer, "not a buffer"));
     }
 
     @Test
     public void testGetByteLength() {
         // Normal case: various buffer sizes
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
-        JSValue result = callBuiltin(ArrayBufferPrototype::getByteLength, buffer);
-        assertNumberValue(result, 16.0);
+        var getByteLength = nativeMethod(ArrayBufferPrototype::getByteLength);
+        assertNumberValue(getByteLength.call(buffer), 16.0);
 
         buffer = new JSArrayBuffer(context, 0);
-        result = callBuiltin(ArrayBufferPrototype::getByteLength, buffer);
-        assertNumberValue(result, 0.0);
+        assertNumberValue(getByteLength.call(buffer), 0.0);
 
         buffer = new JSArrayBuffer(context, 1024);
-        result = callBuiltin(ArrayBufferPrototype::getByteLength, buffer);
-        assertNumberValue(result, 1024.0);
+        assertNumberValue(getByteLength.call(buffer), 1024.0);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = callBuiltin(ArrayBufferPrototype::getByteLength, nonBuffer);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getByteLength.call(nonBuffer));
     }
 
     @Test
@@ -75,66 +72,58 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Normal case: non-detached buffer
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         var getDetached = builtin(ArrayBufferPrototype::getDetached, buffer);
-        JSValue result = getDetached.call();
-        assertThat(result.isBooleanFalse()).isTrue();
+        assertThat(getDetached.call()).isSameAs(JSBoolean.FALSE);
 
         // Normal case: detached buffer
         buffer.detach();
-        result = getDetached.call();
-        assertThat(result.isBooleanTrue()).isTrue();
+        assertThat(getDetached.call()).isSameAs(JSBoolean.TRUE);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = callBuiltin(ArrayBufferPrototype::getDetached, nonBuffer);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(callBuiltin(ArrayBufferPrototype::getDetached, nonBuffer));
     }
 
     @Test
     public void testGetMaxByteLength() {
         // Normal case: non-resizable buffer
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
-        JSValue result = callBuiltin(ArrayBufferPrototype::getMaxByteLength, buffer);
-        assertNumberValue(result, 16.0);
+        var getMaxByteLength = nativeMethod(ArrayBufferPrototype::getMaxByteLength);
+        assertNumberValue(getMaxByteLength.call(buffer), 16.0);
 
         // Normal case: resizable buffer
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 64);
-        result = callBuiltin(ArrayBufferPrototype::getMaxByteLength, resizableBuffer);
-        assertNumberValue(result, 64.0);
+        assertNumberValue(getMaxByteLength.call(resizableBuffer), 64.0);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = callBuiltin(ArrayBufferPrototype::getMaxByteLength, nonBuffer);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getMaxByteLength.call(nonBuffer));
     }
 
     @Test
     public void testGetResizable() {
         // Normal case: non-resizable buffer
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
-        JSValue result = callBuiltin(ArrayBufferPrototype::getResizable, buffer);
-        assertThat(result.isBooleanFalse()).isTrue();
+        var getResizable = nativeMethod(ArrayBufferPrototype::getResizable);
+        assertThat(getResizable.call(buffer)).isSameAs(JSBoolean.FALSE);
 
         // Normal case: resizable buffer
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 64);
-        result = callBuiltin(ArrayBufferPrototype::getResizable, resizableBuffer);
-        assertThat(result.isBooleanTrue()).isTrue();
+        assertThat(getResizable.call(resizableBuffer)).isSameAs(JSBoolean.TRUE);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = callBuiltin(ArrayBufferPrototype::getResizable, nonBuffer);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getResizable.call(nonBuffer));
     }
 
     @Test
     public void testGetToStringTag() {
         // Normal case: any this value should return "ArrayBuffer"
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
-        JSValue result = callBuiltin(ArrayBufferPrototype::getToStringTag, buffer);
-        assertStringValue(result, "ArrayBuffer");
+        var getToStringTag = nativeMethod(ArrayBufferPrototype::getToStringTag);
+        assertStringValue(getToStringTag.call(buffer), "ArrayBuffer");
 
         // It's a getter that returns a constant, so it works with any thisArg
-        result = callBuiltin(ArrayBufferPrototype::getToStringTag, JSUndefined.INSTANCE);
-        assertStringValue(result, "ArrayBuffer");
+        assertStringValue(getToStringTag.call(JSUndefined.INSTANCE), "ArrayBuffer");
     }
 
     @Test
@@ -142,39 +131,32 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Normal case: resize to larger size
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16, 64);
         var resizeMethod = builtin(ArrayBufferPrototype::resize, buffer);
-        JSValue result = resizeMethod.call(32);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(resizeMethod.call(32).isUndefined()).isTrue();
         assertThat(buffer.getByteLength()).isEqualTo(32);
 
         // Normal case: resize to smaller size
-        result = resizeMethod.call(8);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(resizeMethod.call(8).isUndefined()).isTrue();
         assertThat(buffer.getByteLength()).isEqualTo(8);
 
         // Edge case: resize non-resizable buffer (TypeError per ES2024 spec)
         JSArrayBuffer fixedBuffer = new JSArrayBuffer(context, 16);
-        result = callBuiltin(ArrayBufferPrototype::resize, fixedBuffer, 32);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(callBuiltin(ArrayBufferPrototype::resize, fixedBuffer, 32));
 
         // Edge case: resize detached buffer (TypeError per ES2024 spec)
         buffer.detach();
-        result = resizeMethod.call(16);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(resizeMethod.call(16));
 
         // Edge case: resize beyond maxByteLength
         JSArrayBuffer buffer2 = new JSArrayBuffer(context, 16, 64);
-        result = callBuiltin(ArrayBufferPrototype::resize, buffer2, 128);
-        assertPendingRangeError(context, result);
+        assertPendingRangeError(callBuiltin(ArrayBufferPrototype::resize, buffer2, 128));
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = callBuiltin(ArrayBufferPrototype::resize, nonBuffer, 16);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(callBuiltin(ArrayBufferPrototype::resize, nonBuffer, 16));
 
         // Edge case: no arguments (ToIndex(undefined) = 0, resizes to 0 per ES2024 spec)
         JSArrayBuffer buffer3 = new JSArrayBuffer(context, 16, 64);
-        result = callBuiltin(ArrayBufferPrototype::resize, buffer3);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(callBuiltin(ArrayBufferPrototype::resize, buffer3).isUndefined()).isTrue();
         assertThat(buffer3.getByteLength()).isEqualTo(0);
     }
 
@@ -185,53 +167,38 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Normal case: slice entire buffer
         var sliceMethod = builtin(ArrayBufferPrototype::slice, buffer);
         JSValue result = sliceMethod.call();
-        JSArrayBuffer sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(16);
+        assertThat(result.asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(16);
 
         // Normal case: slice with begin only
-        result = sliceMethod.call(4);
-        sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(12);
+        assertThat(sliceMethod.call(4).asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(12);
 
         // Normal case: slice with begin and end
-        result = sliceMethod.call(4, 8);
-        sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(4);
+        assertThat(sliceMethod.call(4, 8).asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(4);
 
         // Normal case: negative begin
-        result = sliceMethod.call(-4);
-        sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(4);
+        assertThat(sliceMethod.call(-4).asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(4);
 
         // Normal case: negative end
-        result = sliceMethod.call(0, -4);
-        sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(12);
+        assertThat(sliceMethod.call(0, -4).asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(12);
 
         // Normal case: begin > end (empty slice)
-        result = sliceMethod.call(8, 4);
-        sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(0);
+        assertThat(sliceMethod.call(8, 4).asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(0);
 
         // Normal case: begin out of bounds
-        result = sliceMethod.call(20);
-        sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(0);
+        assertThat(sliceMethod.call(20).asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(0);
 
         // Normal case: end out of bounds
         result = sliceMethod.call(0, 20);
-        sliced = result.asArrayBuffer().orElseThrow();
-        assertThat(sliced.getByteLength()).isEqualTo(16);
+        assertThat(result.asArrayBuffer().orElseThrow().getByteLength()).isEqualTo(16);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = callBuiltin(ArrayBufferPrototype::slice, nonBuffer);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(result);
 
         // Edge case: slice on detached buffer
         buffer.detach();
-        result = sliceMethod.call();
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(sliceMethod.call());
     }
 
     @Test

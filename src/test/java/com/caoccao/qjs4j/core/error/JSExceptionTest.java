@@ -105,11 +105,9 @@ class JSExceptionTest extends BaseTest {
         String source = "function build() {\n" + "  return {\n" + "    __proto__: null,\n" + "    __proto__: {}\n"
                 + "  };\n" + "}";
 
-        JSException evalException = assertEvalFailure(source, "nested.js", false,
+        assertThat(assertEvalFailure(source, "nested.js", false,
                 "SyntaxError: Duplicate __proto__ fields are not allowed in object literals",
-                new SourceLocation(4, 5, 55, 55));
-
-        assertThat(evalException.getCause()).isNull();
+                new SourceLocation(4, 5, 55, 55)).getCause()).isNull();
     }
 
     @Test
@@ -123,11 +121,9 @@ class JSExceptionTest extends BaseTest {
     void testEvalScriptExceptionCarriesSourceLocation() {
         String source = "const value = {\n" + "  first: 1,\n" + "  __proto__: null,\n" + "  __proto__: {}\n" + "};";
 
-        JSException evalException = assertEvalFailure(source, "script.js", false,
+        assertThat(assertEvalFailure(source, "script.js", false,
                 "SyntaxError: Duplicate __proto__ fields are not allowed in object literals",
-                new SourceLocation(4, 3, 49, 49));
-
-        assertThat(evalException.getCause()).isNull();
+                new SourceLocation(4, 3, 49, 49)).getCause()).isNull();
     }
 
     @Test

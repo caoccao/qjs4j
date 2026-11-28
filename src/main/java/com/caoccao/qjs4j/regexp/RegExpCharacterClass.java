@@ -68,7 +68,7 @@ final class RegExpCharacterClass {
 
     static void compileCharacterClass(CompileContext context, boolean isBackwardDirection) {
         if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+            context.emit(RegExpOpcode.PREV);
         }
         if (context.isUnicodeSetsMode()) {
             emitClassSet(context, RegExpUnicodeSet.read(context));
@@ -76,7 +76,7 @@ final class RegExpCharacterClass {
             compileRangeClass(context);
         }
         if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+            context.emit(RegExpOpcode.PREV);
         }
     }
 
@@ -129,7 +129,7 @@ final class RegExpCharacterClass {
         int[] propertyRanges = property.ranges();
         // Regular property resolved successfully
         if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+            context.emit(RegExpOpcode.PREV);
         }
         boolean emitInvertedRanges = isInverted;
         if (isInverted && context.isUnicodeMode() && context.isIgnoreCase()) {
@@ -138,7 +138,7 @@ final class RegExpCharacterClass {
         }
         emitRanges(context, propertyRanges, emitInvertedRanges);
         if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+            context.emit(RegExpOpcode.PREV);
         }
     }
 
@@ -172,9 +172,9 @@ final class RegExpCharacterClass {
     }
 
     private static void emitRanges(CompileContext context, int[] ranges, boolean inverted) {
-        context.buffer.appendU8(inverted
-                ? (context.isIgnoreCase() ? RegExpOpcode.NOT_RANGE_I.getCode() : RegExpOpcode.NOT_RANGE.getCode())
-                : (context.isIgnoreCase() ? RegExpOpcode.RANGE_I.getCode() : RegExpOpcode.RANGE.getCode()));
+        context.emit(inverted
+                ? (context.isIgnoreCase() ? RegExpOpcode.NOT_RANGE_I : RegExpOpcode.NOT_RANGE)
+                : (context.isIgnoreCase() ? RegExpOpcode.RANGE_I : RegExpOpcode.RANGE));
 
         emitRangePayload(context, ranges);
     }

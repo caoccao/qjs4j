@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.offset;
 public class MathObjectTest extends BaseJavetTest {
 
     private void assertMath(JSNativeCallback operation, double expected, double... inputs) {
-        JSValue value = operation.call(context, JSUndefined.INSTANCE, numberArgs(inputs));
+        JSValue value = callFunction(operation, numberArgs(inputs));
         if (Double.isNaN(expected)) {
             assertThat(value.asNumber().orElseThrow().value()).isNaN();
         } else {
@@ -41,8 +41,8 @@ public class MathObjectTest extends BaseJavetTest {
     }
 
     private void assertMathClose(JSNativeCallback operation, double expected, double... inputs) {
-        assertThat(operation.call(context, JSUndefined.INSTANCE, numberArgs(inputs)).asNumber().map(JSNumber::value)
-                .orElseThrow()).isCloseTo(expected, offset(1e-10));
+        assertThat(callFunction(operation, numberArgs(inputs)).asNumber().map(JSNumber::value).orElseThrow())
+                .isCloseTo(expected, offset(1e-10));
     }
 
     @Test
@@ -66,7 +66,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertMath(MathObject::abs, Double.NaN);
 
         // Edge case: string coercion
-        assertNumberValue(callBuiltin(MathObject::abs, JSUndefined.INSTANCE, "-42"), 42.0);
+        assertNumberValue(callFunction(MathObject::abs, "-42"), 42.0);
     }
 
     @Test
@@ -303,14 +303,13 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testRandom() {
         // Normal case: random number
-        var randomMethod = builtin(MathObject::random, JSUndefined.INSTANCE);
+        var randomMethod = builtin(MathObject::random);
         JSValue result = randomMethod.call();
         double randomValue = result.asNumber().map(JSNumber::value).orElseThrow();
         assertThat(randomValue >= 0.0 && randomValue < 1.0).isTrue();
 
         // Edge case: with arguments (should ignore them)
-        result = randomMethod.call(42);
-        randomValue = result.asNumber().map(JSNumber::value).orElseThrow();
+        randomValue = randomMethod.call(42).asNumber().map(JSNumber::value).orElseThrow();
         assertThat(randomValue >= 0.0 && randomValue < 1.0).isTrue();
     }
 
@@ -366,8 +365,8 @@ public class MathObjectTest extends BaseJavetTest {
         assertMath(MathObject::clz32, 31.0, 1);
 
         // Test fround
-        assertThat(callBuiltin(MathObject::fround, JSUndefined.INSTANCE, 1.5).asNumber().map(JSNumber::value)
-                .orElseThrow()).isCloseTo(1.5, offset(1e-6));
+        assertThat(callFunction(MathObject::fround, 1.5).asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.5,
+                offset(1e-6));
 
         // Test hypot
         assertMathClose(MathObject::hypot, 5.0, 3, 4);
@@ -462,8 +461,8 @@ public class MathObjectTest extends BaseJavetTest {
         assertMathClose(MathObject::tan, 0.0, 0);
 
         // Test with PI/2
-        assertThat(callBuiltin(MathObject::sin, JSUndefined.INSTANCE, new JSNumber(Math.PI / 2)).asNumber()
-                .map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
+        assertThat(callFunction(MathObject::sin, Math.PI / 2).asNumber().map(JSNumber::value).orElseThrow())
+                .isCloseTo(1.0, offset(1e-10));
 
         // Edge case: no arguments
         assertMath(MathObject::sin, Double.NaN);

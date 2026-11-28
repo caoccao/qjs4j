@@ -32,9 +32,9 @@ public class DateConstructorTest extends BaseJavetTest {
     private void assertLocalDateField(JSNativeCallback getter, double minimum, double maximum,
             JSValue invalidReceiver) {
         JSDate date = new JSDate(context, 1750000000000L);
-        assertThat(getter.call(context, date, JSValue.NO_ARGS)).isInstanceOfSatisfying(JSNumber.class,
+        assertThat(callBuiltin(getter, date)).isInstanceOfSatisfying(JSNumber.class,
                 number -> assertThat(number.value()).isBetween(minimum, maximum));
-        assertPendingTypeError(context, getter.call(context, invalidReceiver, JSValue.NO_ARGS));
+        assertPendingTypeError(callBuiltin(getter, invalidReceiver));
     }
 
     @Test
@@ -148,12 +148,13 @@ public class DateConstructorTest extends BaseJavetTest {
         // Normal case: 2025-06-15
         JSDate date = new JSDate(context, 1750000000000L); // Approximately 2025-06-15
 
-        JSValue result = callBuiltin(DatePrototype::getFullYear, date);
+        var getFullYear = nativeMethod(DatePrototype::getFullYear);
+        JSValue result = getFullYear.call(date);
         // We don't assert exact year as it depends on timezone
         assertThat(result).isInstanceOf(JSNumber.class);
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::getFullYear, new JSObject(context)));
+        assertPendingTypeError(getFullYear.call(new JSObject(context)));
     }
 
     @Test
@@ -165,12 +166,13 @@ public class DateConstructorTest extends BaseJavetTest {
     public void testGetMilliseconds() {
         JSDate date = new JSDate(context, 1750000000123L); // 123 milliseconds
 
-        assertThat(callBuiltin(DatePrototype::getMilliseconds, date)).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
+        var getMilliseconds = nativeMethod(DatePrototype::getMilliseconds);
+        assertThat(getMilliseconds.call(date)).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             assertThat(jsNum.value()).isBetween(0.0, 999.0);
         });
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::getMilliseconds, new JSObject(context)));
+        assertPendingTypeError(getMilliseconds.call(new JSObject(context)));
     }
 
     @Test
@@ -194,10 +196,11 @@ public class DateConstructorTest extends BaseJavetTest {
         long timestamp = System.currentTimeMillis();
         JSDate date = new JSDate(context, timestamp);
 
-        assertNumberValue(callBuiltin(DatePrototype::getTime, date), timestamp);
+        var getTime = nativeMethod(DatePrototype::getTime);
+        assertNumberValue(getTime.call(date), timestamp);
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::getTime, new JSString("not date")));
+        assertPendingTypeError(getTime.call("not date"));
     }
 
     @Test
@@ -205,10 +208,11 @@ public class DateConstructorTest extends BaseJavetTest {
         // Known timestamp: 2025-01-01T00:00:00.000Z
         JSDate date = new JSDate(context, 1735689600000L);
 
-        assertNumberValue(callBuiltin(DatePrototype::getUTCDate, date), 1.0);
+        var getUTCDate = nativeMethod(DatePrototype::getUTCDate);
+        assertNumberValue(getUTCDate.call(date), 1.0);
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::getUTCDate, new JSNumber(42)));
+        assertPendingTypeError(getUTCDate.call(42));
     }
 
     @Test
@@ -216,10 +220,11 @@ public class DateConstructorTest extends BaseJavetTest {
         // Known timestamp: 2025-01-01T00:00:00.000Z = 1735689600000
         JSDate date = new JSDate(context, 1735689600000L);
 
-        assertNumberValue(callBuiltin(DatePrototype::getUTCFullYear, date), 2025.0);
+        var getUTCFullYear = nativeMethod(DatePrototype::getUTCFullYear);
+        assertNumberValue(getUTCFullYear.call(date), 2025.0);
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::getUTCFullYear, new JSString("not date")));
+        assertPendingTypeError(getUTCFullYear.call("not date"));
     }
 
     @Test
@@ -227,10 +232,11 @@ public class DateConstructorTest extends BaseJavetTest {
         // Known timestamp: 2025-01-01T00:00:00.000Z
         JSDate date = new JSDate(context, 1735689600000L);
 
-        assertNumberValue(callBuiltin(DatePrototype::getUTCHours, date), 0.0);
+        var getUTCHours = nativeMethod(DatePrototype::getUTCHours);
+        assertNumberValue(getUTCHours.call(date), 0.0);
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::getUTCHours, JSNull.INSTANCE));
+        assertPendingTypeError(getUTCHours.call(JSNull.INSTANCE));
     }
 
     @Test
@@ -238,19 +244,20 @@ public class DateConstructorTest extends BaseJavetTest {
         // Known timestamp: 2025-01-01T00:00:00.000Z
         JSDate date = new JSDate(context, 1735689600000L);
 
-        assertNumberValue(callBuiltin(DatePrototype::getUTCMonth, date), 0.0); // January
+        var getUTCMonth = nativeMethod(DatePrototype::getUTCMonth);
+        assertNumberValue(getUTCMonth.call(date), 0.0); // January
         // =
         // 0
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::getUTCMonth, JSUndefined.INSTANCE));
+        assertPendingTypeError(getUTCMonth.call(JSUndefined.INSTANCE));
     }
 
     @Test
     public void testNow() {
         // Normal case
         long before = System.currentTimeMillis();
-        JSValue result = callBuiltin(DateConstructor::now, JSUndefined.INSTANCE);
+        JSValue result = callFunction(DateConstructor::now);
         long after = System.currentTimeMillis();
 
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
@@ -261,21 +268,18 @@ public class DateConstructorTest extends BaseJavetTest {
     @Test
     public void testParse() {
         // Normal case: ISO 8601 format
-        var parse = builtin(DateConstructor::parse, JSUndefined.INSTANCE);
-        JSValue result = parse.call("2025-01-01T00:00:00.000Z");
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
+        var parse = builtin(DateConstructor::parse);
+        assertThat(parse.call("2025-01-01T00:00:00.000Z")).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             assertThat(jsNum.value()).isGreaterThan(0.0);
         });
 
         // Edge case: no arguments
-        result = parse.call();
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
+        assertThat(parse.call()).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             assertThat(jsNum.value()).isNaN();
         });
 
         // Edge case: invalid date string
-        result = parse.call("not a date");
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
+        assertThat(parse.call("not a date")).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             assertThat(jsNum.value()).isNaN();
         });
     }
@@ -285,14 +289,15 @@ public class DateConstructorTest extends BaseJavetTest {
         // Known timestamp: 2025-01-01T00:00:00.000Z
         JSDate date = new JSDate(context, 1735689600000L);
 
-        assertThat(callBuiltin(DatePrototype::toISOString, date)).isInstanceOfSatisfying(JSString.class, jsStr -> {
+        var toISOString = nativeMethod(DatePrototype::toISOString);
+        assertThat(toISOString.call(date)).isInstanceOfSatisfying(JSString.class, jsStr -> {
             String isoString = jsStr.value();
             assertThat(isoString).contains("2025-01-01");
             assertThat(isoString).endsWith("Z");
         });
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::toISOString, new JSArray(context)));
+        assertPendingTypeError(toISOString.call(new JSArray(context)));
     }
 
     @Test
@@ -300,12 +305,13 @@ public class DateConstructorTest extends BaseJavetTest {
         // Known timestamp: 2025-01-01T00:00:00.000Z
         JSDate date = new JSDate(context, 1735689600000L);
 
-        assertThat(callBuiltin(DatePrototype::toJSON, date)).isInstanceOfSatisfying(JSString.class, jsStr -> {
+        var toJSON = nativeMethod(DatePrototype::toJSON);
+        assertThat(toJSON.call(date)).isInstanceOfSatisfying(JSString.class, jsStr -> {
             assertThat(jsStr.value()).contains("2025-01-01");
         });
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::toJSON, JSBoolean.FALSE));
+        assertPendingTypeError(toJSON.call(JSBoolean.FALSE));
     }
 
     @Test
@@ -317,7 +323,7 @@ public class DateConstructorTest extends BaseJavetTest {
     @Test
     public void testUTC() {
         // Normal case: Date.UTC(2025, 0, 1, 0, 0, 0)
-        var utc = builtin(DateConstructor::UTC, JSUndefined.INSTANCE);
+        var utc = builtin(DateConstructor::UTC);
         JSValue result = utc.call(2025, 0, // January
                 1, 0, 0, 0);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
@@ -349,9 +355,10 @@ public class DateConstructorTest extends BaseJavetTest {
         long timestamp = 1735689600000L;
         JSDate date = new JSDate(context, timestamp);
 
-        assertNumberValue(callBuiltin(DatePrototype::valueOf, date), timestamp);
+        var valueOf = nativeMethod(DatePrototype::valueOf);
+        assertNumberValue(valueOf.call(date), timestamp);
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context, callBuiltin(DatePrototype::valueOf, new JSObject(context)));
+        assertPendingTypeError(valueOf.call(new JSObject(context)));
     }
 }

@@ -92,6 +92,15 @@ final class ExecutionContext {
         finishOpcode(op, resultSlot + 1);
     }
 
+    /** Decode an index from the four compact opcodes or the following u8/u16 operand. */
+    int indexOperand(Opcode op, Opcode firstCompact) {
+        return switch (op.getSize()) {
+            case 1 -> op.getCode() - firstCompact.getCode();
+            case 2 -> operandU8();
+            default -> operandU16();
+        };
+    }
+
     int operandI32() {
         return bytecode.readU32(pc + 1);
     }

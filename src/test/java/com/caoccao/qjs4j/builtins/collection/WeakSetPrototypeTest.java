@@ -43,15 +43,13 @@ public class WeakSetPrototypeTest extends BaseJavetTest {
         // Edge case: no arguments
         assertErrorWithJavet("""
                 var weakSet = new WeakSet();
-                weakSet.add();""");
-
-        // Edge case: non-object value
-        assertErrorWithJavet("""
-                var weakSet = new WeakSet();
-                weakSet.add('string');""");
-
-        // Edge case: called on non-WeakSet
-        assertErrorWithJavet("WeakSet.prototype.add.call('not weakset', {});");
+                weakSet.add();""",
+                // Edge case: non-object value
+                """
+                        var weakSet = new WeakSet();
+                        weakSet.add('string');""",
+                // Edge case: called on non-WeakSet
+                "WeakSet.prototype.add.call('not weakset', {});");
     }
 
     @Test

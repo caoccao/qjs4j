@@ -25,7 +25,7 @@ public abstract sealed class ObjectProperty<V extends Pattern> extends ASTNode
     private final V value;
 
     ObjectProperty(Expression key, V value, boolean computed, boolean shorthand) {
-        super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
+        super(SourceLocation.firstOf(key, value));
         this.key = key;
         this.value = value;
         this.computed = computed;

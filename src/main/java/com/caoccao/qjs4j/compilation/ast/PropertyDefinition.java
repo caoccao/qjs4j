@@ -24,13 +24,8 @@ import java.util.Set;
 /**
  * Represents a field in a class (public or private).
  */
-public final class PropertyDefinition extends ClassElement {
+public final class PropertyDefinition extends ClassMember<Expression> {
     private final boolean autoAccessor;
-    private final boolean computed;
-    private final boolean isPrivate;
-    private final boolean isStatic;
-    private final Expression key;
-    private final Expression value;
 
     public PropertyDefinition(Expression key, Expression value, boolean computed, boolean isStatic, boolean isPrivate) {
         this(key, value, computed, isStatic, isPrivate, false);
@@ -38,42 +33,12 @@ public final class PropertyDefinition extends ClassElement {
 
     public PropertyDefinition(Expression key, Expression value, boolean computed, boolean isStatic, boolean isPrivate,
             boolean autoAccessor) {
-        super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
-        this.key = key;
-        this.value = value;
-        this.computed = computed;
-        this.isStatic = isStatic;
-        this.isPrivate = isPrivate;
+        super(key, value, computed, isStatic, isPrivate);
         this.autoAccessor = autoAccessor;
-    }
-
-    @Override
-    boolean containsSuspension(Suspension kind) {
-        return kind.in(key) || kind.in(value);
-    }
-
-    public Expression getKey() {
-        return key;
-    }
-
-    public Expression getValue() {
-        return value;
     }
 
     public boolean isAutoAccessor() {
         return autoAccessor;
-    }
-
-    public boolean isComputed() {
-        return computed;
-    }
-
-    public boolean isPrivate() {
-        return isPrivate;
-    }
-
-    public boolean isStatic() {
-        return isStatic;
     }
 
     public MethodDefinition toAutoAccessorMethod(String methodKind, String backingPrivateName) {
@@ -99,7 +64,7 @@ public final class PropertyDefinition extends ClassElement {
                     new FunctionParams(List.of(valueIdentifier), null, null), body, false, false, false, location);
         }
 
-        return new MethodDefinition(key, methodFunctionExpression, methodKind, computed, isStatic, false);
+        return new MethodDefinition(getKey(), methodFunctionExpression, methodKind, isComputed(), isStatic(), false);
     }
 
     public static String createAutoAccessorBackingName(int index, Set<String> existingNames) {

@@ -53,7 +53,7 @@ final class JSONStringifier {
         sb.append('"');
         int len = str.length();
         for (int i = 0; i < len; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             char ch = str.charAt(i);
             if (Character.isHighSurrogate(ch) && i + 1 < len && Character.isLowSurrogate(str.charAt(i + 1))) {
                 sb.append(ch).append(str.charAt(++i));
@@ -74,7 +74,7 @@ final class JSONStringifier {
         // Find where the cycle starts in the path
         int cycleStart = -1;
         for (int i = 0; i < cyclePath.size(); i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (cyclePath.get(i).obj == cycleTo) {
                 cycleStart = i;
                 break;
@@ -90,7 +90,7 @@ final class JSONStringifier {
 
             // Add intermediate path entries between cycle start and end
             for (int i = cycleStart + 1; i < cyclePath.size(); i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 CycleEntry entry = cyclePath.get(i);
                 msg.append("\n    |     property '").append(entry.key).append("' -> object with constructor '");
                 msg.append(getConstructorName(entry.obj));
@@ -126,7 +126,7 @@ final class JSONStringifier {
             return false;
         }
         for (int i = 0; i < key.length(); i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (!Character.isDigit(key.charAt(i))) {
                 return false;
             }
@@ -292,7 +292,7 @@ final class JSONStringifier {
         Set<String> keys = new LinkedHashSet<>();
         long length = JSONObject.arrayLength(context, replacer);
         for (long i = 0; i < length && !context.hasPendingException(); i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue item = replacer.get(PropertyKey.fromIndexString(i));
             if (context.hasPendingException()) {
                 break;
@@ -375,7 +375,7 @@ final class JSONStringifier {
 
         for (long i = 0; i < arrayLength; i++) {
 
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (i > 0) {
                 sb.append(',');
             }
@@ -427,7 +427,7 @@ final class JSONStringifier {
 
         for (String key : keys) {
 
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue processedValue = readProperty(object, PropertyKey.fromString(key), new JSString(key));
             if (processedValue == null || context.hasPendingException()) {
                 return false;

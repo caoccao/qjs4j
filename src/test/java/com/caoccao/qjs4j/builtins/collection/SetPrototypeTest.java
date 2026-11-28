@@ -89,29 +89,25 @@ public class SetPrototypeTest extends BaseJavetTest {
 
         // Normal case: add new value
         var addMethod = builtin(SetPrototype::add, set);
-        JSValue result = addMethod.call("value1");
-        assertThat(result).isSameAs(set);
+        assertThat(addMethod.call("value1")).isSameAs(set);
         assertThat(set.size()).isEqualTo(1);
         assertThat(set.setHas(new JSString("value1"))).isTrue();
 
         // Normal case: add duplicate value (should not increase size)
-        result = addMethod.call("value1");
-        assertThat(result).isSameAs(set);
+        assertThat(addMethod.call("value1")).isSameAs(set);
         assertThat(set.size()).isEqualTo(1);
 
         // Normal case: add different value
-        result = addMethod.call(42);
-        assertThat(result).isSameAs(set);
+        assertThat(addMethod.call(42)).isSameAs(set);
         assertThat(set.size()).isEqualTo(2);
         assertThat(set.setHas(new JSNumber(42))).isTrue();
 
         // Edge case: no arguments (adds undefined)
-        result = addMethod.call();
-        assertThat(result).isSameAs(set);
+        assertThat(addMethod.call()).isSameAs(set);
         assertThat(set.size()).isEqualTo(3); // Should add undefined, increasing size
 
         // Edge case: called on non-Set
-        assertPendingTypeError(context, callBuiltin(SetPrototype::add, new JSString("not set"), "value"));
+        assertPendingTypeError(callBuiltin(SetPrototype::add, "not set", "value"));
     }
 
     @Test
@@ -235,11 +231,12 @@ public class SetPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSString("value2"));
 
         // Normal case: clear set
-        assertThat(callBuiltin(SetPrototype::clear, set)).isEqualTo(JSUndefined.INSTANCE);
+        var clearMethod = nativeMethod(SetPrototype::clear);
+        assertThat(clearMethod.call(set)).isEqualTo(JSUndefined.INSTANCE);
         assertThat(set.size()).isEqualTo(0);
 
         // Edge case: called on non-Set
-        assertPendingTypeError(context, callBuiltin(SetPrototype::clear, new JSString("not set")));
+        assertPendingTypeError(clearMethod.call("not set"));
     }
 
     @Test
@@ -305,7 +302,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         delete.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
-        assertPendingTypeError(context, callBuiltin(SetPrototype::delete, new JSString("not set"), "value"));
+        assertPendingTypeError(callBuiltin(SetPrototype::delete, "not set", "value"));
     }
 
     @Test
@@ -533,13 +530,13 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(resultStr).contains("value2");
 
         // Edge case: no callback function
-        assertPendingTypeError(context, forEachMethod.call());
+        assertPendingTypeError(forEachMethod.call());
 
         // Edge case: non-function callback
-        assertPendingTypeError(context, forEachMethod.call("not function"));
+        assertPendingTypeError(forEachMethod.call("not function"));
 
         // Edge case: called on non-Set
-        assertPendingTypeError(context, callBuiltin(SetPrototype::forEach, new JSString("not set"), callback));
+        assertPendingTypeError(callBuiltin(SetPrototype::forEach, "not set", callback));
     }
 
     @Test
@@ -825,17 +822,15 @@ public class SetPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty set
         var getSize = builtin(SetPrototype::getSize, set);
-        JSValue result = getSize.call();
-        assertNumberValue(result, 0.0);
+        assertNumberValue(getSize.call(), 0.0);
 
         // Normal case: set with values
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
-        result = getSize.call();
-        assertNumberValue(result, 2.0);
+        assertNumberValue(getSize.call(), 2.0);
 
         // Edge case: called on non-Set
-        assertPendingTypeError(context, callBuiltin(SetPrototype::getSize, new JSString("not set")));
+        assertPendingTypeError(callBuiltin(SetPrototype::getSize, "not set"));
 
         assertIntegerWithJavet("new Set().size", "var a = new Set(); a.add('a'); a.size");
     }
@@ -856,7 +851,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         has.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
-        assertPendingTypeError(context, callBuiltin(SetPrototype::has, new JSString("not set"), "value"));
+        assertPendingTypeError(callBuiltin(SetPrototype::has, "not set", "value"));
     }
 
     @Test

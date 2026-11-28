@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import static com.caoccao.qjs4j.regexp.RegExpBytecode.readU16;
+import static com.caoccao.qjs4j.regexp.RegExpBytecode.readU32;
+
 import com.caoccao.qjs4j.core.JSRuntimeOptions;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.unicode.CharacterProperties;
@@ -115,7 +118,8 @@ public final class RegExpEngine {
 
         ExecutionContext executionContext = new ExecutionContext(input, bytecode.instructions(),
                 bytecode.captureCount(), bytecode.groupNames(), bytecode.isIgnoreCase(), bytecode.isMultiline(),
-                bytecode.isDotAll(), isUnicode, bytecode.registerCount(), backtrackLimit);
+                bytecode.isDotAll(), isUnicode, isUnicode ? input.codePoints().toArray() : null,
+                bytecode.registerCount(), backtrackLimit);
         executionContext.interruptProbe = interruptProbe;
 
         // ExecutionContext indexes code points in Unicode mode and UTF-16 units otherwise.
@@ -189,48 +193,17 @@ public final class RegExpEngine {
                         return true;
                     }
 
-                    case LOOKAHEAD -> {
+                    case LOOKAHEAD, LOOKBEHIND, NEGATIVE_LOOKAHEAD, NEGATIVE_LOOKBEHIND -> {
                         int len = readU32(bc, pc + 1);
                         byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                        ExecutionContext assertionContext = executeLookaheadAssertion(executionContext,
-                                assertionBytecode);
-                        if (assertionContext == null) {
+                        ExecutionContext assertion = executeAssertion(executionContext, assertionBytecode);
+                        boolean negative = op == RegExpOpcode.NEGATIVE_LOOKAHEAD
+                                || op == RegExpOpcode.NEGATIVE_LOOKBEHIND;
+                        if ((assertion != null) == negative) {
                             break match;
                         }
-                        executionContext.copyCapturesFrom(assertionContext);
-                        pc += 5 + len;
-                    }
-
-                    case NEGATIVE_LOOKAHEAD -> {
-                        int len = readU32(bc, pc + 1);
-                        byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                        ExecutionContext assertionContext = executeLookaheadAssertion(executionContext,
-                                assertionBytecode);
-                        if (assertionContext != null) {
-                            break match;
-                        }
-                        pc += 5 + len;
-                    }
-
-                    case LOOKBEHIND -> {
-                        int len = readU32(bc, pc + 1);
-                        byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                        ExecutionContext assertionContext = executeLookbehindAssertion(executionContext,
-                                assertionBytecode);
-                        if (assertionContext == null) {
-                            break match;
-                        }
-                        executionContext.copyCapturesFrom(assertionContext);
-                        pc += 5 + len;
-                    }
-
-                    case NEGATIVE_LOOKBEHIND -> {
-                        int len = readU32(bc, pc + 1);
-                        byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                        ExecutionContext assertionContext = executeLookbehindAssertion(executionContext,
-                                assertionBytecode);
-                        if (assertionContext != null) {
-                            break match;
+                        if (assertion != null) {
+                            executionContext.copyCapturesFrom(assertion);
                         }
                         pc += 5 + len;
                     }
@@ -375,26 +348,17 @@ public final class RegExpEngine {
         }
     }
 
-    private ExecutionContext executeLookaheadAssertion(ExecutionContext outerContext, byte[] assertionBytecode) {
-        return executeStandalone(outerContext, outerContext.input, assertionBytecode, outerContext.pos);
-    }
-
-    private ExecutionContext executeLookbehindAssertion(ExecutionContext outerContext, byte[] assertionBytecode) {
-        return executeStandalone(outerContext, outerContext.input, assertionBytecode, outerContext.pos);
-    }
-
-    private ExecutionContext executeStandalone(ExecutionContext outerContext, String input, byte[] bytecode,
-            int startPos) {
+    private ExecutionContext executeAssertion(ExecutionContext outerContext, byte[] bytecode) {
         // A lookaround runs on its own context. It inherits the outer context's *remaining* budget
         // and charges what it spends back, so a lookaround inside a loop cannot reset the budget
         // on every iteration and reintroduce unbounded backtracking.
-        ExecutionContext tempContext = new ExecutionContext(input, bytecode, outerContext.captureCount,
+        ExecutionContext tempContext = new ExecutionContext(outerContext.input, bytecode, outerContext.captureCount,
                 outerContext.groupNames, outerContext.ignoreCase, outerContext.multiline, outerContext.dotAll,
-                outerContext.unicode,
+                outerContext.unicode, outerContext.codePoints,
                 // Lookaround bodies are compiled in the same CompileContext as the pattern, so they
                 // draw on the same register counter and the outer count bounds them.
                 outerContext.registerCount, outerContext.remainingBacktrackBudget());
-        tempContext.pos = startPos;
+        tempContext.pos = outerContext.pos;
         tempContext.interruptProbe = outerContext.interruptProbe;
         System.arraycopy(outerContext.captureStarts, 0, tempContext.captureStarts, 0, outerContext.captureCount);
         System.arraycopy(outerContext.captureEnds, 0, tempContext.captureEnds, 0, outerContext.captureCount);
@@ -410,21 +374,6 @@ public final class RegExpEngine {
      */
     public boolean test(String input) {
         return exec(input, 0) != null;
-    }
-
-    /**
-     * Read a 16-bit unsigned value from bytecode (little-endian).
-     */
-    private static int readU16(byte[] bc, int offset) {
-        return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8);
-    }
-
-    /**
-     * Read a 32-bit unsigned value from bytecode (little-endian).
-     */
-    private static int readU32(byte[] bc, int offset) {
-        return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8) | ((bc[offset + 2] & 0xFF) << 16)
-                | ((bc[offset + 3] & 0xFF) << 24);
     }
 
     /**
@@ -503,7 +452,8 @@ public final class RegExpEngine {
         final boolean unicode;
 
         ExecutionContext(String input, byte[] bytecode, int captureCount, String[] groupNames, boolean ignoreCase,
-                boolean multiline, boolean dotAll, boolean unicode, int registerCount, long backtrackLimit) {
+                boolean multiline, boolean dotAll, boolean unicode, int[] codePoints, int registerCount,
+                long backtrackLimit) {
             this.backtrackLimit = backtrackLimit;
             this.registerCount = Math.max(0, Math.min(registerCount, MAX_REGISTERS));
             this.input = input;
@@ -511,7 +461,7 @@ public final class RegExpEngine {
             // Non-Unicode matching already uses UTF-16 offsets, so read the original string
             // as QuickJS does. Copying it for every exec and lookaround makes repeated sticky
             // matches (including String.prototype.split) allocate quadratically in input size.
-            this.codePoints = unicode ? input.codePoints().toArray() : null;
+            this.codePoints = codePoints;
             this.inputLength = unicode ? codePoints.length : input.length();
             this.captureCount = captureCount;
             this.groupNames = groupNames;

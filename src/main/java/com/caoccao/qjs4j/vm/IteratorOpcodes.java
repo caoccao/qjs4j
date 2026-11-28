@@ -518,7 +518,6 @@ final class IteratorOpcodes {
     }
 
     static void handleIteratorCall(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         int flags = executionContext.operandU8();
         JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;

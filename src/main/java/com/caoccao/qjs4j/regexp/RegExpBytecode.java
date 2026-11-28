@@ -35,6 +35,11 @@ public record RegExpBytecode(byte[] instructions, int flags, int captureCount, i
     public static final int FLAG_UNICODE = 1 << 4;
     public static final int FLAG_UNICODE_SETS = 1 << 8;
 
+    /** Flag order in the compiled bytecode's string representation. */
+    private static final String FLAG_CHARACTERS = "gimsuydv";
+    private static final int[] FLAG_BITS = {FLAG_GLOBAL, FLAG_IGNORECASE, FLAG_MULTILINE, FLAG_DOTALL, FLAG_UNICODE,
+            FLAG_STICKY, FLAG_INDICES, FLAG_UNICODE_SETS};
+
     public RegExpBytecode(byte[] instructions, int flags, int captureCount) {
         this(instructions, flags, captureCount, ExecutionLimits.MAX_REGISTERS, null);
     }
@@ -47,20 +52,11 @@ public record RegExpBytecode(byte[] instructions, int flags, int captureCount, i
         if (flagStr != null) {
             for (int i = 0; i < flagStr.length(); i++) {
                 char c = flagStr.charAt(i);
-                int flagBit = switch (c) {
-                    case 'g' -> FLAG_GLOBAL;
-                    case 'i' -> FLAG_IGNORECASE;
-                    case 'm' -> FLAG_MULTILINE;
-                    case 's' -> FLAG_DOTALL;
-                    case 'u' -> FLAG_UNICODE;
-                    case 'y' -> FLAG_STICKY;
-                    case 'd' -> FLAG_INDICES;
-                    case 'v' -> FLAG_UNICODE_SETS;
-                    default -> throw new JSSyntaxErrorException("Invalid regular expression flags");
-                };
-                if ((flags & flagBit) != 0) {
+                int index = FLAG_CHARACTERS.indexOf(c);
+                if (index < 0 || (flags & FLAG_BITS[index]) != 0) {
                     throw new JSSyntaxErrorException("Invalid regular expression flags");
                 }
+                int flagBit = FLAG_BITS[index];
                 flags |= flagBit;
             }
         }
@@ -75,31 +71,27 @@ public record RegExpBytecode(byte[] instructions, int flags, int captureCount, i
      */
     public String flagsToString() {
         StringBuilder sb = new StringBuilder();
-        if (isGlobal()) {
-            sb.append('g');
-        }
-        if (isIgnoreCase()) {
-            sb.append('i');
-        }
-        if (isMultiline()) {
-            sb.append('m');
-        }
-        if (isDotAll()) {
-            sb.append('s');
-        }
-        if (isUnicode()) {
-            sb.append('u');
-        }
-        if (isSticky()) {
-            sb.append('y');
-        }
-        if (hasIndices()) {
-            sb.append('d');
-        }
-        if (hasUnicodeSets()) {
-            sb.append('v');
+        for (int i = 0; i < FLAG_BITS.length; i++) {
+            if ((flags & FLAG_BITS[i]) != 0) {
+                sb.append(FLAG_CHARACTERS.charAt(i));
+            }
         }
         return sb.toString();
+    }
+
+    /**
+     * Read a 16-bit unsigned value from bytecode (little-endian).
+     */
+    static int readU16(byte[] bc, int offset) {
+        return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8);
+    }
+
+    /**
+     * Read a 32-bit unsigned value from bytecode (little-endian).
+     */
+    static int readU32(byte[] bc, int offset) {
+        return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8) | ((bc[offset + 2] & 0xFF) << 16)
+                | ((bc[offset + 3] & 0xFF) << 24);
     }
 
     public boolean hasIndices() {

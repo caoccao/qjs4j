@@ -43,7 +43,7 @@ public final class StringReplacement {
         int callbackArgCount = captures.length + 2 + (hasNamedCaptures ? 1 : 0);
         JSValue[] callbackArgs = new JSValue[callbackArgCount];
         for (int captureIndex = 0; captureIndex < captures.length; captureIndex++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             String captureValue = captures[captureIndex];
             callbackArgs[captureIndex] = captureValue != null ? new JSString(captureValue) : JSUndefined.INSTANCE;
         }
@@ -74,7 +74,7 @@ public final class StringReplacement {
         String suffix = null;
         int replacementIndex = 0;
         while (replacementIndex < replacementTemplate.length()) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             char currentChar = replacementTemplate.charAt(replacementIndex);
             if (currentChar != '$') {
                 // Preserve literal runs as a single leaf. Per-character appends rebuild short rope leaves for every

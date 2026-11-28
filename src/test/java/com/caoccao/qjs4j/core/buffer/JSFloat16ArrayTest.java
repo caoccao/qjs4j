@@ -116,8 +116,7 @@ public class JSFloat16ArrayTest extends BaseTest {
     @Test
     public void testGlobalConstructor() {
         // Verify Float16Array is registered in global object
-        JSObject global = context.getGlobalObject();
-        JSValue float16ArrayCtor = global.get("Float16Array");
+        JSValue float16ArrayCtor = context.getGlobalObject().get("Float16Array");
 
         assertThat(float16ArrayCtor).isNotNull();
         assertThat(float16ArrayCtor.isObject()).isTrue();

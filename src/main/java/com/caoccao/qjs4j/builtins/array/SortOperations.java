@@ -110,16 +110,16 @@ final class SortOperations {
 
         long[] counts = new long[1 << 16];
         for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             counts[(int) typedArray.getElement(i) + valueOffset]++;
         }
         long outputIndex = 0;
         for (int countIndex = 0; countIndex < counts.length; countIndex++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             long count = counts[countIndex];
             double value = countIndex - valueOffset;
             for (long i = 0; i < count; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 target.setElement(outputIndex++, value);
             }
         }
@@ -154,7 +154,7 @@ final class SortOperations {
         List<JSValue> sortableElements = new ArrayList<>();
         int undefinedCount = 0;
         for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue value = copy
                     ? ArrayPrototype.getElement(context, obj, i)
                     : ArrayLikeElements.getPresent(context, obj, i);
@@ -182,7 +182,7 @@ final class SortOperations {
             }
             JSArray result = context.createJSArray(0, sorted.length);
             for (JSValue value : sorted) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 result.push(value);
             }
             return result;
@@ -193,7 +193,7 @@ final class SortOperations {
 
         // Write sorted elements
         for (JSValue value : sorted) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             PropertyKey key = PropertyKey.fromIndexString(writeIndex);
             if (!ArrayCopy.setOrThrow(context, obj, key, value)) {
                 return context.getPendingException();
@@ -203,7 +203,7 @@ final class SortOperations {
 
         // Write undefined values after sorted elements
         for (int i = 0; i < undefinedCount; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             PropertyKey key = PropertyKey.fromIndexString(writeIndex);
             if (!ArrayCopy.setOrThrow(context, obj, key, JSUndefined.INSTANCE)) {
                 return context.getPendingException();
@@ -213,7 +213,7 @@ final class SortOperations {
 
         // Delete remaining holes
         for (long i = writeIndex; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             PropertyKey key = PropertyKey.fromIndexString(i);
             if (!ArrayCopy.deleteOrThrow(context, obj, key)) {
                 return context.getPendingException();
@@ -228,7 +228,7 @@ final class SortOperations {
         // Collect elements into array
         JSValue[] elements = new JSValue[requireWorkspaceLength(context, length)];
         for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             elements[(int) i] = typedArray.getJSElement(i);
         }
 
@@ -242,7 +242,7 @@ final class SortOperations {
 
         // Write back
         for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             target.set(PropertyKey.fromIndex(i), elements[(int) i]);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -262,12 +262,12 @@ final class SortOperations {
             }
             double[] elements = new double[requireWorkspaceLength(context, length)];
             for (long i = 0; i < length; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 elements[(int) i] = typedArray.getElement(i);
             }
             Arrays.sort(elements);
             for (long i = 0; i < length; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 target.setElement(i, elements[(int) i]);
             }
             return target;
@@ -291,7 +291,7 @@ final class SortOperations {
                 int right = middle;
                 int end = (int) Math.min(start + width * 2, length);
                 for (int output = left; output < end; output++) {
-                    context.getVirtualMachine().checkExecutionInterruptForNative();
+                    context.checkExecutionInterrupt();
                     boolean takeLeft = right == end;
                     if (!takeLeft && left < middle) {
                         takeLeft = comparator.compare(source[left], source[right]) <= 0;

@@ -51,7 +51,7 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         // Normal case: TypedArray instances should return true
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSUint8Array uint8Array = new JSUint8Array(context, buffer, 0, 8);
-        BuiltinAssertions isView = builtin(ArrayBufferConstructor::isView, JSUndefined.INSTANCE);
+        BuiltinAssertions isView = builtin(ArrayBufferConstructor::isView);
         isView.expectValue(JSBoolean.TRUE, uint8Array);
 
         JSInt32Array int32Array = new JSInt32Array(context, buffer, 0, 4);

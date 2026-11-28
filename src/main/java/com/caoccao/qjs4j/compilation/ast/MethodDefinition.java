@@ -19,32 +19,13 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a method in a class.
  */
-public final class MethodDefinition extends ClassElement {
-    private final boolean computed;
-    private final boolean isPrivate;
-    private final boolean isStatic;
-    private final Expression key;
+public final class MethodDefinition extends ClassMember<FunctionExpression> {
     private final String kind;
-    private final FunctionExpression value;
 
     public MethodDefinition(Expression key, FunctionExpression value, String kind, boolean computed, boolean isStatic,
             boolean isPrivate) {
-        super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
-        this.key = key;
-        this.value = value;
+        super(key, value, computed, isStatic, isPrivate);
         this.kind = kind;
-        this.computed = computed;
-        this.isStatic = isStatic;
-        this.isPrivate = isPrivate;
-    }
-
-    @Override
-    boolean containsSuspension(Suspension kind) {
-        return kind.in(key) || kind.in(value);
-    }
-
-    public Expression getKey() {
-        return key;
     }
 
     public String getKind() {
@@ -52,46 +33,36 @@ public final class MethodDefinition extends ClassElement {
     }
 
     public String getSimpleName() {
-        if (key instanceof Identifier id) {
+        if (getKey() instanceof Identifier id) {
             return id.getName();
-        } else if (key instanceof Literal literal) {
+        } else if (getKey() instanceof Literal literal) {
             return literal.getValue() != null ? literal.getValue().toString() : "null";
-        } else if (key instanceof PrivateIdentifier privateId) {
+        } else if (getKey() instanceof PrivateIdentifier privateId) {
             return privateId.getName();
         } else {
             return "[computed]";
         }
     }
 
+    @Override
     public FunctionExpression getValue() {
-        return value;
-    }
-
-    public boolean isComputed() {
-        return computed;
+        return super.getValue();
     }
 
     /**
      * Per ES2024, only non-static, non-computed "constructor" defines a class constructor method.
      */
     public boolean isConstructor() {
-        if (isStatic || computed) {
+        if (isStatic() || isComputed()) {
             return false;
         }
-        if (key instanceof Identifier id) {
+        if (getKey() instanceof Identifier id) {
             return "constructor".equals(id.getName());
         }
-        if (key instanceof Literal literal && literal.getValue() instanceof String name) {
+        if (getKey() instanceof Literal literal && literal.getValue() instanceof String name) {
             return "constructor".equals(name);
         }
         return false;
     }
 
-    public boolean isPrivate() {
-        return isPrivate;
-    }
-
-    public boolean isStatic() {
-        return isStatic;
-    }
 }

@@ -31,19 +31,14 @@ public final class JSUint16Array extends JSTypedArray {
      * Create a Uint16Array view on an existing buffer.
      */
     public JSUint16Array(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
+        super(context, buffer, byteOffset, length, TypedArrayKind.UINT16);
     }
 
     /**
      * Create a Uint16Array with a new buffer.
      */
     public JSUint16Array(JSContext context, long length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.UINT16;
+        super(context, length, TypedArrayKind.UINT16);
     }
 
     @Override

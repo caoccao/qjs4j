@@ -302,25 +302,7 @@ public final class Float16 {
      *         half-precision float value
      */
     public static short ceil(short h) {
-        int bits = h & 0xffff;
-        int abs = bits & EXPONENT_SIGNIFICAND_MASK;
-        int result = bits;
-        if (abs < 0x3c00) {
-            result &= SIGN_MASK;
-            result |= 0x3c00 & -(~(bits >> 15) & (abs != 0 ? 1 : 0));
-        } else if (abs < 0x6400) {
-            abs = 25 - (abs >> 10);
-            int mask = (1 << abs) - 1;
-            result += mask & ((bits >> 15) - 1);
-            result &= ~mask;
-        }
-        if (isNaN((short) result)) {
-            // if result is NaN mask with qNaN
-            // (i.e. mask the most significant mantissa bit with 1)
-            // to comply with hardware implementations (ARM64, Intel, etc).
-            result |= NaN;
-        }
-        return (short) result;
+        return roundDirected(h, true);
     }
 
     /**
@@ -377,6 +359,16 @@ public final class Float16 {
         return x == y || ((x | y) & EXPONENT_SIGNIFICAND_MASK) == 0;
     }
 
+    private static short extremum(short x, short y, boolean maximum) {
+        if (isNaN(x) || isNaN(y)) {
+            return NaN;
+        }
+        if (((x | y) & EXPONENT_SIGNIFICAND_MASK) == 0) {
+            return (short) (maximum ? x & y : x | y);
+        }
+        return (maximum ? orderedValue(x) > orderedValue(y) : orderedValue(x) < orderedValue(y)) ? x : y;
+    }
+
     /**
      * Returns the largest half-precision float value toward positive infinity less than or equal to the specified
      * half-precision float value. Special values are handled in the following ways:
@@ -394,24 +386,7 @@ public final class Float16 {
      *         half-precision float value
      */
     public static short floor(short h) {
-        int bits = h & 0xffff;
-        int abs = bits & EXPONENT_SIGNIFICAND_MASK;
-        int result = bits;
-        if (abs < 0x3c00) {
-            result &= SIGN_MASK;
-            result |= 0x3c00 & (bits > 0x8000 ? 0xffff : 0x0);
-        } else if (abs < 0x6400) {
-            abs = 25 - (abs >> 10);
-            int mask = (1 << abs) - 1;
-            result += mask & -(bits >> 15);
-            result &= ~mask;
-        }
-        if (isNaN((short) result)) {
-            // if result is NaN mask with qNaN
-            // i.e. (Mask the most significant mantissa bit with 1)
-            result |= NaN;
-        }
-        return (short) result;
+        return roundDirected(h, false);
     }
 
     /**
@@ -520,13 +495,7 @@ public final class Float16 {
      * @return The larger of the two specified half-precision values
      */
     public static short max(short x, short y) {
-        if (isNaN(x) || isNaN(y)) {
-            return NaN;
-        }
-        if ((x & EXPONENT_SIGNIFICAND_MASK) == 0 && (y & EXPONENT_SIGNIFICAND_MASK) == 0) {
-            return (x & SIGN_MASK) != 0 ? y : x;
-        }
-        return orderedValue(x) > orderedValue(y) ? x : y;
+        return extremum(x, y, true);
     }
 
     /**
@@ -544,17 +513,15 @@ public final class Float16 {
      * @return The smaller of the two specified half-precision values
      */
     public static short min(short x, short y) {
-        if (isNaN(x) || isNaN(y)) {
-            return NaN;
-        }
-        if ((x & EXPONENT_SIGNIFICAND_MASK) == 0 && (y & EXPONENT_SIGNIFICAND_MASK) == 0) {
-            return (x & SIGN_MASK) != 0 ? x : y;
-        }
-        return orderedValue(x) < orderedValue(y) ? x : y;
+        return extremum(x, y, false);
     }
 
     private static int orderedValue(short value) {
         return value < 0 ? -(value & EXPONENT_SIGNIFICAND_MASK) : value;
+    }
+
+    private static short quietNaN(short value) {
+        return isNaN(value) ? (short) (value | NaN) : value;
     }
 
     /**
@@ -587,13 +554,21 @@ public final class Float16 {
             result += ((1 << (exp - 1)) - (~(abs >> exp) & 1));
             result &= ~mask;
         }
-        if (isNaN((short) result)) {
-            // if result is NaN mask with qNaN
-            // (i.e. mask the most significant mantissa bit with 1)
-            // to comply with hardware implementations (ARM64, Intel, etc).
-            result |= NaN;
+        return quietNaN((short) result);
+    }
+
+    private static short roundDirected(short value, boolean up) {
+        int bits = value & 0xffff;
+        int magnitude = bits & EXPONENT_SIGNIFICAND_MASK;
+        boolean awayFromZero = (value >= 0) == up;
+        if (magnitude < 0x3c00) {
+            return (short) ((bits & SIGN_MASK) | (awayFromZero && magnitude != 0 ? 0x3c00 : 0));
         }
-        return (short) result;
+        if (magnitude < 0x6400) {
+            int fractionMask = (1 << (25 - (magnitude >> 10))) - 1;
+            return (short) ((bits + (awayFromZero ? fractionMask : 0)) & ~fractionMask);
+        }
+        return quietNaN(value);
     }
 
     /**

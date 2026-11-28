@@ -64,19 +64,16 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     public void testToLocaleString() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: with locale — grouping is enabled by default per Intl.NumberFormat spec
-        JSValue result = callBuiltin(BigIntPrototype::toLocaleString, bigInt, "en-US");
-        JSString str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("12,345");
+        var toLocaleString = nativeMethod(BigIntPrototype::toLocaleString);
+        JSValue result = toLocaleString.call(bigInt, "en-US");
+        assertThat(result.asString().orElseThrow().value()).isEqualTo("12,345");
 
         // Normal case: small number (no grouping needed)
         JSBigInt smallBigInt = new JSBigInt(BigInteger.valueOf(123));
-        result = callBuiltin(BigIntPrototype::toLocaleString, smallBigInt, "en-US");
-        str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("123");
+        assertThat(toLocaleString.call(smallBigInt, "en-US").asString().orElseThrow().value()).isEqualTo("123");
 
         // Edge case: called on non-BigInt
-        result = callBuiltin(BigIntPrototype::toLocaleString, new JSString("not a bigint"));
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(toLocaleString.call("not a bigint"));
     }
 
     @Test
@@ -85,51 +82,37 @@ public class BigIntPrototypeTest extends BaseJavetTest {
         // Normal case: default radix (10)
         var toString = builtin(BigIntPrototype::toString, bigInt);
         JSValue result = toString.call();
-        JSString str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("12345");
+        assertThat(result.asString().orElseThrow().value()).isEqualTo("12345");
 
         // Normal case: explicit radix 10
-        result = toString.call(10);
-        str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("12345");
+        assertThat(toString.call(10).asString().orElseThrow().value()).isEqualTo("12345");
 
         // Normal case: radix 16
-        result = toString.call(16);
-        str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("3039");
+        assertThat(toString.call(16).asString().orElseThrow().value()).isEqualTo("3039");
 
         // Normal case: radix 2
         result = toString.call(2);
-        str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("11000000111001");
+        assertThat(result.asString().orElseThrow().value()).isEqualTo("11000000111001");
 
         // Normal case: negative BigInt
         JSBigInt negativeBigInt = new JSBigInt(BigInteger.valueOf(-12345));
-        result = callBuiltin(BigIntPrototype::toString, negativeBigInt);
-        str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("-12345");
+        var toStringMethod = nativeMethod(BigIntPrototype::toString);
+        assertThat(toStringMethod.call(negativeBigInt).asString().orElseThrow().value()).isEqualTo("-12345");
 
         // Edge case: radix 2 (minimum)
-        result = toString.call(2);
-        str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("11000000111001");
+        assertThat(toString.call(2).asString().orElseThrow().value()).isEqualTo("11000000111001");
 
         // Edge case: radix 36 (maximum)
-        result = toString.call(36);
-        str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("9ix");
+        assertThat(toString.call(36).asString().orElseThrow().value()).isEqualTo("9ix");
 
         // Edge case: radix too small
-        result = toString.call(1);
-        assertPendingRangeError(context, result);
+        assertPendingRangeError(toString.call(1));
 
         // Edge case: radix too large
-        result = toString.call(37);
-        assertPendingRangeError(context, result);
+        assertPendingRangeError(toString.call(37));
 
         // Edge case: called on non-BigInt
-        result = callBuiltin(BigIntPrototype::toString, new JSString("not a bigint"));
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(toStringMethod.call("not a bigint"));
 
         assertStringWithJavet("Object(BigInt(123n)).toString()");
     }
@@ -138,12 +121,11 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     public void testValueOf() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: BigInt
-        JSValue result = callBuiltin(BigIntPrototype::valueOf, bigInt);
-        assertThat(result).isEqualTo(bigInt);
+        var valueOf = nativeMethod(BigIntPrototype::valueOf);
+        assertThat(valueOf.call(bigInt)).isEqualTo(bigInt);
 
         // Edge case: called on non-BigInt
-        result = callBuiltin(BigIntPrototype::valueOf, new JSString("not a bigint"));
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(valueOf.call("not a bigint"));
 
         assertLongWithJavet("Object(BigInt(123n)).valueOf()");
     }

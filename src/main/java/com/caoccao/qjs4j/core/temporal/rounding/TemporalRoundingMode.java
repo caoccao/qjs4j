@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core.temporal.rounding;
 
+import com.caoccao.qjs4j.core.temporal.TemporalOptionNames;
+import java.util.Map;
+
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.temporal.TemporalError;
@@ -30,15 +33,23 @@ import java.math.BigInteger;
  * {@code isValidDifferenceRoundingMode()} methods across temporal prototype files.
  */
 public enum TemporalRoundingMode {
-    CEIL,
-    EXPAND,
-    FLOOR,
-    HALF_CEIL,
-    HALF_EVEN,
-    HALF_EXPAND,
-    HALF_FLOOR,
-    HALF_TRUNC,
-    TRUNC;
+    CEIL("ceil"),
+    EXPAND("expand"),
+    FLOOR("floor"),
+    HALF_CEIL("halfCeil"),
+    HALF_EVEN("halfEven"),
+    HALF_EXPAND("halfExpand"),
+    HALF_FLOOR("halfFloor"),
+    HALF_TRUNC("halfTrunc"),
+    TRUNC("trunc");
+
+    private static final Map<String, TemporalRoundingMode> BY_NAME = TemporalOptionNames.index(values(),
+            option -> option.jsName);
+    private final String jsName;
+
+    TemporalRoundingMode(String jsName) {
+        this.jsName = jsName;
+    }
 
     /**
      * Returns the negated rounding mode, used for .since() operations. ceil ↔ floor, halfCeil ↔ halfFloor, others
@@ -179,21 +190,7 @@ public enum TemporalRoundingMode {
      * Parses a JS rounding mode string. Returns {@code null} if not recognized.
      */
     public static TemporalRoundingMode fromString(String text) {
-        if (text == null) {
-            return null;
-        }
-        return switch (text) {
-            case "ceil" -> CEIL;
-            case "floor" -> FLOOR;
-            case "trunc" -> TRUNC;
-            case "expand" -> EXPAND;
-            case "halfExpand" -> HALF_EXPAND;
-            case "halfTrunc" -> HALF_TRUNC;
-            case "halfEven" -> HALF_EVEN;
-            case "halfCeil" -> HALF_CEIL;
-            case "halfFloor" -> HALF_FLOOR;
-            default -> null;
-        };
+        return BY_NAME.get(text);
     }
 
     /**

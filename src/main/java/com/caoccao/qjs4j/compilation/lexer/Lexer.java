@@ -146,10 +146,6 @@ public final class Lexer {
         return true;
     }
 
-    private TokenType matchEquals(TokenType plain, TokenType withEquals) {
-        return match('=') ? withEquals : plain;
-    }
-
     /**
      * Get the next token from the source.
      */
@@ -479,79 +475,19 @@ public final class Lexer {
             return scanNumberStartingWithDot(startPos, startLine, startColumn);
         }
 
-        TokenType type = switch (c) {
-            case '(' -> TokenType.LPAREN;
-            case ')' -> TokenType.RPAREN;
-            case '{' -> TokenType.LBRACE;
-            case '}' -> TokenType.RBRACE;
-            case '[' -> TokenType.LBRACKET;
-            case ']' -> TokenType.RBRACKET;
-            case ';' -> TokenType.SEMICOLON;
-            case ',' -> TokenType.COMMA;
-            case '~' -> TokenType.BIT_NOT;
-            case '?' -> {
-                if (match('?')) {
-                    yield matchEquals(TokenType.NULLISH_COALESCING, TokenType.NULLISH_ASSIGN);
-                } else if (!isAtEnd() && peek() == '.'
-                        && (position + 1 >= source.length() || !Character.isDigit(source.charAt(position + 1)))) {
-                    advance(); // consume '.'
-                    yield TokenType.OPTIONAL_CHAINING;
-                }
-                yield TokenType.QUESTION;
-            }
-            case ':' -> TokenType.COLON;
-            case '.' -> {
-                if (match('.') && match('.')) {
-                    yield TokenType.ELLIPSIS;
-                }
-                yield TokenType.DOT;
-            }
-            case '+' -> match('+') ? TokenType.INC : matchEquals(TokenType.PLUS, TokenType.PLUS_ASSIGN);
-            case '-' -> match('-') ? TokenType.DEC : matchEquals(TokenType.MINUS, TokenType.MINUS_ASSIGN);
-            case '*' -> match('*')
-                    ? matchEquals(TokenType.EXP, TokenType.EXP_ASSIGN)
-                    : matchEquals(TokenType.MUL, TokenType.MUL_ASSIGN);
-            case '/' -> matchEquals(TokenType.DIV, TokenType.DIV_ASSIGN);
-            case '%' -> matchEquals(TokenType.MOD, TokenType.MOD_ASSIGN);
-            case '&' -> match('&')
-                    ? matchEquals(TokenType.LOGICAL_AND, TokenType.LOGICAL_AND_ASSIGN)
-                    : matchEquals(TokenType.BIT_AND, TokenType.AND_ASSIGN);
-            case '|' -> match('|')
-                    ? matchEquals(TokenType.LOGICAL_OR, TokenType.LOGICAL_OR_ASSIGN)
-                    : matchEquals(TokenType.BIT_OR, TokenType.OR_ASSIGN);
-            case '^' -> matchEquals(TokenType.BIT_XOR, TokenType.XOR_ASSIGN);
-            case '=' -> {
-                if (match('=')) {
-                    yield matchEquals(TokenType.EQ, TokenType.STRICT_EQ);
-                } else if (match('>')) {
-                    yield TokenType.ARROW;
-                } else {
-                    yield TokenType.ASSIGN;
-                }
-            }
-            case '!' -> {
-                if (match('=')) {
-                    yield matchEquals(TokenType.NE, TokenType.STRICT_NE);
-                } else {
-                    yield TokenType.NOT;
-                }
-            }
-            case '<' -> match('<')
-                    ? matchEquals(TokenType.LSHIFT, TokenType.LSHIFT_ASSIGN)
-                    : matchEquals(TokenType.LT, TokenType.LE);
-            case '>' -> {
-                if (match('>')) {
-                    yield match('>')
-                            ? matchEquals(TokenType.URSHIFT, TokenType.URSHIFT_ASSIGN)
-                            : matchEquals(TokenType.RSHIFT, TokenType.RSHIFT_ASSIGN);
-                }
-                yield matchEquals(TokenType.GT, TokenType.GE);
-            }
-            default -> throw new JSSyntaxErrorException("Invalid or unexpected token");
-        };
-
-        String value = source.substring(startPos, position);
-        return new Token(type, value, startLine, startColumn, startPos);
+        if (c == '.' && match('.')) {
+            // Keep the two-dot token available to the parser for diagnostics.
+            TokenType type = match('.') ? TokenType.ELLIPSIS : TokenType.DOT;
+            return new Token(type, type == TokenType.DOT ? ".." : type.fixedText(), startLine, startColumn, startPos);
+        }
+        TokenType type = TokenType.punctuator(source, startPos);
+        if (type == null) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
+        }
+        int width = type.fixedText().length();
+        position = startPos + width;
+        column = startColumn + width;
+        return new Token(type, type.fixedText(), startLine, startColumn, startPos);
     }
 
     private Token scanRegex(int startPos, int startLine, int startColumn) {

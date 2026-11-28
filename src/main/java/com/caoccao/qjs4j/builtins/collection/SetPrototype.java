@@ -100,7 +100,7 @@ public final class SetPrototype {
 
         JSSet.IterationCursor cursor = set.createIterationCursor();
         while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue value = set.nextIterationValue(cursor);
             if (value == null) {
                 break;

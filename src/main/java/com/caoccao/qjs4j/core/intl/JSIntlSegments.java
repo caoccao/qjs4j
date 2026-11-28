@@ -93,7 +93,7 @@ public final class JSIntlSegments extends JSObject {
         if (cursor == text.length()) {
             return false;
         }
-        context.getVirtualMachine().checkExecutionInterruptForNative();
+        context.checkExecutionInterrupt();
         if (graphemes == null) {
             graphemes = GRAPHEME.matcher(text);
             if (!"grapheme".equals(segmenter.getGranularity())) {

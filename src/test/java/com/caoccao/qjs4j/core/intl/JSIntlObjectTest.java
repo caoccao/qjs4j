@@ -202,12 +202,11 @@ public class JSIntlObjectTest extends BaseJavetTest {
         assertBooleanWithJavet("Intl.supportedValuesOf('calendar').includes('islamic-civil')",
                 "Intl.supportedValuesOf('calendar').includes('islamic-tbla')",
                 "Intl.supportedValuesOf('calendar').includes('islamic-umalqura')",
-                "Intl.supportedValuesOf('calendar').includes('gregory')");
-
-        // The list should be sorted
-        assertBooleanWithJavet("""
-                var calendars = Intl.supportedValuesOf('calendar');
-                JSON.stringify(calendars) === JSON.stringify(calendars.slice().sort())""");
+                "Intl.supportedValuesOf('calendar').includes('gregory')",
+                // The list should be sorted
+                """
+                        var calendars = Intl.supportedValuesOf('calendar');
+                        JSON.stringify(calendars) === JSON.stringify(calendars.slice().sort())""");
     }
 
     @Test

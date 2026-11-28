@@ -21,9 +21,7 @@ public final class ImportSpecifier extends ASTNode {
     private final Identifier local;
 
     public ImportSpecifier(Identifier imported, Identifier local) {
-        super(imported != null
-                ? imported.getLocation()
-                : (local != null ? local.getLocation() : new SourceLocation(0, 0, 0, 0)));
+        super(SourceLocation.firstOf(imported, local));
         this.imported = imported;
         this.local = local;
     }

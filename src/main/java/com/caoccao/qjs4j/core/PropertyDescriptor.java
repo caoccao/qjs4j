@@ -63,12 +63,7 @@ public final class PropertyDescriptor {
         if (setter instanceof JSUndefined) {
             setter = null;
         }
-        if (enumerable.isEmpty()) {
-            setEnumerable(false);
-        }
-        if (configurable.isEmpty()) {
-            setConfigurable(false);
-        }
+        completeAttributes();
     }
 
     /**
@@ -81,6 +76,10 @@ public final class PropertyDescriptor {
         if (writable.isEmpty()) {
             setWritable(false);
         }
+        completeAttributes();
+    }
+
+    private void completeAttributes() {
         if (enumerable.isEmpty()) {
             setEnumerable(false);
         }

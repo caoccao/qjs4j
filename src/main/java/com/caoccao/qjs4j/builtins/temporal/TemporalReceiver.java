@@ -104,12 +104,22 @@ public record TemporalReceiver<T extends JSObject>(Class<T> type, String typeNam
 
     public JSValue difference(JSContext context, JSValue receiver, JSValue[] args, boolean since,
             Difference<T> difference) {
+        return difference(context, receiver, args, since, difference, false);
+    }
+
+    public JSValue convertedDifference(JSContext context, JSValue receiver, JSValue[] args, boolean since,
+            Difference<T> difference) {
+        return difference(context, receiver, args, since, difference, true);
+    }
+
+    private JSValue difference(JSContext context, JSValue receiver, JSValue[] args, boolean since,
+            Difference<T> difference, boolean convertSameType) {
         T first = require(context, receiver, since ? "since" : "until");
         if (first == null) {
             return JSUndefined.INSTANCE;
         }
         JSValue item = JSValue.argumentOrUndefined(args, 0);
-        T second = type.isInstance(item) ? type.cast(item) : convert(context, item);
+        T second = !convertSameType && type.isInstance(item) ? type.cast(item) : convert(context, item);
         return second == null
                 ? JSUndefined.INSTANCE
                 : difference.between(context, first, second, JSValue.argumentOrUndefined(args, 1), since);

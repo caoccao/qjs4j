@@ -47,7 +47,7 @@ final class ArrayLikeElements {
         long step = reverse ? -1 : 1;
         long end = reverse ? -1 : length;
         for (long i = reverse ? length - 1 : 0; i != end; i += step) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = get(i);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -86,7 +86,7 @@ final class ArrayLikeElements {
     JSValue iterate(JSValue[] args, ArrayIteration iteration) {
         JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
         for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = getPresent(i);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -111,7 +111,7 @@ final class ArrayLikeElements {
         long step = reverse ? -1 : 1;
         long end = reverse ? -1 : length;
         for (long i = reverse ? length - 1 : 0; i != end; i += step) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = getPresent(i);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -151,7 +151,7 @@ final class ArrayLikeElements {
         long step = reverse ? -1 : 1;
         long end = reverse ? -1 : length;
         for (long i = start; i != end; i += step) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue element = includes ? get(i) : getPresent(i);
             if (context.hasPendingException()) {
                 return context.getPendingException();

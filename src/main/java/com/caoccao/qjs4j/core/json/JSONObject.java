@@ -211,7 +211,7 @@ public final class JSONObject {
         List<String> keys = new ArrayList<>();
         List<PropertyKey> ownKeys = obj.getOwnPropertyKeys();
         for (PropertyKey key : ownKeys) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (key.isSymbol()) {
                 continue;
             }

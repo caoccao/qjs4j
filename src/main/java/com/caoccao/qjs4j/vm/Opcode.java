@@ -51,13 +51,13 @@ public enum Opcode {
     /** func receiver args -> ret */
     CALL_METHOD(36, 3, -1, 1, CallOpcodes::handleCall),
     /** func -> ret (call with 0 args) */
-    CALL0(236, 1, 1, 1, CallOpcodes::handleCall0),
+    CALL0(236, 1, 1, 1, CallOpcodes::handleCall),
     /** func arg -> ret (call with 1 arg) */
-    CALL1(237, 1, 1, 1, CallOpcodes::handleCall1),
+    CALL1(237, 1, 1, 1, CallOpcodes::handleCall),
     /** func arg1 arg2 -> ret (call with 2 args) */
-    CALL2(238, 1, 1, 1, CallOpcodes::handleCall2),
+    CALL2(238, 1, 1, 1, CallOpcodes::handleCall),
     /** func arg1 arg2 arg3 -> ret (call with 3 args) */
-    CALL3(239, 1, 1, 1, CallOpcodes::handleCall3),
+    CALL3(239, 1, 1, 1, CallOpcodes::handleCall),
     /** -> val (set catch handler at label offset) */
     CATCH(107, 5, 0, 1, OpcodeHandler::handleCatch),
     /** this_obj func -> this_obj func (verify private brand) */
@@ -127,13 +127,13 @@ public enum Opcode {
     /** -> val (get argument by u16 index) */
     GET_ARG(88, 3, 0, 1, BindingOpcodes::handleGetArg),
     /** -> val (get argument 0) */
-    GET_ARG0(207, 1, 0, 1, BindingOpcodes::handleGetArgShort),
+    GET_ARG0(207, 1, 0, 1, BindingOpcodes::handleGetArg),
     /** -> val (get argument 1) */
-    GET_ARG1(208, 1, 0, 1, BindingOpcodes::handleGetArgShort),
+    GET_ARG1(208, 1, 0, 1, BindingOpcodes::handleGetArg),
     /** -> val (get argument 2) */
-    GET_ARG2(209, 1, 0, 1, BindingOpcodes::handleGetArgShort),
+    GET_ARG2(209, 1, 0, 1, BindingOpcodes::handleGetArg),
     /** -> val (get argument 3) */
-    GET_ARG3(210, 1, 0, 1, BindingOpcodes::handleGetArgShort),
+    GET_ARG3(210, 1, 0, 1, BindingOpcodes::handleGetArg),
     /** obj prop -> val (get computed property) */
     GET_ARRAY_EL(67, 1, 2, 1, PropertyOpcodes::handleGetArrayEl),
     /** obj prop -> obj val (get computed, keep object) */
@@ -153,15 +153,15 @@ public enum Opcode {
     /** -> val (get local this, throw if uninitialized) */
     GET_LOC_CHECKTHIS(99, 3, 0, 1, BindingOpcodes::handleGetLocCheck),
     /** -> val (get local 0) */
-    GET_LOC0(195, 1, 0, 1, BindingOpcodes::handleGetLocShort),
+    GET_LOC0(195, 1, 0, 1, BindingOpcodes::handleGetLoc),
     /** -> val (get local 1) */
-    GET_LOC1(196, 1, 0, 1, BindingOpcodes::handleGetLocShort),
+    GET_LOC1(196, 1, 0, 1, BindingOpcodes::handleGetLoc),
     /** -> val (get local 2) */
-    GET_LOC2(197, 1, 0, 1, BindingOpcodes::handleGetLocShort),
+    GET_LOC2(197, 1, 0, 1, BindingOpcodes::handleGetLoc),
     /** -> val (get local 3) */
-    GET_LOC3(198, 1, 0, 1, BindingOpcodes::handleGetLocShort),
+    GET_LOC3(198, 1, 0, 1, BindingOpcodes::handleGetLoc),
     /** -> val (get local, u8 index) */
-    GET_LOC8(192, 2, 0, 1, BindingOpcodes::handleGetLoc8),
+    GET_LOC8(192, 2, 0, 1, BindingOpcodes::handleGetLoc),
     /** obj prop -> value */
     GET_PRIVATE_FIELD(64, 1, 2, 1, PropertyOpcodes::handleGetPrivateField),
     /** obj prop -> obj prop val (get reference value) */
@@ -177,13 +177,13 @@ public enum Opcode {
     /** -> val (get closure var, throw if uninitialized) */
     GET_VAR_REF_CHECK(100, 3, 0, 1, BindingOpcodes::handleGetVarRefCheck),
     /** -> val (get closure var 0) */
-    GET_VAR_REF0(219, 1, 0, 1, BindingOpcodes::handleGetVarRefShort),
+    GET_VAR_REF0(219, 1, 0, 1, BindingOpcodes::handleGetVarRef),
     /** -> val (get closure var 1) */
-    GET_VAR_REF1(220, 1, 0, 1, BindingOpcodes::handleGetVarRefShort),
+    GET_VAR_REF1(220, 1, 0, 1, BindingOpcodes::handleGetVarRef),
     /** -> val (get closure var 2) */
-    GET_VAR_REF2(221, 1, 0, 1, BindingOpcodes::handleGetVarRefShort),
+    GET_VAR_REF2(221, 1, 0, 1, BindingOpcodes::handleGetVarRef),
     /** -> val (get closure var 3) */
-    GET_VAR_REF3(222, 1, 0, 1, BindingOpcodes::handleGetVarRefShort),
+    GET_VAR_REF3(222, 1, 0, 1, BindingOpcodes::handleGetVarRef),
     /** push undefined if variable does not exist -> val */
     GET_VAR_UNDEF(55, 5, 0, 1, BindingOpcodes::handleGetVarUndef),
     /** jump to finally block (push return address) */
@@ -344,13 +344,13 @@ public enum Opcode {
     /** val -> (put argument) */
     PUT_ARG(89, 3, 1, 0, BindingOpcodes::handlePutArg),
     /** val -> (put argument 0) */
-    PUT_ARG0(211, 1, 1, 0, BindingOpcodes::handlePutArgShort),
+    PUT_ARG0(211, 1, 1, 0, BindingOpcodes::handlePutArg),
     /** val -> (put argument 1) */
-    PUT_ARG1(212, 1, 1, 0, BindingOpcodes::handlePutArgShort),
+    PUT_ARG1(212, 1, 1, 0, BindingOpcodes::handlePutArg),
     /** val -> (put argument 2) */
-    PUT_ARG2(213, 1, 1, 0, BindingOpcodes::handlePutArgShort),
+    PUT_ARG2(213, 1, 1, 0, BindingOpcodes::handlePutArg),
     /** val -> (put argument 3) */
-    PUT_ARG3(214, 1, 1, 0, BindingOpcodes::handlePutArgShort),
+    PUT_ARG3(214, 1, 1, 0, BindingOpcodes::handlePutArg),
     /** obj prop val -> (set computed property) */
     PUT_ARRAY_EL(70, 1, 3, 0, PropertyOpcodes::handlePutArrayEl),
     /** obj val -> (set named property by atom) */
@@ -362,15 +362,15 @@ public enum Opcode {
     /** val -> (put local, initialize if needed) */
     PUT_LOC_CHECK_INIT(98, 3, 1, 0, BindingOpcodes::handlePutLocCheckInit),
     /** val -> (put local 0) */
-    PUT_LOC0(199, 1, 1, 0, BindingOpcodes::handlePutLocShort),
+    PUT_LOC0(199, 1, 1, 0, BindingOpcodes::handlePutLoc),
     /** val -> (put local 1) */
-    PUT_LOC1(200, 1, 1, 0, BindingOpcodes::handlePutLocShort),
+    PUT_LOC1(200, 1, 1, 0, BindingOpcodes::handlePutLoc),
     /** val -> (put local 2) */
-    PUT_LOC2(201, 1, 1, 0, BindingOpcodes::handlePutLocShort),
+    PUT_LOC2(201, 1, 1, 0, BindingOpcodes::handlePutLoc),
     /** val -> (put local 3) */
-    PUT_LOC3(202, 1, 1, 0, BindingOpcodes::handlePutLocShort),
+    PUT_LOC3(202, 1, 1, 0, BindingOpcodes::handlePutLoc),
     /** val -> (put local, u8 index) */
-    PUT_LOC8(193, 2, 1, 0, BindingOpcodes::handlePutLoc8),
+    PUT_LOC8(193, 2, 1, 0, BindingOpcodes::handlePutLoc),
     /** obj value prop -> */
     PUT_PRIVATE_FIELD(65, 1, 3, 0, PropertyOpcodes::handlePutPrivateField),
     /** obj prop val -> (put reference value) */
@@ -389,13 +389,13 @@ public enum Opcode {
     /** val -> (put closure var, initialize if needed) */
     PUT_VAR_REF_CHECK_INIT(102, 3, 1, 0, BindingOpcodes::handlePutVarRefCheckInit),
     /** val -> (put closure var 0) */
-    PUT_VAR_REF0(223, 1, 1, 0, BindingOpcodes::handlePutVarRefShort),
+    PUT_VAR_REF0(223, 1, 1, 0, BindingOpcodes::handlePutVarRef),
     /** val -> (put closure var 1) */
-    PUT_VAR_REF1(224, 1, 1, 0, BindingOpcodes::handlePutVarRefShort),
+    PUT_VAR_REF1(224, 1, 1, 0, BindingOpcodes::handlePutVarRef),
     /** val -> (put closure var 2) */
-    PUT_VAR_REF2(225, 1, 1, 0, BindingOpcodes::handlePutVarRefShort),
+    PUT_VAR_REF2(225, 1, 1, 0, BindingOpcodes::handlePutVarRef),
     /** val -> (put closure var 3) */
-    PUT_VAR_REF3(226, 1, 1, 0, BindingOpcodes::handlePutVarRefShort),
+    PUT_VAR_REF3(226, 1, 1, 0, BindingOpcodes::handlePutVarRef),
     /** create new RegExp from constant template */
     REGEXP(52, 5, 0, 1, OpcodeHandler::handleRegexp),
     /** collect rest parameters (u16 index) -> array (only at function start) */
@@ -421,13 +421,13 @@ public enum Opcode {
     /** val -> val (set argument, keep value) */
     SET_ARG(90, 3, 1, 1, BindingOpcodes::handleSetArg),
     /** val -> val (set argument 0) */
-    SET_ARG0(215, 1, 1, 1, BindingOpcodes::handleSetArgShort),
+    SET_ARG0(215, 1, 1, 1, BindingOpcodes::handleSetArg),
     /** val -> val (set argument 1) */
-    SET_ARG1(216, 1, 1, 1, BindingOpcodes::handleSetArgShort),
+    SET_ARG1(216, 1, 1, 1, BindingOpcodes::handleSetArg),
     /** val -> val (set argument 2) */
-    SET_ARG2(217, 1, 1, 1, BindingOpcodes::handleSetArgShort),
+    SET_ARG2(217, 1, 1, 1, BindingOpcodes::handleSetArg),
     /** val -> val (set argument 3) */
-    SET_ARG3(218, 1, 1, 1, BindingOpcodes::handleSetArgShort),
+    SET_ARG3(218, 1, 1, 1, BindingOpcodes::handleSetArg),
     /** obj func -> obj func (set home object for super) */
     SET_HOME_OBJECT(77, 1, 2, 2, ClassOpcodes::handleSetHomeObject),
     /** val -> val (set local, keep value) */
@@ -437,15 +437,15 @@ public enum Opcode {
     /** mark local as uninitialized (TDZ) */
     SET_LOC_UNINITIALIZED(94, 3, 0, 0, BindingOpcodes::handleSetLocUninitialized),
     /** val -> val (set local 0) */
-    SET_LOC0(203, 1, 1, 1, BindingOpcodes::handleSetLocShort),
+    SET_LOC0(203, 1, 1, 1, BindingOpcodes::handleSetLoc),
     /** val -> val (set local 1) */
-    SET_LOC1(204, 1, 1, 1, BindingOpcodes::handleSetLocShort),
+    SET_LOC1(204, 1, 1, 1, BindingOpcodes::handleSetLoc),
     /** val -> val (set local 2) */
-    SET_LOC2(205, 1, 1, 1, BindingOpcodes::handleSetLocShort),
+    SET_LOC2(205, 1, 1, 1, BindingOpcodes::handleSetLoc),
     /** val -> val (set local 3) */
-    SET_LOC3(206, 1, 1, 1, BindingOpcodes::handleSetLocShort),
+    SET_LOC3(206, 1, 1, 1, BindingOpcodes::handleSetLoc),
     /** val -> val (set local, u8 index) */
-    SET_LOC8(194, 2, 1, 1, BindingOpcodes::handleSetLoc8),
+    SET_LOC8(194, 2, 1, 1, BindingOpcodes::handleSetLoc),
     /** func -> func (set function name by atom) */
     SET_NAME(74, 5, 1, 1, ClassOpcodes::handleSetName),
     /** name func -> name func (set computed function name) */
@@ -455,13 +455,13 @@ public enum Opcode {
     /** val -> val (set closure variable, keep value) */
     SET_VAR_REF(93, 3, 1, 1, BindingOpcodes::handleSetVarRef),
     /** val -> val (set closure var 0) */
-    SET_VAR_REF0(227, 1, 1, 1, BindingOpcodes::handleSetVarRefShort),
+    SET_VAR_REF0(227, 1, 1, 1, BindingOpcodes::handleSetVarRef),
     /** val -> val (set closure var 1) */
-    SET_VAR_REF1(228, 1, 1, 1, BindingOpcodes::handleSetVarRefShort),
+    SET_VAR_REF1(228, 1, 1, 1, BindingOpcodes::handleSetVarRef),
     /** val -> val (set closure var 2) */
-    SET_VAR_REF2(229, 1, 1, 1, BindingOpcodes::handleSetVarRefShort),
+    SET_VAR_REF2(229, 1, 1, 1, BindingOpcodes::handleSetVarRef),
     /** val -> val (set closure var 3) */
-    SET_VAR_REF3(230, 1, 1, 1, BindingOpcodes::handleSetVarRefShort),
+    SET_VAR_REF3(230, 1, 1, 1, BindingOpcodes::handleSetVarRef),
     /** a b -&gt; a&lt;&lt;b */
     SHL(158, 1, 2, 1, NumericOpcodes::handleShl),
     /** a b -> a>>>b (unsigned right shift) */

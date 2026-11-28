@@ -100,7 +100,7 @@ enum SetOperation {
     private JSValue visitOwnKeys(JSContext context, JSSet source, SetRecord other, JSSet result) {
         JSSet.IterationCursor cursor = source.createIterationCursor();
         while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue item = source.nextIterationValue(cursor);
             if (item == null) {
                 return result == null ? JSBoolean.TRUE : result;
@@ -156,7 +156,7 @@ enum SetOperation {
         JSSet newSet = context.createJSSet();
         JSSet.IterationCursor cursor = sourceSet.createIterationCursor();
         while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue value = sourceSet.nextIterationValue(cursor);
             if (value == null) {
                 break;
@@ -250,7 +250,7 @@ enum SetOperation {
         }
 
         boolean advance(JSContext context) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue next = JSCall.call(context, nextFunction, iteratorObject, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 return false;

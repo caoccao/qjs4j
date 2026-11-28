@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.compilation.lexer.TokenType;
+
 /**
  * Represents a unary expression.
  */
@@ -59,14 +61,39 @@ public final class UnaryExpression extends Expression {
     }
 
     public enum UnaryOperator {
-        BIT_NOT,
-        DEC,
-        DELETE,
-        INC,
-        MINUS,
-        NOT,
-        PLUS,
-        TYPEOF,
-        VOID
+        BIT_NOT(TokenType.BIT_NOT),
+        DEC(TokenType.DEC),
+        DELETE(TokenType.DELETE),
+        INC(TokenType.INC),
+        MINUS(TokenType.MINUS),
+        NOT(TokenType.NOT),
+        PLUS(TokenType.PLUS),
+        TYPEOF(TokenType.TYPEOF),
+        VOID(TokenType.VOID);
+
+        private static final UnaryOperator[] PREFIX = new UnaryOperator[TokenType.values().length];
+        static {
+            for (UnaryOperator operator : values()) {
+                if (operator != INC && operator != DEC) {
+                    PREFIX[operator.token.ordinal()] = operator;
+                }
+            }
+        }
+        private final String displayText;
+
+        private final TokenType token;
+
+        UnaryOperator(TokenType token) {
+            this.token = token;
+            displayText = token.isIdentifierName() ? token.fixedText() + " " : token.fixedText();
+        }
+
+        public String displayText() {
+            return displayText;
+        }
+
+        public static UnaryOperator prefixOperator(TokenType token) {
+            return PREFIX[token.ordinal()];
+        }
     }
 }

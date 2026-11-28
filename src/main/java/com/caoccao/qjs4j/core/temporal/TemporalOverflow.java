@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.temporal.TemporalOptionNames;
+import java.util.Map;
+
 /**
  * Temporal overflow handling mode enum.
  * <p>
@@ -25,6 +28,8 @@ public enum TemporalOverflow {
     CONSTRAIN("constrain"),
     REJECT("reject");
 
+    private static final Map<String, TemporalOverflow> BY_NAME = TemporalOptionNames.index(values(),
+            option -> option.jsName);
     private final String jsName;
 
     TemporalOverflow(String jsName) {
@@ -46,13 +51,6 @@ public enum TemporalOverflow {
      * Parses a JS overflow string. Returns {@code null} if not recognized.
      */
     public static TemporalOverflow fromString(String text) {
-        if (text == null) {
-            return null;
-        }
-        return switch (text) {
-            case "constrain" -> CONSTRAIN;
-            case "reject" -> REJECT;
-            default -> null;
-        };
+        return BY_NAME.get(text);
     }
 }

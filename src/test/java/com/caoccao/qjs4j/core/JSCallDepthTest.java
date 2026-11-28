@@ -53,8 +53,7 @@ public class JSCallDepthTest extends BaseJavetTest {
         JSRuntimeOptions options = new JSRuntimeOptions().setMaxStackSize(20 * JSRuntimeOptions.BYTES_PER_STACK_FRAME);
         assertThat(options.getMaxCallDepth()).isEqualTo(20);
         assertThat(options.getMaxStackDepth()).isEqualTo(20);
-        long size = options.getMaxStackSize();
-        assertThat(size).isEqualTo(20 * 256);
+        assertThat(options.getMaxStackSize()).isEqualTo(20 * 256);
         long defaultSize = JSRuntimeOptions.DEFAULT_MAX_STACK_SIZE;
         assertThat(defaultSize).isEqualTo(JSRuntimeOptions.DEFAULT_MAX_CALL_DEPTH * 256L);
         assertThat(new JSRuntimeOptions().setMaxStackSize(-5).getMaxCallDepth()).isEqualTo(1);

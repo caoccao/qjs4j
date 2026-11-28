@@ -32,19 +32,14 @@ public final class JSUint8ClampedArray extends JSTypedArray {
      * Create a Uint8ClampedArray view on an existing buffer.
      */
     public JSUint8ClampedArray(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
+        super(context, buffer, byteOffset, length, TypedArrayKind.UINT8_CLAMPED);
     }
 
     /**
      * Create a Uint8ClampedArray with a new buffer.
      */
     public JSUint8ClampedArray(JSContext context, long length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.UINT8_CLAMPED;
+        super(context, length, TypedArrayKind.UINT8_CLAMPED);
     }
 
     @Override

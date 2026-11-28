@@ -70,9 +70,9 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertElements(from(new JSString("hello"), upper), nativeArguments("H", "E", "L", "L", "O"));
         assertElements(from(new JSArray(context)));
         assertElements(from(new JSString("")));
-        assertPendingTypeError(context, from());
+        assertPendingTypeError(from());
         assertElements(from(JSNumber.of(123)));
-        assertPendingTypeError(context, from(source, new JSString("not a function")));
+        assertPendingTypeError(from(source, new JSString("not a function")));
     }
 
     @Test
@@ -141,17 +141,15 @@ public class ArrayConstructorTest extends BaseJavetTest {
     public void testGetSpecies() {
         // Normal case: returns thisArg
         JSObject arrayConstructor = new JSObject(context);
-        JSValue result = callBuiltin(ArrayConstructor::getSpecies, arrayConstructor);
-        assertThat(result).isEqualTo(arrayConstructor);
+        var getSpecies = nativeMethod(ArrayConstructor::getSpecies);
+        assertThat(getSpecies.call(arrayConstructor)).isEqualTo(arrayConstructor);
 
         // Normal case: with different thisArg
         JSObject customConstructor = new JSObject(context);
-        result = callBuiltin(ArrayConstructor::getSpecies, customConstructor);
-        assertThat(result).isEqualTo(customConstructor);
+        assertThat(getSpecies.call(customConstructor)).isEqualTo(customConstructor);
 
         // Edge case: undefined thisArg
-        result = callBuiltin(ArrayConstructor::getSpecies, JSUndefined.INSTANCE);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(getSpecies.call(JSUndefined.INSTANCE).isUndefined()).isTrue();
     }
 
     @Test
@@ -175,7 +173,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
     public void testIsArray() {
         // Normal case: array
         JSArray arr = new JSArray(context);
-        BuiltinAssertions isArray = builtin(ArrayConstructor::isArray, JSUndefined.INSTANCE);
+        BuiltinAssertions isArray = builtin(ArrayConstructor::isArray);
         isArray.expectValue(JSBoolean.TRUE, arr);
 
         // Normal case: not array
@@ -191,7 +189,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testOf() {
-        var of = builtin(ArrayConstructor::of, JSUndefined.INSTANCE);
+        var of = builtin(ArrayConstructor::of);
         assertElements(of.call(1, 2, 3), nativeArguments(1, 2, 3));
         assertElements(of.call());
         assertElements(of.call("hello"), new JSString("hello"));

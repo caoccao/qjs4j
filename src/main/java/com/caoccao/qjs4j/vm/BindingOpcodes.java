@@ -158,28 +158,16 @@ final class BindingOpcodes {
     }
 
     static void handleGetArg(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int argumentIndex = executionContext.operandU16();
-        executionContext.push(executionContext.virtualMachine.getArgumentValue(argumentIndex));
-        executionContext.pc = pc + op.getSize();
-    }
-
-    static void handleGetArgShort(Opcode op, ExecutionContext executionContext) {
-        int argumentIndex = op.getCode() - Opcode.GET_ARG0.getCode();
+        int argumentIndex = executionContext.indexOperand(op, Opcode.GET_ARG0);
         executionContext.push(executionContext.virtualMachine.getArgumentValue(argumentIndex));
         executionContext.advance(op);
     }
 
     static void handleGetLoc(Opcode op, ExecutionContext executionContext) {
-        pushLocal(op, executionContext, executionContext.operandU16());
-    }
-
-    static void handleGetLoc8(Opcode op, ExecutionContext executionContext) {
-        pushLocal(op, executionContext, executionContext.instructions[executionContext.pc + 1] & 0xFF);
+        pushLocal(op, executionContext, executionContext.indexOperand(op, Opcode.GET_LOC0));
     }
 
     static void handleGetLocCheck(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         int localIndex = executionContext.operandU16();
         JSValue localValue = executionContext.frame.getLocals()[localIndex];
         if (executionContext.virtualMachine.isUninitialized(localValue)) {
@@ -190,11 +178,6 @@ final class BindingOpcodes {
         int sp = executionContext.sp;
         stack[sp++] = localValue;
         executionContext.finishOpcode(op, sp);
-    }
-
-    static void handleGetLocShort(Opcode op, ExecutionContext executionContext) {
-        int index = op.getCode() - Opcode.GET_LOC0.getCode();
-        pushLocal(op, executionContext, index);
     }
 
     static void handleGetRefValue(Opcode op, ExecutionContext executionContext) {
@@ -231,10 +214,9 @@ final class BindingOpcodes {
     }
 
     static void handleGetVarRef(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.operandU16();
+        int varRefIndex = executionContext.indexOperand(op, Opcode.GET_VAR_REF0);
         executionContext.push(readVarRefValue(executionContext, varRefIndex));
-        executionContext.pc = pc + op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleGetVarRefCheck(Opcode op, ExecutionContext executionContext) {
@@ -246,12 +228,6 @@ final class BindingOpcodes {
         }
         executionContext.push(value);
         executionContext.pc = pc + op.getSize();
-    }
-
-    static void handleGetVarRefShort(Opcode op, ExecutionContext executionContext) {
-        int varRefIndex = op.getCode() - Opcode.GET_VAR_REF0.getCode();
-        executionContext.push(readVarRefValue(executionContext, varRefIndex));
-        executionContext.advance(op);
     }
 
     static void handleGetVarUndef(Opcode op, ExecutionContext executionContext) {
@@ -295,30 +271,14 @@ final class BindingOpcodes {
     }
 
     static void handlePutArg(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int argumentIndex = executionContext.operandU16();
-        JSValue argumentValue = executionContext.pop();
-        executionContext.virtualMachine.setArgumentValue(argumentIndex, argumentValue);
-        executionContext.pc = pc + op.getSize();
-    }
-
-    static void handlePutArgShort(Opcode op, ExecutionContext executionContext) {
-        int argumentIndex = op.getCode() - Opcode.PUT_ARG0.getCode();
+        int argumentIndex = executionContext.indexOperand(op, Opcode.PUT_ARG0);
         JSValue argumentValue = executionContext.pop();
         executionContext.virtualMachine.setArgumentValue(argumentIndex, argumentValue);
         executionContext.advance(op);
     }
 
     static void handlePutLoc(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.operandU16();
-        executionContext.locals[localIndex] = executionContext.pop();
-        executionContext.advance(op);
-    }
-
-    static void handlePutLoc8(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        int localIndex = executionContext.indexOperand(op, Opcode.PUT_LOC0);
         executionContext.locals[localIndex] = executionContext.pop();
         executionContext.advance(op);
     }
@@ -337,12 +297,6 @@ final class BindingOpcodes {
         }
         localValues[localIndex] = executionContext.pop();
         executionContext.pc = pc + op.getSize();
-    }
-
-    static void handlePutLocShort(Opcode op, ExecutionContext executionContext) {
-        int index = op.getCode() - Opcode.PUT_LOC0.getCode();
-        executionContext.locals[index] = executionContext.pop();
-        executionContext.advance(op);
     }
 
     static void handlePutRefValue(Opcode op, ExecutionContext executionContext) {
@@ -520,11 +474,10 @@ final class BindingOpcodes {
     }
 
     static void handlePutVarRef(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.operandU16();
+        int varRefIndex = executionContext.indexOperand(op, Opcode.PUT_VAR_REF0);
         JSValue value = executionContext.pop();
         writeVarRefValue(executionContext, varRefIndex, value);
-        executionContext.pc = pc + op.getSize();
+        executionContext.advance(op);
     }
 
     static void handlePutVarRefCheck(Opcode op, ExecutionContext executionContext) {
@@ -550,48 +503,20 @@ final class BindingOpcodes {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handlePutVarRefShort(Opcode op, ExecutionContext executionContext) {
-        int varRefIndex = op.getCode() - Opcode.PUT_VAR_REF0.getCode();
-        JSValue value = executionContext.pop();
-        writeVarRefValue(executionContext, varRefIndex, value);
-        executionContext.advance(op);
-    }
-
     static void handleSetArg(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int argumentIndex = executionContext.operandU16();
-        executionContext.virtualMachine.setArgumentValue(argumentIndex, executionContext.peek(0));
-        executionContext.pc = pc + op.getSize();
-    }
-
-    static void handleSetArgShort(Opcode op, ExecutionContext executionContext) {
-        int argumentIndex = op.getCode() - Opcode.SET_ARG0.getCode();
+        int argumentIndex = executionContext.indexOperand(op, Opcode.SET_ARG0);
         executionContext.virtualMachine.setArgumentValue(argumentIndex, executionContext.peek(0));
         executionContext.advance(op);
     }
 
     static void handleSetLoc(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.operandU16();
-        executionContext.locals[localIndex] = executionContext.peek(0);
-        executionContext.advance(op);
-    }
-
-    static void handleSetLoc8(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        int localIndex = executionContext.indexOperand(op, Opcode.SET_LOC0);
         executionContext.locals[localIndex] = executionContext.peek(0);
         executionContext.advance(op);
     }
 
     static void handleSetLocCheck(Opcode op, ExecutionContext executionContext) {
         writeCheckedLocal(op, executionContext, false);
-    }
-
-    static void handleSetLocShort(Opcode op, ExecutionContext executionContext) {
-        int index = op.getCode() - Opcode.SET_LOC0.getCode();
-        executionContext.locals[index] = executionContext.peek(0);
-        executionContext.advance(op);
     }
 
     static void handleSetLocUninitialized(Opcode op, ExecutionContext executionContext) {
@@ -605,14 +530,7 @@ final class BindingOpcodes {
     }
 
     static void handleSetVarRef(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.operandU16();
-        executionContext.frame.setVarRef(varRefIndex, executionContext.peek(0));
-        executionContext.pc = pc + op.getSize();
-    }
-
-    static void handleSetVarRefShort(Opcode op, ExecutionContext executionContext) {
-        int varRefIndex = op.getCode() - Opcode.SET_VAR_REF0.getCode();
+        int varRefIndex = executionContext.indexOperand(op, Opcode.SET_VAR_REF0);
         executionContext.frame.setVarRef(varRefIndex, executionContext.peek(0));
         executionContext.advance(op);
     }

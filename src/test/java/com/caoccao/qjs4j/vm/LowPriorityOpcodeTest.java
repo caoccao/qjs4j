@@ -134,9 +134,8 @@ public class LowPriorityOpcodeTest extends OpcodeTest {
         argEmitter.emitU16(0);
         emitOpcodes(argEmitter, Opcode.DROP, Opcode.GET_ARG0, Opcode.ADD, Opcode.RETURN);
 
-        JSValue argResult = execute(argEmitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE, new JSNumber(1),
-                new JSNumber(2), new JSNumber(3), new JSNumber(4));
-        assertNumberValue(argResult, 389);
+        assertNumberValue(execute(argEmitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE, new JSNumber(1),
+                new JSNumber(2), new JSNumber(3), new JSNumber(4)), 389);
 
         JSValue[] closureVars = nativeArguments(1, 2, 3, 4);
         BytecodeEmitter varRefEmitter = new BytecodeEmitter();

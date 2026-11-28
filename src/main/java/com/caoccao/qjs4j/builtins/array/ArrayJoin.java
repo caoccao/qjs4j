@@ -99,7 +99,7 @@ final class ArrayJoin {
         try {
             ArrayJoin result = new ArrayJoin(context);
             for (long i = 0; i < elements.length; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 if (i != 0 && !result.append(separator)) {
                     return context.getPendingException();
                 }

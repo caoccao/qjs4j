@@ -42,7 +42,7 @@ final class ArrayFrom {
     static boolean copyMapped(JSContext context, JSObject source, JSObject target, long length, JSFunction mapper,
             JSValue thisArg, boolean typedTarget) {
         for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             PropertyKey key = PropertyKey.fromIndexString(i);
             JSValue value = source.get(key);
             if (context.hasPendingException()) {
@@ -120,7 +120,7 @@ final class ArrayFrom {
 
             long k = 0;
             while (true) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 JSValue nextResultValue = nextFunction.call(context, iteratorObject, JSValue.NO_ARGS);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -197,7 +197,7 @@ final class ArrayFrom {
             return context.getPendingException();
         }
         for (int i = 0; i < args.length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if (!define(context, target, i, args[i])) {
                 return context.getPendingException();
             }

@@ -197,6 +197,11 @@ public final class JSContext implements AutoCloseable {
         return errorReporter.captureStackTrace(target, skipFunction);
     }
 
+    /** Poll for a host-requested interrupt while executing a native operation in this context. */
+    public void checkExecutionInterrupt() {
+        virtualMachine.checkExecutionInterruptForNative();
+    }
+
     /**
      * Clear the pending exception in both context and VM. This is needed when an async function catches an exception.
      */

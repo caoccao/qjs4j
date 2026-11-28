@@ -295,9 +295,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         nonStrictGlobalEmitter.emitOpcodeAtom(Opcode.GET_VAR, "newGlobalRef");
         nonStrictGlobalEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue nonStrictResult = executeWithStrict(false, nonStrictGlobalEmitter, 0, JSValue.NO_ARGS,
-                JSUndefined.INSTANCE);
-        assertNumberValue(nonStrictResult, 11);
+        assertNumberValue(executeWithStrict(false, nonStrictGlobalEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE),
+                11);
 
         BytecodeEmitter strictMissingGetEmitter = new BytecodeEmitter();
         strictMissingGetEmitter.emitOpcode(Opcode.UNDEFINED);
@@ -350,9 +349,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         deleteMissingVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "missingDeleteVar");
         deleteMissingVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deleteMissingResult = executeWithStrict(false, deleteMissingVarEmitter, 0, JSValue.NO_ARGS,
-                JSUndefined.INSTANCE);
-        assertThat(deleteMissingResult).isEqualTo(JSBoolean.TRUE);
+        assertThat(executeWithStrict(false, deleteMissingVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
+                .isEqualTo(JSBoolean.TRUE);
 
         context.getGlobalObject().defineProperty(PropertyKey.fromString("lockedDeleteVar"),
                 PropertyDescriptor.dataDescriptor(new JSNumber(2), PropertyDescriptor.DataState.EnumerableWritable));
@@ -360,9 +358,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         deleteLockedVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "lockedDeleteVar");
         deleteLockedVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deleteLockedResult = executeWithStrict(false, deleteLockedVarEmitter, 0, JSValue.NO_ARGS,
-                JSUndefined.INSTANCE);
-        assertThat(deleteLockedResult).isEqualTo(JSBoolean.FALSE);
+        assertThat(executeWithStrict(false, deleteLockedVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
+                .isEqualTo(JSBoolean.FALSE);
         assertThat(context.getGlobalObject().get("lockedDeleteVar")).isInstanceOf(JSNumber.class);
     }
 
@@ -474,9 +471,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         putVarRefCheckInitEmitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, 0);
         putVarRefCheckInitEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue putVarRefCheckInitResult = execute(putVarRefCheckInitEmitter, 1, new JSValue[]{JSUndefined.INSTANCE},
-                JSUndefined.INSTANCE);
-        assertNumberValue(putVarRefCheckInitResult, 10);
+        assertNumberValue(
+                execute(putVarRefCheckInitEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE), 10);
 
         BytecodeEmitter putVarRefCheckInitTwiceEmitter = new BytecodeEmitter();
         putVarRefCheckInitTwiceEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);

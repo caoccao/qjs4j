@@ -176,13 +176,13 @@ public class JSResourceLimitTest extends BaseJavetTest {
                 try {
                     'a'.repeat(2 ** 17).replace(/a/g, 'b'.repeat(2 ** 13));
                     'NO ERROR';
-                } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""");
-        // Count the unmatched tail without materializing a half-gigabyte replacement.
-        assertStringWithJavet("""
-                try {
-                    ('x' + 'a'.repeat(1000)).replace(/x/, () => 'b'.repeat(536870888 - 500));
-                    'NO ERROR';
-                } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""");
+                } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""",
+                // Count the unmatched tail without materializing a half-gigabyte replacement.
+                """
+                        try {
+                            ('x' + 'a'.repeat(1000)).replace(/x/, () => 'b'.repeat(536870888 - 500));
+                            'NO ERROR';
+                        } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""");
     }
 
     @Test

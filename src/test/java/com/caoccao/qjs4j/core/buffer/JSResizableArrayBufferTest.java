@@ -62,10 +62,9 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
         // A huge growth ceiling with a small current length is legal and cheap: nothing is
         // allocated for the ceiling until the buffer actually grows.
         try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSValue result = context.eval("new ArrayBuffer(0, { maxByteLength: 2147483647 }).maxByteLength", "b.js",
-                    false);
-            assertThat(result.toString()).isEqualTo("2147483647");
+            assertThat(runtime.createContext()
+                    .eval("new ArrayBuffer(0, { maxByteLength: 2147483647 }).maxByteLength", "b.js", false).toString())
+                    .isEqualTo("2147483647");
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
         }
     }

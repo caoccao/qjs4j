@@ -38,7 +38,6 @@ package com.caoccao.qjs4j.core;
  * participates in the engine's error model.
  */
 public final class JSClassBuilder {
-    private final JSClass classObject;
     private JSFunction constructor;
     private final JSContext context;
     private final String name;
@@ -56,7 +55,6 @@ public final class JSClassBuilder {
         this.constructor = new JSNativeFunction(this.context, "constructor", 0,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         this.superClass = null;
-        this.classObject = null; // Will be created in build()
     }
 
     /**
@@ -65,8 +63,7 @@ public final class JSClassBuilder {
      * @return The constructed class
      */
     public JSClass build() {
-        JSClass result = new JSClass(context, name, constructor, superClass);
-        return result;
+        return new JSClass(context, name, constructor, superClass);
     }
 
     /**
@@ -75,8 +72,7 @@ public final class JSClassBuilder {
      * @return A BuilderWithClass that allows adding methods/fields
      */
     public BuilderWithClass buildAndConfigure() {
-        JSClass result = new JSClass(context, name, constructor, superClass);
-        return new BuilderWithClass(result);
+        return new BuilderWithClass(build());
     }
 
     /**
@@ -101,8 +97,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder constructor(JSNativeCallback constructor) {
-        this.constructor = new JSNativeFunction(this.context, "constructor", 0, constructor, true);
-        return this;
+        return constructor(0, constructor);
     }
 
     /**
@@ -127,15 +122,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder instanceField(String fieldName, JSValue initialValue) {
-        if (classObject == null) {
-            throw new IllegalStateException("Must call build() before adding fields");
-        }
-        JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(initialValue, true, // writable
-                true, // enumerable
-                true // configurable
-        );
-        classObject.addInstanceField(fieldName, descriptor);
-        return this;
+        throw new IllegalStateException("Must call build() before adding fields");
     }
 
     /**
@@ -150,12 +137,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder instanceMethod(String methodName, int length, JSNativeCallback callback) {
-        if (classObject == null) {
-            throw new IllegalStateException("Must call build() before adding methods");
-        }
-        JSNativeFunction method = new JSNativeFunction(this.context, methodName, length, callback);
-        classObject.addInstanceMethod(methodName, method);
-        return this;
+        throw new IllegalStateException("Must call build() before adding methods");
     }
 
     /**
@@ -181,15 +163,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder staticField(String fieldName, JSValue value) {
-        if (classObject == null) {
-            throw new IllegalStateException("Must call build() before adding fields");
-        }
-        JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(value, true, // writable
-                true, // enumerable
-                true // configurable
-        );
-        classObject.addStaticField(fieldName, descriptor);
-        return this;
+        throw new IllegalStateException("Must call build() before adding fields");
     }
 
     /**
@@ -204,12 +178,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder staticMethod(String methodName, int length, JSNativeCallback callback) {
-        if (classObject == null) {
-            throw new IllegalStateException("Must call build() before adding methods");
-        }
-        JSNativeFunction method = new JSNativeFunction(this.context, methodName, length, callback);
-        classObject.addStaticMethod(methodName, method);
-        return this;
+        throw new IllegalStateException("Must call build() before adding methods");
     }
 
     /**

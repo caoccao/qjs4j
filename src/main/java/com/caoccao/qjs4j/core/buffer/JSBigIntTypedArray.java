@@ -24,12 +24,12 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 /** Shared raw-word writes for BigInt64Array and BigUint64Array. */
 abstract sealed class JSBigIntTypedArray extends JSTypedArray permits JSBigInt64Array, JSBigUint64Array {
-    JSBigIntTypedArray(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, Long.BYTES);
+    JSBigIntTypedArray(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length, TypedArrayKind kind) {
+        super(context, buffer, byteOffset, length, kind);
     }
 
-    JSBigIntTypedArray(JSContext context, long length) {
-        super(context, length, Long.BYTES);
+    JSBigIntTypedArray(JSContext context, long length, TypedArrayKind kind) {
+        super(context, length, kind);
     }
 
     @Override

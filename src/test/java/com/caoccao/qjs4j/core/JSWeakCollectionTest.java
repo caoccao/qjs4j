@@ -182,8 +182,7 @@ public class JSWeakCollectionTest extends BaseJavetTest {
                 }
                 results.join(',');""");
 
-        JSRuntime runtime = context.getRuntime();
-        JSSymbol registered = runtime.getOrCreateGlobalSymbol("registered");
+        JSSymbol registered = context.getRuntime().getOrCreateGlobalSymbol("registered");
         JSWeakMap weakMap = context.createJSWeakMap();
         JSWeakSet weakSet = context.createJSWeakSet();
 

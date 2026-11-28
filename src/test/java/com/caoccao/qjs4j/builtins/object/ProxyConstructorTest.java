@@ -286,9 +286,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     public void testProxyCallableTypeof() {
         assertStringWithJavet("""
                 var proxy = new Proxy(function() {}, {});
-                typeof proxy""");
-
-        assertStringWithJavet("""
+                typeof proxy""", """
                 var proxy1 = new Proxy(function() {}, {});
                 var proxy2 = new Proxy(proxy1, {});
                 typeof proxy2""");
@@ -1044,9 +1042,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 d.writable === true &&
                 d.enumerable === false &&
                 d.configurable === true &&
-                typeof d.value === 'function'""");
-
-        assertBooleanWithJavet("""
+                typeof d.value === 'function'""", """
                 Object.prototype.hasOwnProperty.call(Proxy, 'prototype') === false &&
                 Proxy.prototype === undefined""");
     }
@@ -1080,15 +1076,11 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 var target = {x: 1};
                 var handler = {};
                 var revocable = Proxy.revocable(target, handler);
-                typeof revocable""");
-
-        assertStringWithJavet("""
+                typeof revocable""", """
                 var target = {x: 1};
                 var handler = {};
                 var revocable = Proxy.revocable(target, handler);
-                typeof revocable.proxy""");
-
-        assertStringWithJavet("""
+                typeof revocable.proxy""", """
                 var target = {x: 1};
                 var handler = {};
                 var revocable = Proxy.revocable(target, handler);
@@ -1123,9 +1115,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
         assertErrorWithJavet("""
                 var revocable = Proxy.revocable(function() { return 1; }, {});
                 revocable.revoke();
-                revocable.proxy()""");
-
-        assertErrorWithJavet("""
+                revocable.proxy()""", """
                 function C() {}
                 var revocable = Proxy.revocable(C, {});
                 revocable.revoke();
@@ -1173,9 +1163,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
                     return true;
                   }
                 });
-                proxy.x = 2""");
-
-        assertErrorWithJavet("""
+                proxy.x = 2""", """
                 var target = {};
                 Object.defineProperty(target, 'x', {
                   get: function() { return 1; },
@@ -1296,9 +1284,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
                     return true;
                   }
                 });
-                Reflect.set(proxy, 'x', 1, receiver) && called && gotReceiver""");
-
-        assertBooleanWithJavet("""
+                Reflect.set(proxy, 'x', 1, receiver) && called && gotReceiver""", """
                 var proxy = new Proxy({}, {
                   set: function() { return false; }
                 });
@@ -1344,9 +1330,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     public void testProxyTrapMustBeCallable() {
         assertErrorWithJavet("""
                 var proxy = new Proxy({}, {has: 1});
-                'x' in proxy""");
-
-        assertErrorWithJavet("""
+                'x' in proxy""", """
                 var proxy = new Proxy({}, {set: 1});
                 proxy.x = 1""");
     }

@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core.temporal.timezone;
 
+import com.caoccao.qjs4j.core.temporal.TemporalOptionNames;
+import java.util.Map;
+
 /**
  * Temporal disambiguation mode enum for resolving ambiguous or invalid local times during timezone conversions.
  */
@@ -25,6 +28,8 @@ public enum TemporalDisambiguation {
     LATER("later"),
     REJECT("reject");
 
+    private static final Map<String, TemporalDisambiguation> BY_NAME = TemporalOptionNames.index(values(),
+            option -> option.jsName);
     private final String jsName;
 
     TemporalDisambiguation(String jsName) {
@@ -46,15 +51,6 @@ public enum TemporalDisambiguation {
      * Parses a JS disambiguation string. Returns {@code null} if not recognized.
      */
     public static TemporalDisambiguation fromString(String text) {
-        if (text == null) {
-            return null;
-        }
-        return switch (text) {
-            case "compatible" -> COMPATIBLE;
-            case "earlier" -> EARLIER;
-            case "later" -> LATER;
-            case "reject" -> REJECT;
-            default -> null;
-        };
+        return BY_NAME.get(text);
     }
 }

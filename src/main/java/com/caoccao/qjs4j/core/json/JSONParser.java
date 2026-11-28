@@ -136,7 +136,7 @@ final class JSONParser {
     private int parseHex4(int offset) {
         int value = 0;
         for (int i = 0; i < 4; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             int digit = Character.digit(text.charAt(offset + i), 16);
             if (digit < 0) {
                 return -1;
@@ -175,7 +175,7 @@ final class JSONParser {
             }
         } else {
             while (i < text.length() && Character.isDigit(text.charAt(i))) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 i++;
             }
         }
@@ -234,7 +234,7 @@ final class JSONParser {
 
         while (i < text.length()) {
 
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             char ch = text.charAt(i);
 
             if (ch == '"') {
@@ -305,7 +305,7 @@ final class JSONParser {
         Deque<ParseFrame> stack = new ArrayDeque<>();
         int i = 0;
         while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             // Read one value; an array or object that is not empty is opened instead, and read element by element.
             i = skipWhitespace(i);
             if (i >= length) {
@@ -343,7 +343,7 @@ final class JSONParser {
             }
             // Hand the completed value to the containers it closes, innermost first.
             while (true) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 ParseFrame frame = stack.peek();
                 if (frame == null) {
                     return completed;
@@ -397,7 +397,7 @@ final class JSONParser {
             throw new JSONParseException("Invalid number in JSON " + getPositionInfo(i));
         }
         while (i < text.length() && Character.isDigit(text.charAt(i))) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             i++;
         }
         return i;
@@ -413,7 +413,7 @@ final class JSONParser {
     }
 
     private boolean reviveProperty(JSObject holder, PropertyKey key) {
-        context.getVirtualMachine().checkExecutionInterruptForNative();
+        context.checkExecutionInterrupt();
         if (context.hasPendingException()) {
             return false;
         }
@@ -433,7 +433,7 @@ final class JSONParser {
     private int skipWhitespace(int start) {
         int i = start;
         while (i < text.length()) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             char ch = text.charAt(i);
             if (isWhitespace(ch)) {
                 i++;

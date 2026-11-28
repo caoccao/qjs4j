@@ -75,20 +75,10 @@ public final class TemporalInstantPrototype {
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
-        JSTemporalInstant instant = RECEIVER.require(context, thisArg, since ? "since" : "until");
-        if (instant == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-        return since
-                ? instantDifference(context, instant, other, optionsArg)
-                : instantDifference(context, other, instant, optionsArg);
+        return RECEIVER.convertedDifference(context, thisArg, args, since,
+                (ctx, instant, other, options, backwards) -> backwards
+                        ? instantDifference(ctx, instant, other, options)
+                        : instantDifference(ctx, other, instant, options));
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {

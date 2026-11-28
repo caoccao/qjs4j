@@ -73,9 +73,7 @@ public class MapConstructorTest extends BaseJavetTest {
         assertBooleanWithJavet("""
                 const arr = [1, 2, 3, 4, 5];
                 const grouped = Map.groupBy(arr, (x) => x % 2 === 0 ? 'even' : 'odd');
-                grouped.get('even').length === 2 && grouped.get('odd').length === 3""");
-
-        assertBooleanWithJavet("""
+                grouped.get('even').length === 2 && grouped.get('odd').length === 3""", """
                 const iterable = {
                   [Symbol.iterator]() {
                     let i = 0;
@@ -120,8 +118,8 @@ public class MapConstructorTest extends BaseJavetTest {
         entries.push(entry1);
         entries.push(entry2);
 
-        JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();
-        JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
+        JSObject mapPrototype = context.getGlobalObject().get("Map").asObject().orElseThrow().get("prototype")
+                .asObject().orElseThrow();
         JSValue originalSet = mapPrototype.get("set");
         int[] called = {0};
         mapPrototype.set("set", new JSNativeFunction(context, "set", 2, (childContext, thisArg, args) -> {

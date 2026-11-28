@@ -87,16 +87,12 @@ final class ExpressionPrimaryParser {
                 if (expr.isPartOfOptionalChain() && !parserContext.isParenthesizedExpression(expr)) {
                     throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
                 }
-                SourceLocation location = parserContext.getLocation();
-                TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
-                expr = new TaggedTemplateExpression(expr, template, location);
+                expr = parseTaggedTemplate(expr);
             } else if (parserContext.match(TokenType.LPAREN)) {
                 if (expr instanceof Identifier identifier && JSKeyword.IMPORT.equals(identifier.getName())) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
-                SourceLocation location = parserContext.getLocation();
-                List<Expression> args = parseCallArguments();
-                expr = createCallExpression(expr, args, false, location);
+                expr = parseCallSuffix(expr);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
                 expr = parseOptionalLink(expr);
             } else if (parserContext.match(TokenType.DOT)) {
@@ -106,16 +102,25 @@ final class ExpressionPrimaryParser {
                 expr = createMemberExpression(expr, property, false, false, location);
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 validateNoCoverInitializedName(expr);
-                SourceLocation location = parserContext.consumeLocation();
-                Expression property = expressions.parseExpression();
-                parserContext.expect(TokenType.RBRACKET);
-                expr = createMemberExpression(expr, property, true, false, location);
+                expr = parseComputedMember(expr, false);
             } else {
                 break;
             }
         }
 
         return expr;
+    }
+
+    private Expression parseCallSuffix(Expression callee) {
+        SourceLocation location = parserContext.getLocation();
+        return createCallExpression(callee, parseCallArguments(), false, location);
+    }
+
+    private Expression parseComputedMember(Expression object, boolean assignmentOnly) {
+        SourceLocation location = parserContext.consumeLocation();
+        Expression property = assignmentOnly ? expressions.parseAssignmentExpression() : expressions.parseExpression();
+        parserContext.expect(TokenType.RBRACKET);
+        return createMemberExpression(object, property, true, false, location);
     }
 
     private SpreadElement parseCoverRestElement() {
@@ -172,16 +177,11 @@ final class ExpressionPrimaryParser {
                     callee = createMemberExpression(callee, property, false, false, memberLocation);
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     // A computed member is located at its `[`, as in the call loop and as V8 reports it.
-                    SourceLocation memberLocation = parserContext.consumeLocation();
-                    Expression property = expressions.parseExpression();
-                    parserContext.expect(TokenType.RBRACKET);
-                    callee = createMemberExpression(callee, property, true, false, memberLocation);
+                    callee = parseComputedMember(callee, false);
                 } else if (parserContext.match(TokenType.TEMPLATE)) {
                     // No optional chain can reach here: `new a?.b` is rejected, and a parenthesized
                     // chain such as `new (a?.b)`x`` is an ordinary tag.
-                    SourceLocation templateLocation = parserContext.getLocation();
-                    TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
-                    callee = new TaggedTemplateExpression(callee, template, templateLocation);
+                    callee = parseTaggedTemplate(callee);
                 } else {
                     break;
                 }
@@ -205,10 +205,7 @@ final class ExpressionPrimaryParser {
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 validateNoCoverInitializedName(expr);
                 // A computed member is located at its `[`, as in the call loop and as V8 reports it.
-                SourceLocation memberLocation = parserContext.consumeLocation();
-                Expression property = expressions.parseExpression();
-                parserContext.expect(TokenType.RBRACKET);
-                expr = createMemberExpression(expr, property, true, false, memberLocation);
+                expr = parseComputedMember(expr, false);
             } else {
                 break;
             }
@@ -280,13 +277,9 @@ final class ExpressionPrimaryParser {
                 if (expr.isPartOfOptionalChain()) {
                     throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
                 }
-                SourceLocation loc = parserContext.getLocation();
-                TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
-                expr = new TaggedTemplateExpression(expr, template, loc);
+                expr = parseTaggedTemplate(expr);
             } else if (parserContext.match(TokenType.LPAREN)) {
-                SourceLocation loc = parserContext.getLocation();
-                List<Expression> args = parseCallArguments();
-                expr = createCallExpression(expr, args, false, loc);
+                expr = parseCallSuffix(expr);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
                 expr = parseOptionalLink(expr);
             } else if (parserContext.match(TokenType.DOT)) {
@@ -294,10 +287,7 @@ final class ExpressionPrimaryParser {
                 Expression property = parseMemberPropertyName();
                 expr = createMemberExpression(expr, property, false, false, loc);
             } else if (parserContext.match(TokenType.LBRACKET)) {
-                SourceLocation loc = parserContext.consumeLocation();
-                Expression property = expressions.parseAssignmentExpression();
-                parserContext.expect(TokenType.RBRACKET);
-                expr = createMemberExpression(expr, property, true, false, loc);
+                expr = parseComputedMember(expr, true);
             } else {
                 break;
             }
@@ -623,6 +613,11 @@ final class ExpressionPrimaryParser {
         };
     }
 
+    private Expression parseTaggedTemplate(Expression tag) {
+        SourceLocation location = parserContext.getLocation();
+        return new TaggedTemplateExpression(tag, delegates.literals.parseTemplateLiteral(true), location);
+    }
+
     Expression parseUnaryExpression() {
         if (parserContext.match(TokenType.ASYNC) && parserContext.nextToken.type() == TokenType.FUNCTION
                 && parserContext.nextToken.line() == parserContext.currentToken.line()) {
@@ -689,20 +684,8 @@ final class ExpressionPrimaryParser {
             return new UnaryExpression(op, operand, true, location);
         }
 
-        if (parserContext.match(TokenType.PLUS) || parserContext.match(TokenType.MINUS)
-                || parserContext.match(TokenType.NOT) || parserContext.match(TokenType.BIT_NOT)
-                || parserContext.match(TokenType.TYPEOF) || parserContext.match(TokenType.VOID)
-                || parserContext.match(TokenType.DELETE)) {
-            UnaryOperator op = switch (parserContext.currentToken.type()) {
-                case PLUS -> UnaryOperator.PLUS;
-                case MINUS -> UnaryOperator.MINUS;
-                case NOT -> UnaryOperator.NOT;
-                case BIT_NOT -> UnaryOperator.BIT_NOT;
-                case TYPEOF -> UnaryOperator.TYPEOF;
-                case VOID -> UnaryOperator.VOID;
-                case DELETE -> UnaryOperator.DELETE;
-                default -> null;
-            };
+        UnaryOperator op = UnaryOperator.prefixOperator(parserContext.currentToken.type());
+        if (op != null) {
             SourceLocation location = parserContext.consumeLocation();
             Expression operand = parseUnaryExpression();
             if (op == UnaryOperator.DELETE) {

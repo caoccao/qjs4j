@@ -116,7 +116,7 @@ public final class TypedArrayPrototype {
         // Collect kept elements
         List<JSValue> kept = new ArrayList<>();
         for (long k = 0; k < length; k++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue kValue = typedArray.getElementOrUndefined(k);
             JSValue selected = ArrayLikeElements.callElement(context, callbackFn, callbackThisArg, kValue, k,
                     typedArray);
@@ -134,7 +134,7 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         for (long i = 0; i < kept.size(); i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             resultArray.set(PropertyKey.fromIndex(i), kept.get((int) i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -269,7 +269,7 @@ public final class TypedArrayPrototype {
 
         for (long k = 0; k < length; k++) {
 
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue kValue = typedArray.getElementOrUndefined(k);
             JSValue mappedValue = ArrayLikeElements.callElement(context, callbackFn, callbackThisArg, kValue, k,
                     typedArray);

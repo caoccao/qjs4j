@@ -38,13 +38,17 @@ public sealed interface JSValue extends JSStackValue
 
     JSValue[] NO_ARGS = new JSValue[0];
 
+    private <T extends JSValue> Optional<T> as(Class<T> type) {
+        return type.isInstance(this) ? Optional.of(type.cast(this)) : Optional.empty();
+    }
+
     /**
      * Attempt to cast this value to JSArray.
      *
      * @return Optional containing the JSArray if this value is an array, empty otherwise
      */
     default Optional<JSArray> asArray() {
-        return this instanceof JSArray v ? Optional.of(v) : Optional.empty();
+        return as(JSArray.class);
     }
 
     /**
@@ -53,7 +57,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSArrayBuffer if this value is an ArrayBuffer, empty otherwise
      */
     default Optional<JSArrayBuffer> asArrayBuffer() {
-        return this instanceof JSArrayBuffer v ? Optional.of(v) : Optional.empty();
+        return as(JSArrayBuffer.class);
     }
 
     /**
@@ -62,7 +66,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSAsyncGenerator if this value is an async generator, empty otherwise
      */
     default Optional<JSAsyncGenerator> asAsyncGenerator() {
-        return this instanceof JSAsyncGenerator v ? Optional.of(v) : Optional.empty();
+        return as(JSAsyncGenerator.class);
     }
 
     /**
@@ -71,7 +75,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSAsyncIterator if this value is an async iterator, empty otherwise
      */
     default Optional<JSAsyncIterator> asAsyncIterator() {
-        return this instanceof JSAsyncIterator v ? Optional.of(v) : Optional.empty();
+        return as(JSAsyncIterator.class);
     }
 
     /**
@@ -80,7 +84,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBigInt if this value is a BigInt, empty otherwise
      */
     default Optional<JSBigInt> asBigInt() {
-        return this instanceof JSBigInt v ? Optional.of(v) : Optional.empty();
+        return as(JSBigInt.class);
     }
 
     /**
@@ -89,7 +93,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBigIntObject if this value is a BigInt object, empty otherwise
      */
     default Optional<JSBigIntObject> asBigIntObject() {
-        return this instanceof JSBigIntObject v ? Optional.of(v) : Optional.empty();
+        return as(JSBigIntObject.class);
     }
 
     /**
@@ -98,12 +102,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBigInt if this value is a BigInt or BigInt object, empty otherwise
      */
     default Optional<JSBigInt> asBigIntWithDownCast() {
-        if (this instanceof JSBigInt jsBigInt) {
-            return Optional.of(jsBigInt);
-        } else if (this instanceof JSBigIntObject jsBigIntObject) {
-            return Optional.of(jsBigIntObject.getValue());
-        }
-        return Optional.empty();
+        return asPrimitive(JSBigInt.class, JSBigIntObject.class);
     }
 
     /**
@@ -112,7 +111,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBoolean if this value is a boolean, empty otherwise
      */
     default Optional<JSBoolean> asBoolean() {
-        return this instanceof JSBoolean v ? Optional.of(v) : Optional.empty();
+        return as(JSBoolean.class);
     }
 
     /**
@@ -121,7 +120,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBooleanObject if this value is a Boolean object, empty otherwise
      */
     default Optional<JSBooleanObject> asBooleanObject() {
-        return this instanceof JSBooleanObject v ? Optional.of(v) : Optional.empty();
+        return as(JSBooleanObject.class);
     }
 
     /**
@@ -130,12 +129,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBoolean if this value is a boolean or Boolean object, empty otherwise
      */
     default Optional<JSBoolean> asBooleanWithDownCast() {
-        if (this instanceof JSBoolean jsBoolean) {
-            return Optional.of(jsBoolean);
-        } else if (this instanceof JSBooleanObject jsBooleanObject) {
-            return Optional.of(jsBooleanObject.getValue());
-        }
-        return Optional.empty();
+        return asPrimitive(JSBoolean.class, JSBooleanObject.class);
     }
 
     /**
@@ -144,7 +138,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBoundFunction if this value is a bound function, empty otherwise
      */
     default Optional<JSBoundFunction> asBoundFunction() {
-        return this instanceof JSBoundFunction v ? Optional.of(v) : Optional.empty();
+        return as(JSBoundFunction.class);
     }
 
     /**
@@ -153,7 +147,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSBytecodeFunction if this value is a bytecode function, empty otherwise
      */
     default Optional<JSBytecodeFunction> asBytecodeFunction() {
-        return this instanceof JSBytecodeFunction v ? Optional.of(v) : Optional.empty();
+        return as(JSBytecodeFunction.class);
     }
 
     /**
@@ -162,7 +156,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSClass if this value is a class, empty otherwise
      */
     default Optional<JSClass> asClass() {
-        return this instanceof JSClass v ? Optional.of(v) : Optional.empty();
+        return as(JSClass.class);
     }
 
     /**
@@ -171,7 +165,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSFinalizationRegistry if this value is a FinalizationRegistry, empty otherwise
      */
     default Optional<JSFinalizationRegistry> asFinalizationRegistry() {
-        return this instanceof JSFinalizationRegistry v ? Optional.of(v) : Optional.empty();
+        return as(JSFinalizationRegistry.class);
     }
 
     /**
@@ -180,7 +174,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSFloat16Array if this value is a Float16Array, empty otherwise
      */
     default Optional<JSFloat16Array> asFloat16Array() {
-        return this instanceof JSFloat16Array v ? Optional.of(v) : Optional.empty();
+        return as(JSFloat16Array.class);
     }
 
     /**
@@ -189,7 +183,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSFloat32Array if this value is a Float32Array, empty otherwise
      */
     default Optional<JSFloat32Array> asFloat32Array() {
-        return this instanceof JSFloat32Array v ? Optional.of(v) : Optional.empty();
+        return as(JSFloat32Array.class);
     }
 
     /**
@@ -198,7 +192,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSFloat64Array if this value is a Float64Array, empty otherwise
      */
     default Optional<JSFloat64Array> asFloat64Array() {
-        return this instanceof JSFloat64Array v ? Optional.of(v) : Optional.empty();
+        return as(JSFloat64Array.class);
     }
 
     /**
@@ -207,7 +201,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSFunction if this value is a function, empty otherwise
      */
     default Optional<JSFunction> asFunction() {
-        return this instanceof JSFunction v ? Optional.of(v) : Optional.empty();
+        return as(JSFunction.class);
     }
 
     /**
@@ -216,7 +210,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSGenerator if this value is a generator, empty otherwise
      */
     default Optional<JSGenerator> asGenerator() {
-        return this instanceof JSGenerator v ? Optional.of(v) : Optional.empty();
+        return as(JSGenerator.class);
     }
 
     /**
@@ -225,7 +219,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSInt16Array if this value is an Int16Array, empty otherwise
      */
     default Optional<JSInt16Array> asInt16Array() {
-        return this instanceof JSInt16Array v ? Optional.of(v) : Optional.empty();
+        return as(JSInt16Array.class);
     }
 
     /**
@@ -234,7 +228,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSInt32Array if this value is an Int32Array, empty otherwise
      */
     default Optional<JSInt32Array> asInt32Array() {
-        return this instanceof JSInt32Array v ? Optional.of(v) : Optional.empty();
+        return as(JSInt32Array.class);
     }
 
     /**
@@ -243,7 +237,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSInt8Array if this value is an Int8Array, empty otherwise
      */
     default Optional<JSInt8Array> asInt8Array() {
-        return this instanceof JSInt8Array v ? Optional.of(v) : Optional.empty();
+        return as(JSInt8Array.class);
     }
 
     /**
@@ -252,7 +246,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSIterator if this value is an iterator, empty otherwise
      */
     default Optional<JSIterator> asIterator() {
-        return this instanceof JSIterator v ? Optional.of(v) : Optional.empty();
+        return as(JSIterator.class);
     }
 
     /**
@@ -261,7 +255,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSMap if this value is a Map, empty otherwise
      */
     default Optional<JSMap> asMap() {
-        return this instanceof JSMap v ? Optional.of(v) : Optional.empty();
+        return as(JSMap.class);
     }
 
     /**
@@ -270,7 +264,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSNativeFunction if this value is a native function, empty otherwise
      */
     default Optional<JSNativeFunction> asNativeFunction() {
-        return this instanceof JSNativeFunction v ? Optional.of(v) : Optional.empty();
+        return as(JSNativeFunction.class);
     }
 
     /**
@@ -279,7 +273,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSNull if this value is null, empty otherwise
      */
     default Optional<JSNull> asNull() {
-        return this instanceof JSNull v ? Optional.of(v) : Optional.empty();
+        return as(JSNull.class);
     }
 
     /**
@@ -288,7 +282,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSNumber if this value is a number, empty otherwise
      */
     default Optional<JSNumber> asNumber() {
-        return this instanceof JSNumber v ? Optional.of(v) : Optional.empty();
+        return as(JSNumber.class);
     }
 
     /**
@@ -297,7 +291,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSNumberObject if this value is a Number object, empty otherwise
      */
     default Optional<JSNumberObject> asNumberObject() {
-        return this instanceof JSNumberObject v ? Optional.of(v) : Optional.empty();
+        return as(JSNumberObject.class);
     }
 
     /**
@@ -306,12 +300,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSNumber if this value is a number or Number object, empty otherwise
      */
     default Optional<JSNumber> asNumberWithDownCast() {
-        if (this instanceof JSNumber jsNumber) {
-            return Optional.of(jsNumber);
-        } else if (this instanceof JSNumberObject jsNumberObject) {
-            return Optional.of(jsNumberObject.getValue());
-        }
-        return Optional.empty();
+        return asPrimitive(JSNumber.class, JSNumberObject.class);
     }
 
     /**
@@ -320,7 +309,12 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSObject if this value is an object, empty otherwise
      */
     default Optional<JSObject> asObject() {
-        return this instanceof JSObject v ? Optional.of(v) : Optional.empty();
+        return as(JSObject.class);
+    }
+
+    private <T extends JSValue, W extends JSPrimitiveObject<T>> Optional<T> asPrimitive(Class<T> primitive,
+            Class<W> wrapper) {
+        return wrapper.isInstance(this) ? Optional.of(wrapper.cast(this).value) : as(primitive);
     }
 
     /**
@@ -329,7 +323,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSPromise if this value is a Promise, empty otherwise
      */
     default Optional<JSPromise> asPromise() {
-        return this instanceof JSPromise v ? Optional.of(v) : Optional.empty();
+        return as(JSPromise.class);
     }
 
     /**
@@ -338,7 +332,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSProxy if this value is a Proxy, empty otherwise
      */
     default Optional<JSProxy> asProxy() {
-        return this instanceof JSProxy v ? Optional.of(v) : Optional.empty();
+        return as(JSProxy.class);
     }
 
     /**
@@ -347,7 +341,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSRegExp if this value is a RegExp, empty otherwise
      */
     default Optional<JSRegExp> asRegExp() {
-        return this instanceof JSRegExp v ? Optional.of(v) : Optional.empty();
+        return as(JSRegExp.class);
     }
 
     /**
@@ -356,7 +350,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSSet if this value is a Set, empty otherwise
      */
     default Optional<JSSet> asSet() {
-        return this instanceof JSSet v ? Optional.of(v) : Optional.empty();
+        return as(JSSet.class);
     }
 
     /**
@@ -365,7 +359,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSSharedArrayBuffer if this value is a SharedArrayBuffer, empty otherwise
      */
     default Optional<JSSharedArrayBuffer> asSharedArrayBuffer() {
-        return this instanceof JSSharedArrayBuffer v ? Optional.of(v) : Optional.empty();
+        return as(JSSharedArrayBuffer.class);
     }
 
     /**
@@ -374,7 +368,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSString if this value is a string, empty otherwise
      */
     default Optional<JSString> asString() {
-        return this instanceof JSString v ? Optional.of(v) : Optional.empty();
+        return as(JSString.class);
     }
 
     /**
@@ -383,7 +377,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSStringObject if this value is a String object, empty otherwise
      */
     default Optional<JSStringObject> asStringObject() {
-        return this instanceof JSStringObject v ? Optional.of(v) : Optional.empty();
+        return as(JSStringObject.class);
     }
 
     /**
@@ -392,12 +386,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSString if this value is a string or String object, empty otherwise
      */
     default Optional<JSString> asStringWithDownCast() {
-        if (this instanceof JSString jsString) {
-            return Optional.of(jsString);
-        } else if (this instanceof JSStringObject jsStringObject) {
-            return Optional.of(jsStringObject.getValue());
-        }
-        return Optional.empty();
+        return asPrimitive(JSString.class, JSStringObject.class);
     }
 
     /**
@@ -406,7 +395,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSSymbol if this value is a symbol, empty otherwise
      */
     default Optional<JSSymbol> asSymbol() {
-        return this instanceof JSSymbol v ? Optional.of(v) : Optional.empty();
+        return as(JSSymbol.class);
     }
 
     /**
@@ -415,7 +404,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSSymbolObject if this value is a Symbol object, empty otherwise
      */
     default Optional<JSSymbolObject> asSymbolObject() {
-        return this instanceof JSSymbolObject v ? Optional.of(v) : Optional.empty();
+        return as(JSSymbolObject.class);
     }
 
     /**
@@ -424,12 +413,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSSymbol if this value is a symbol or Symbol object, empty otherwise
      */
     default Optional<JSSymbol> asSymbolWithDownCast() {
-        if (this instanceof JSSymbol jsSymbol) {
-            return Optional.of(jsSymbol);
-        } else if (this instanceof JSSymbolObject jsSymbolObject) {
-            return Optional.of(jsSymbolObject.getValue());
-        }
-        return Optional.empty();
+        return asPrimitive(JSSymbol.class, JSSymbolObject.class);
     }
 
     /**
@@ -438,7 +422,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSTypedArray if this value is a TypedArray, empty otherwise
      */
     default Optional<JSTypedArray> asTypedArray() {
-        return this instanceof JSTypedArray v ? Optional.of(v) : Optional.empty();
+        return as(JSTypedArray.class);
     }
 
     /**
@@ -447,7 +431,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSUint16Array if this value is a Uint16Array, empty otherwise
      */
     default Optional<JSUint16Array> asUint16Array() {
-        return this instanceof JSUint16Array v ? Optional.of(v) : Optional.empty();
+        return as(JSUint16Array.class);
     }
 
     /**
@@ -456,7 +440,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSUint32Array if this value is a Uint32Array, empty otherwise
      */
     default Optional<JSUint32Array> asUint32Array() {
-        return this instanceof JSUint32Array v ? Optional.of(v) : Optional.empty();
+        return as(JSUint32Array.class);
     }
 
     /**
@@ -465,7 +449,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSUint8Array if this value is a Uint8Array, empty otherwise
      */
     default Optional<JSUint8Array> asUint8Array() {
-        return this instanceof JSUint8Array v ? Optional.of(v) : Optional.empty();
+        return as(JSUint8Array.class);
     }
 
     /**
@@ -474,7 +458,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSUint8ClampedArray if this value is a Uint8ClampedArray, empty otherwise
      */
     default Optional<JSUint8ClampedArray> asUint8ClampedArray() {
-        return this instanceof JSUint8ClampedArray v ? Optional.of(v) : Optional.empty();
+        return as(JSUint8ClampedArray.class);
     }
 
     /**
@@ -483,7 +467,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSUndefined if this value is undefined, empty otherwise
      */
     default Optional<JSUndefined> asUndefined() {
-        return this instanceof JSUndefined v ? Optional.of(v) : Optional.empty();
+        return as(JSUndefined.class);
     }
 
     /**
@@ -492,7 +476,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSWeakMap if this value is a WeakMap, empty otherwise
      */
     default Optional<JSWeakMap> asWeakMap() {
-        return this instanceof JSWeakMap v ? Optional.of(v) : Optional.empty();
+        return as(JSWeakMap.class);
     }
 
     /**
@@ -501,7 +485,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSWeakRef if this value is a WeakRef, empty otherwise
      */
     default Optional<JSWeakRef> asWeakRef() {
-        return this instanceof JSWeakRef v ? Optional.of(v) : Optional.empty();
+        return as(JSWeakRef.class);
     }
 
     /**
@@ -510,7 +494,7 @@ public sealed interface JSValue extends JSStackValue
      * @return Optional containing the JSWeakSet if this value is a WeakSet, empty otherwise
      */
     default Optional<JSWeakSet> asWeakSet() {
-        return this instanceof JSWeakSet v ? Optional.of(v) : Optional.empty();
+        return as(JSWeakSet.class);
     }
 
     /**

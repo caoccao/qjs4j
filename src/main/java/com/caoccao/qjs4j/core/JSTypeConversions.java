@@ -31,7 +31,10 @@ import java.math.BigInteger;
  */
 public final class JSTypeConversions {
     private static final int MAX_CACHED_NUMBER_STRING_LENGTH = 256;
+    private static final PropertyKey[] NUMBER_METHODS = {PropertyKey.VALUE_OF, PropertyKey.TO_STRING};
     private static volatile NumberStringCacheEntry numberStringCacheEntry;
+
+    private static final PropertyKey[] STRING_METHODS = {PropertyKey.TO_STRING, PropertyKey.VALUE_OF};
 
     /**
      * Abstract Equality Comparison (==). ES2020 7.2.14
@@ -114,6 +117,15 @@ public final class JSTypeConversions {
         }
 
         return false;
+    }
+
+    private static JSValue callConversion(JSContext context, JSObject object, JSFunction method, JSValue[] arguments) {
+        try {
+            return method.call(context, object, arguments);
+        } catch (RuntimeException failure) {
+            setPendingExceptionFromInvocation(context, failure);
+            return JSUndefined.INSTANCE;
+        }
     }
 
     private static int compareBigIntAndNumber(BigInteger bigInt, double number) {
@@ -872,13 +884,8 @@ public final class JSTypeConversions {
                     case NUMBER -> "number";
                     case DEFAULT -> "default";
                 };
-                JSValue result;
-                try {
-                    result = toPrimitiveFunction.call(context, obj, new JSValue[]{new JSString(hintString)});
-                } catch (RuntimeException runtimeException) {
-                    setPendingExceptionFromInvocation(context, runtimeException);
-                    return JSUndefined.INSTANCE;
-                }
+                JSValue result = callConversion(context, obj, toPrimitiveFunction,
+                        new JSValue[]{new JSString(hintString)});
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -890,23 +897,15 @@ public final class JSTypeConversions {
             }
 
             // OrdinaryToPrimitive: DEFAULT behaves like NUMBER.
-            String[] methodNames = hint == PreferredType.STRING
-                    ? new String[]{"toString", "valueOf"}
-                    : new String[]{"valueOf", "toString"};
+            PropertyKey[] methodNames = hint == PreferredType.STRING ? STRING_METHODS : NUMBER_METHODS;
 
-            for (String methodName : methodNames) {
-                JSValue method = obj.get(PropertyKey.fromString(methodName));
+            for (PropertyKey methodName : methodNames) {
+                JSValue method = obj.get(methodName);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
                 if (method instanceof JSFunction func) {
-                    JSValue result;
-                    try {
-                        result = func.call(context, obj, JSValue.NO_ARGS);
-                    } catch (RuntimeException runtimeException) {
-                        setPendingExceptionFromInvocation(context, runtimeException);
-                        return JSUndefined.INSTANCE;
-                    }
+                    JSValue result = callConversion(context, obj, func, JSValue.NO_ARGS);
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }

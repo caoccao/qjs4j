@@ -81,11 +81,12 @@ public class DirectBindingAssignmentTest extends BaseJavetTest {
                 """
                         new Function('let x = 1; const o = {}; with (o) { (function () { x = 3; })(); } return String(x);')()""",
                 """
-                        (function () { var x = 1; \\u0065val('x = 5'); return String(x); })()""");
-        // A function expression's own name is immutable: a compound assignment to it is ignored, or throws in strict
-        // code.
-        assertStringWithJavet("""
-                (function g() { try { g += 1; } catch (e) { return e.name; } return typeof g; })()""");
+                        (function () { var x = 1; \\u0065val('x = 5'); return String(x); })()""",
+                // A function expression's own name is immutable: a compound assignment to it is ignored, or throws in
+                // strict
+                // code.
+                """
+                        (function g() { try { g += 1; } catch (e) { return e.name; } return typeof g; })()""");
         // Without the source, a function may contain a direct eval as far as the compiler can tell.
         assertThat(CompilerContext.sourceMayContainDirectEval(null)).isTrue();
         assertThat(CompilerContext.sourceMayContainDirectEval("x = 1")).isFalse();

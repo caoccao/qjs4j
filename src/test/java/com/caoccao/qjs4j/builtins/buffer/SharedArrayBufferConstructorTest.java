@@ -30,39 +30,36 @@ public class SharedArrayBufferConstructorTest extends BaseJavetTest {
     @Test
     public void testCreateSharedArrayBuffer() {
         // Normal case: create with valid length
-        JSValue result = JSSharedArrayBuffer.create(context, new JSNumber(32));
-        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
-                jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(32));
+        assertThat(JSSharedArrayBuffer.create(context, new JSNumber(32))).isInstanceOfSatisfying(
+                JSSharedArrayBuffer.class, jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(32));
 
         // Normal case: create with zero length
-        result = JSSharedArrayBuffer.create(context, new JSNumber(0));
-        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
-                jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(0));
+        assertThat(JSSharedArrayBuffer.create(context, new JSNumber(0))).isInstanceOfSatisfying(
+                JSSharedArrayBuffer.class, jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(0));
 
         // Edge case: negative length
         assertRangeError(JSSharedArrayBuffer.create(context, new JSNumber(-1)));
 
         // Edge case: non-numeric length
-        result = JSSharedArrayBuffer.create(context, new JSString("32"));
-        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
-                jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(32));
+        assertThat(JSSharedArrayBuffer.create(context, new JSString("32"))).isInstanceOfSatisfying(
+                JSSharedArrayBuffer.class, jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(32));
 
         // Growable case: maxByteLength option
-        result = JSSharedArrayBuffer.create(context, new JSNumber(16), context.createJSObject());
-        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> {
-            assertThat(jsSab.getByteLength()).isEqualTo(16);
-            assertThat(jsSab.getMaxByteLength()).isEqualTo(16);
-            assertThat(jsSab.isGrowable()).isFalse();
-        });
+        assertThat(JSSharedArrayBuffer.create(context, new JSNumber(16), context.createJSObject()))
+                .isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> {
+                    assertThat(jsSab.getByteLength()).isEqualTo(16);
+                    assertThat(jsSab.getMaxByteLength()).isEqualTo(16);
+                    assertThat(jsSab.isGrowable()).isFalse();
+                });
 
         JSObject options = context.createJSObject();
         options.set("maxByteLength", new JSNumber(64));
-        result = JSSharedArrayBuffer.create(context, new JSNumber(16), options);
-        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> {
-            assertThat(jsSab.getByteLength()).isEqualTo(16);
-            assertThat(jsSab.getMaxByteLength()).isEqualTo(64);
-            assertThat(jsSab.isGrowable()).isTrue();
-        });
+        assertThat(JSSharedArrayBuffer.create(context, new JSNumber(16), options))
+                .isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> {
+                    assertThat(jsSab.getByteLength()).isEqualTo(16);
+                    assertThat(jsSab.getMaxByteLength()).isEqualTo(64);
+                    assertThat(jsSab.isGrowable()).isTrue();
+                });
     }
 
     @Test

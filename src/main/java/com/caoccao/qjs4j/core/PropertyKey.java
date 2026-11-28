@@ -147,6 +147,7 @@ public final class PropertyKey {
     public static final PropertyKey USAGE = fromString("usage");
     public static final PropertyKey USE_GROUPING = fromString("useGrouping");
     public static final PropertyKey VALUE = fromString("value");
+    public static final PropertyKey VALUE_OF = fromString("valueOf");
     public static final PropertyKey VARIANTS = fromString("variants");
     public static final PropertyKey WEEKDAY = fromString("weekday");
     public static final PropertyKey WEEKEND = fromString("weekend");

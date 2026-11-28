@@ -45,24 +45,21 @@ public class AtomicsObjectTest extends BaseJavetTest {
         for (int i = 0; i < operands.length; i++) {
             args[i + 2] = JSNumber.of(operands[i]);
         }
-        assertNumberValue(operation.call(context, null, args), expectedResult);
+        assertNumberValue(callBuiltin(operation, null, args), expectedResult);
         assertThat(array.getBuffer().getBuffer().getInt(index * Integer.BYTES)).isEqualTo(expectedStored);
     }
 
     private void assertWaitArgumentErrors(JSNativeCallback waitOperation, JSInt32Array arr) {
         // Test 3: Invalid arguments
-        JSValue error = waitOperation.call(context, null, nativeArguments(arr, 0));
-        assertTypeError(error);
+        assertTypeError(callBuiltin(waitOperation, null, arr, 0));
         context.clearPendingException();
 
         // Test 4: Non-TypedArray argument
-        error = waitOperation.call(context, null, nativeArguments(1, 0, 0));
-        assertTypeError(error);
+        assertTypeError(callBuiltin(waitOperation, null, 1, 0, 0));
         context.clearPendingException();
 
         // Test 5: Out of bounds index
-        error = waitOperation.call(context, null, nativeArguments(arr, 10, 0));
-        assertRangeError(error);
+        assertRangeError(callBuiltin(waitOperation, null, arr, 10, 0));
         context.clearPendingException();
     }
 
@@ -165,21 +162,20 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testIsLockFree() {
         // Test various sizes
-        JSValue result = atomics().isLockFree(context, null, nativeArguments(1));
-        assertThat(result.isBoolean()).isTrue(); // Implementation dependent
+        assertThat(atomics().isLockFree(context, null, nativeArguments(1)).isBoolean()).isTrue(); // Implementation
+                                                                                                  // dependent
 
-        result = atomics().isLockFree(context, null, nativeArguments(2));
-        assertThat(result.isBoolean()).isTrue();
+        assertThat(atomics().isLockFree(context, null, nativeArguments(2)).isBoolean()).isTrue();
 
-        result = atomics().isLockFree(context, null, nativeArguments(4));
-        assertThat(result.isBoolean()).isTrue();
+        assertThat(atomics().isLockFree(context, null, nativeArguments(4)).isBoolean()).isTrue();
 
-        result = atomics().isLockFree(context, null, nativeArguments(8));
-        assertThat(result.isBoolean()).isTrue();
+        assertThat(atomics().isLockFree(context, null, nativeArguments(8)).isBoolean()).isTrue();
 
         // Test invalid size
-        result = atomics().isLockFree(context, null, nativeArguments(3));
-        assertThat(result.isBooleanFalse()).isTrue(); // Should be false for unsupported sizes
+        assertThat(atomics().isLockFree(context, null, nativeArguments(3))).isSameAs(JSBoolean.FALSE); // Should be
+                                                                                                       // false for
+                                                                                                       // unsupported
+                                                                                                       // sizes
     }
 
     @Test
@@ -212,11 +208,9 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSInt32Array arr = sharedInts(2, 111, 222);
 
         // Test load
-        JSValue result = atomics().load(context, null, nativeArguments(arr, 0));
-        assertNumberValue(result, 111.0);
+        assertNumberValue(atomics().load(context, null, nativeArguments(arr, 0)), 111.0);
 
-        result = atomics().load(context, null, nativeArguments(arr, 1));
-        assertNumberValue(result, 222.0);
+        assertNumberValue(atomics().load(context, null, nativeArguments(arr, 1)), 222.0);
     }
 
     @Test
@@ -229,18 +223,15 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertNumberValue(result, 0.0);
 
         // Test 2: Invalid arguments
-        JSValue error = atomics().notify(context, null, JSValue.NO_ARGS);
-        assertTypeError(error);
+        assertTypeError(atomics().notify(context, null, JSValue.NO_ARGS));
         context.clearPendingException();
 
         // Test 3: Non-TypedArray argument
-        error = atomics().notify(context, null, nativeArguments(1));
-        assertTypeError(error);
+        assertTypeError(atomics().notify(context, null, nativeArguments(1)));
         context.clearPendingException();
 
         // Test 4: Out of bounds index
-        error = atomics().notify(context, null, nativeArguments(arr, 10));
-        assertRangeError(error);
+        assertRangeError(atomics().notify(context, null, nativeArguments(arr, 10)));
         context.clearPendingException();
 
         // Test 5: Negative count is clamped to 0; non-shared buffers still return 0
@@ -443,8 +434,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertThat(((JSString) resultObj.get("value")).value()).isEqualTo("not-equal");
 
         // Test 2: waitAsync with matching value and positive timeout - should return {async: true, value: Promise}
-        result = atomics().waitAsync(context, null, nativeArguments(arr, 0, 42, 1));
-        resultObj = result.asObject().orElseThrow();
+        resultObj = atomics().waitAsync(context, null, nativeArguments(arr, 0, 42, 1)).asObject().orElseThrow();
         assertThat(resultObj.get("async").isBoolean()).isTrue();
         assertThat(resultObj.get("async").asBoolean().map(JSBoolean::value).orElseThrow()).isTrue();
         assertThat(resultObj.get("value")).isInstanceOf(JSPromise.class);

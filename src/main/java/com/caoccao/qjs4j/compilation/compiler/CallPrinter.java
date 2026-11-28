@@ -112,17 +112,7 @@ final class CallPrinter {
 
     private static String describeUnary(UnaryExpression unaryExpression) {
         Expression operand = unaryExpression.getOperand();
-        String operator = switch (unaryExpression.getOperator()) {
-            case MINUS -> "-";
-            case PLUS -> "+";
-            case NOT -> "!";
-            case BIT_NOT -> "~";
-            case TYPEOF -> "typeof ";
-            case VOID -> "void ";
-            case DELETE -> "delete ";
-            case INC -> "++";
-            case DEC -> "--";
-        };
+        String operator = unaryExpression.getOperator().displayText();
         if (!unaryExpression.isPrefix()) {
             return "(" + describe(operand) + operator + ")";
         }

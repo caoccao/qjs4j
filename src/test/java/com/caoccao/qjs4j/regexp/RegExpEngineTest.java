@@ -60,8 +60,7 @@ public class RegExpEngineTest extends RegExpTestBase {
         // Start index out of bounds
         RegExpEngine.MatchResult result = engine.exec("abc", -1);
         assertThat(result).isNull();
-        result = engine.exec("abc", 4);
-        assertThat(result).isNull();
+        assertThat(engine.exec("abc", 4)).isNull();
     }
 
     @Test
@@ -69,8 +68,7 @@ public class RegExpEngineTest extends RegExpTestBase {
         RegExpEngine engine = compilePattern("a\\nb", "");
         assertMatch(engine, "a\nb", 0, "a\nb");
 
-        engine = compilePattern("a\\tb", "");
-        assertMatch(engine, "a\tb", 0, "a\tb");
+        assertMatch(compilePattern("a\\tb", ""), "a\tb", 0, "a\tb");
     }
 
     @Test
@@ -108,16 +106,14 @@ public class RegExpEngineTest extends RegExpTestBase {
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
 
-        result = engine.exec("xabc", 0);
-        assertThat(result).isNull(); // Should not match at position 0
+        assertThat(engine.exec("xabc", 0)).isNull(); // Should not match at position 0
 
         engine = compilePattern("abc$", "");
         result = engine.exec("abc", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
 
-        result = engine.exec("abcx", 0);
-        assertThat(result).isNull(); // Should not match at end
+        assertThat(engine.exec("abcx", 0)).isNull(); // Should not match at end
     }
 
     @Test
@@ -169,8 +165,7 @@ public class RegExpEngineTest extends RegExpTestBase {
         assertThat(result).isNull(); // Should not match "def" with "^abc$"
 
         // Test ^ matching at line start
-        engine = compilePattern("^def", "m");
-        assertMatch(engine, "abc\ndef", 4, "def");
+        assertMatch(compilePattern("^def", "m"), "abc\ndef", 4, "def");
     }
 
     @Test

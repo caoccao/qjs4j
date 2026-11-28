@@ -109,15 +109,13 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
         // Edge case: no arguments
         assertErrorWithJavet("""
                 var weakMap = new WeakMap();
-                weakMap.set();""");
-
-        // Edge case: non-object key
-        assertErrorWithJavet("""
-                var weakMap = new WeakMap();
-                weakMap.set('string', 'value');""");
-
-        // Edge case: called on non-WeakMap
-        assertErrorWithJavet("WeakMap.prototype.set.call('not weakmap', {}, 'value');");
+                weakMap.set();""",
+                // Edge case: non-object key
+                """
+                        var weakMap = new WeakMap();
+                        weakMap.set('string', 'value');""",
+                // Edge case: called on non-WeakMap
+                "WeakMap.prototype.set.call('not weakmap', {}, 'value');");
     }
 
     @Test

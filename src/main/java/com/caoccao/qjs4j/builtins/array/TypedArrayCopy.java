@@ -41,7 +41,7 @@ final class TypedArrayCopy {
             long bytes = count * width;
             if (!snapshot && source.getBuffer() == target.getBuffer() && to > from && to - from < bytes) {
                 for (long i = 0; i < bytes; i++) {
-                    context.getVirtualMachine().checkExecutionInterruptForNative();
+                    context.checkExecutionInterrupt();
                     dst.put(to + i, src.get(from + i));
                 }
             } else {
@@ -53,7 +53,7 @@ final class TypedArrayCopy {
             source = source.copyStorage();
         }
         for (long i = 0; i < count; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             target.set(PropertyKey.fromIndex(targetIndex + i), source.getJSElement(start + i));
             if (context.hasPendingException()) {
                 return false;
@@ -108,7 +108,7 @@ final class TypedArrayCopy {
             return context.getPendingException();
         }
         for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSValue value = i == replacedIndex
                     ? replacement
                     : source.getElementOrUndefined(reversed ? length - 1 - i : i);
@@ -158,12 +158,12 @@ final class TypedArrayCopy {
         if (convertedValue instanceof JSNumber number) {
             double value = number.value();
             for (long i = start; i < end; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 typedArray.setElement(i, value);
             }
         } else {
             for (long i = start; i < end; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 typedArray.set(PropertyKey.fromIndex(i), convertedValue);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -182,7 +182,7 @@ final class TypedArrayCopy {
         long length = typedArray.getLength();
         long middle = length / 2;
         for (long lower = 0; lower < middle; lower++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             long upper = length - 1 - lower;
             JSValue lowerValue = typedArray.getJSElement(lower);
             JSValue upperValue = typedArray.getJSElement(upper);
@@ -247,7 +247,7 @@ final class TypedArrayCopy {
 
         // Step 11: Loop - convert values and write
         for (long k = 0; k < srcLength; k++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             PropertyKey pk = PropertyKey.fromIndexString(k);
             JSValue value = src.get(pk);
             if (context.hasPendingException()) {

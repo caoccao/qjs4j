@@ -80,7 +80,7 @@ public final class MapPrototype {
 
         JSMap.IterationCursor cursor = map.createIterationCursor();
         while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
             if (entry == null) {
                 break;

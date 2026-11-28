@@ -137,7 +137,7 @@ public final class StringPrototype {
             return context.getPendingException();
         }
         for (JSValue arg : args) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             JSString appended = JSTypeConversions.toString(context, arg);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -184,7 +184,7 @@ public final class StringPrototype {
             result.append(' ').append(attr).append("=\"");
             // Escape quotes in attribute value
             for (int i = 0; i < attrText.length(); i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 char c = attrText.charAt(i);
                 if (c == '"') {
                     result.append("&quot;");
@@ -517,7 +517,7 @@ public final class StringPrototype {
         }
         // Limit uninterrupted copying even when the fill string is very large.
         for (int copied = 0; copied < fillLength;) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             int offset = copied % fillStr.length();
             int count = Math.min(1024, Math.min(fillStr.length() - offset, fillLength - copied));
             result.append(fillStr, offset, offset + count);
@@ -576,7 +576,7 @@ public final class StringPrototype {
         JSString result = JSString.EMPTY;
         JSString block = new JSString(s);
         while (count != 0) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             if ((count & 1) != 0) {
                 result = JSString.concat(result, block);
             }
@@ -668,7 +668,7 @@ public final class StringPrototype {
         StringResultBuilder result = new StringResultBuilder(context);
         int end = 0;
         while (position >= 0) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             result.append(input, end, position);
             JSString replacement = StringReplacement.forStringMatch(context, searchStr, input, position, replaceValue,
                     replaceStr);
@@ -826,7 +826,7 @@ public final class StringPrototype {
         if (separator.isEmpty()) {
             // Split into individual characters
             for (int i = 0; i < s.length() && i < limit; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
+                context.checkExecutionInterrupt();
                 arr.push(JSString.of(s.charAt(i)));
             }
             return arr;
@@ -836,7 +836,7 @@ public final class StringPrototype {
         int start = 0;
         int index;
         while ((index = s.indexOf(separator, start)) != -1 && arr.getLength() < limit) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             arr.push(new JSString(s.substring(start, index)));
             start = index + separator.length();
         }
@@ -990,7 +990,7 @@ public final class StringPrototype {
         // Replace unpaired surrogates with U+FFFD
         StringBuilder result = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             char c = s.charAt(i);
 
             if (Character.isSurrogate(c)) {
@@ -1038,11 +1038,11 @@ public final class StringPrototype {
         int start = 0;
         int end = s.length();
         while (leading && start < end && JSTypeConversions.isEcmaWhitespace(s.charAt(start))) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             start++;
         }
         while (trailing && end > start && JSTypeConversions.isEcmaWhitespace(s.charAt(end - 1))) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
+            context.checkExecutionInterrupt();
             end--;
         }
         return new JSString(s.substring(start, end));

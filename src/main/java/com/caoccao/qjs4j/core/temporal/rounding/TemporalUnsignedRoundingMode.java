@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core.temporal.rounding;
 
+import com.caoccao.qjs4j.core.temporal.TemporalOptionNames;
+import java.util.Map;
+
 /**
  * Internal unsigned rounding mode, obtained by applying the sign of a value to a {@link TemporalRoundingMode}.
  * <p>
@@ -28,6 +31,8 @@ public enum TemporalUnsignedRoundingMode {
     INFINITY("infinity"),
     ZERO("zero");
 
+    private static final Map<String, TemporalUnsignedRoundingMode> BY_NAME = TemporalOptionNames.index(values(),
+            option -> option.jsName);
     private final String jsName;
 
     TemporalUnsignedRoundingMode(String jsName) {
@@ -70,16 +75,6 @@ public enum TemporalUnsignedRoundingMode {
      * Parses a JS unsigned rounding mode string. Returns {@code null} if not recognized.
      */
     public static TemporalUnsignedRoundingMode fromString(String text) {
-        if (text == null) {
-            return null;
-        }
-        return switch (text) {
-            case "infinity" -> INFINITY;
-            case "zero" -> ZERO;
-            case "half-infinity" -> HALF_INFINITY;
-            case "half-zero" -> HALF_ZERO;
-            case "half-even" -> HALF_EVEN;
-            default -> null;
-        };
+        return BY_NAME.get(text);
     }
 }

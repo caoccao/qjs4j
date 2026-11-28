@@ -32,19 +32,14 @@ public final class JSFloat16Array extends JSTypedArray {
      * Create a Float16Array view on an existing buffer.
      */
     public JSFloat16Array(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
+        super(context, buffer, byteOffset, length, TypedArrayKind.FLOAT16);
     }
 
     /**
      * Create a Float16Array with a new buffer.
      */
     public JSFloat16Array(JSContext context, long length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.FLOAT16;
+        super(context, length, TypedArrayKind.FLOAT16);
     }
 
     @Override

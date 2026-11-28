@@ -31,19 +31,14 @@ public final class JSInt32Array extends JSTypedArray {
      * Create an Int32Array view on an existing buffer.
      */
     public JSInt32Array(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
+        super(context, buffer, byteOffset, length, TypedArrayKind.INT32);
     }
 
     /**
      * Create an Int32Array with a new buffer.
      */
     public JSInt32Array(JSContext context, long length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.INT32;
+        super(context, length, TypedArrayKind.INT32);
     }
 
     @Override

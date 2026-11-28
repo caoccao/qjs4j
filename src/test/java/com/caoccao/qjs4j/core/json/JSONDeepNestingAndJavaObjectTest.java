@@ -70,10 +70,9 @@ public class JSONDeepNestingAndJavaObjectTest extends BaseJavetTest {
                         log.join(';')""", """
                         var parsed = JSON.parse('{"__proto__": [1], "x": {"__proto__": null}}');
                         [Object.getPrototypeOf(parsed) === Object.prototype, Array.isArray(parsed.__proto__),
-                          Object.hasOwn(parsed.x, '__proto__')].join()""");
-        // V8's own wording for these is different; what matters here is that every malformed input is a
-        // SyntaxError at the same place.
-        assertStringWithJavet(
+                          Object.hasOwn(parsed.x, '__proto__')].join()""",
+                // V8's own wording for these is different; what matters here is that every malformed input is a
+                // SyntaxError at the same place.
                 """
                         ['[', '[1', '[1,', '[1,]', '[1 2]', '{', '{"a"', '{"a":', '{"a":1', '{"a":1,', '{"a":1,}', '{"a" 1}',
                           '{a:1}', '{"a":1 "b":2}', '[[[]]]x', '', ' ', '[}', '{]', '{"a":[}', '[1]]', '{"a":1}}', 'nul', '[tru]']

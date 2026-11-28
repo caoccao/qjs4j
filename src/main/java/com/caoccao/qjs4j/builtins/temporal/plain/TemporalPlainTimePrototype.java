@@ -72,17 +72,8 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
-        JSTemporalPlainTime plainTime = RECEIVER.require(context, thisArg, since ? "since" : "until");
-        if (plainTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainTime other = TemporalPlainTimeConstructor.toTemporalTimeObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-        return differencePlainTime(context, plainTime, other, optionsArg, since);
+        return RECEIVER.convertedDifference(context, thisArg, args, since,
+                TemporalPlainTimePrototype::differencePlainTime);
     }
 
     private static JSValue differencePlainTime(JSContext context, JSTemporalPlainTime plainTime,

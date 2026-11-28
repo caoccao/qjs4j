@@ -491,8 +491,7 @@ public class WithIdentifierResolutionTest extends BaseJavetTest {
     public void testReadAndCallTrapOrderAndReceiver() {
         String trace = "7:receiver|has:value,get:Symbol(Symbol.unscopables),has:value,get:value,"
                 + "has:method,get:Symbol(Symbol.unscopables),has:method,get:method";
-        String expected = String.join(";", Collections.nCopies(5, trace));
-        assertStringWithTest262Semantics(expected, """
+        assertStringWithTest262Semantics(String.join(";", Collections.nCopies(5, trace)), """
                 (() => [undefined, null, 42, {}, function () {}].map(unscopables => {
                   const log = [];
                   const target = { value: 7, method() { return this === scope ? 'receiver' : 'wrong'; } };

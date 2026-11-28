@@ -181,29 +181,8 @@ final class CallOpcodes {
     }
 
     static void handleCall(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int argumentCount = executionContext.operandU16();
+        int argumentCount = executionContext.indexOperand(op, Opcode.CALL0);
         call(executionContext, argumentCount, false);
-        executionContext.advance(op);
-    }
-
-    static void handleCall0(Opcode op, ExecutionContext executionContext) {
-        call(executionContext, 0, false);
-        executionContext.advance(op);
-    }
-
-    static void handleCall1(Opcode op, ExecutionContext executionContext) {
-        call(executionContext, 1, false);
-        executionContext.advance(op);
-    }
-
-    static void handleCall2(Opcode op, ExecutionContext executionContext) {
-        call(executionContext, 2, false);
-        executionContext.advance(op);
-    }
-
-    static void handleCall3(Opcode op, ExecutionContext executionContext) {
-        call(executionContext, 3, false);
         executionContext.advance(op);
     }
 

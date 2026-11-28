@@ -210,13 +210,12 @@ public class PromiseConstructorTest extends BaseJavetTest {
     void testPromiseStaticMethods() {
         // Promise static methods should still exist and work
         assertStringWithJavet("typeof Promise.resolve", "typeof Promise.reject", "typeof Promise.all",
-                "typeof Promise.race", "typeof Promise.allSettled", "typeof Promise.any");
-
-        // Test Promise.resolve
-        assertStringWithJavet("""
-                let result = 'pending';
-                Promise.resolve('test').then(x => { result = x; });
-                result""");
+                "typeof Promise.race", "typeof Promise.allSettled", "typeof Promise.any",
+                // Test Promise.resolve
+                """
+                        let result = 'pending';
+                        Promise.resolve('test').then(x => { result = x; });
+                        result""");
     }
 
     @Test

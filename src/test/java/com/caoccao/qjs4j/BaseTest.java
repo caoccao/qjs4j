@@ -121,29 +121,29 @@ public abstract class BaseTest {
                 number -> assertThat(number.value()).isEqualTo(expected));
     }
 
-    protected void assertPendingException(JSContext context) {
+    protected void assertPendingException() {
         assertThat(context.hasPendingException()).isTrue();
         context.clearPendingException();
     }
 
-    protected void assertPendingRangeError(JSContext context, JSValue value) {
+    protected void assertPendingRangeError(JSValue value) {
         assertRangeError(value);
-        assertPendingException(context);
+        assertPendingException();
     }
 
-    protected void assertPendingSyntaxError(JSContext context, JSValue value) {
+    protected void assertPendingSyntaxError(JSValue value) {
         assertSyntaxError(value);
-        assertPendingException(context);
+        assertPendingException();
     }
 
-    protected void assertPendingTypeError(JSContext context, JSValue value) {
+    protected void assertPendingTypeError(JSValue value) {
         assertTypeError(value);
-        assertPendingException(context);
+        assertPendingException();
     }
 
-    protected void assertPendingTypeError(JSContext context, JSValue value, String expectedMessage) {
+    protected void assertPendingTypeError(JSValue value, String expectedMessage) {
         assertTypeError(value, expectedMessage);
-        assertPendingException(context);
+        assertPendingException();
     }
 
     protected void assertRangeError(JSValue value) {
@@ -180,13 +180,29 @@ public abstract class BaseTest {
         return promise.getState() != JSPromise.PromiseState.PENDING;
     }
 
-    /** Bind the receiver once for a table of native builtin input/output cases. */
-    protected BuiltinAssertions builtin(JSNativeCallback callback, JSValue receiver) {
-        return new BuiltinAssertions(callback, receiver);
+    protected BuiltinAssertions builtin(JSNativeCallback callback) {
+        return builtin(callback, JSUndefined.INSTANCE);
     }
 
-    protected JSValue callBuiltin(JSNativeCallback callback, JSValue receiver, Object... arguments) {
-        return callback.call(context, receiver, nativeArguments(arguments));
+    /** Bind the receiver once for a table of native builtin input/output cases. */
+    protected BuiltinAssertions builtin(JSNativeCallback callback, Object receiver) {
+        return new BuiltinAssertions(callback, nativeValue(receiver));
+    }
+
+    protected JSValue callBuiltin(JSNativeCallback callback, Object receiver, JSValue[] arguments) {
+        return callback.call(context, nativeValue(receiver), arguments);
+    }
+
+    protected JSValue callBuiltin(JSNativeCallback callback, Object receiver, Object... arguments) {
+        return callBuiltin(callback, receiver, nativeArguments(arguments));
+    }
+
+    protected JSValue callFunction(JSNativeCallback callback, JSValue[] arguments) {
+        return callBuiltin(callback, JSUndefined.INSTANCE, arguments);
+    }
+
+    protected JSValue callFunction(JSNativeCallback callback, Object... arguments) {
+        return callBuiltin(callback, JSUndefined.INSTANCE, arguments);
     }
 
     protected JSRuntime createRuntime() {
@@ -204,6 +220,11 @@ public abstract class BaseTest {
 
     protected JSArray nativeArray(Object... elements) {
         return new JSArray(context, nativeArguments(elements));
+    }
+
+    /** Exercise one prototype method with different receivers. */
+    protected NativeMethod nativeMethod(JSNativeCallback callback) {
+        return (receiver, arguments) -> callBuiltin(callback, receiver, arguments);
     }
 
     protected JSContext resetContext() {
@@ -234,16 +255,19 @@ public abstract class BaseTest {
         }
         JSValue[] values = new JSValue[inputs.length];
         for (int i = 0; i < inputs.length; i++) {
-            Object input = inputs[i];
-            if (input instanceof String string) {
-                values[i] = new JSString(string);
-            } else if (input instanceof Number number) {
-                values[i] = new JSNumber(number.doubleValue());
-            } else {
-                values[i] = (JSValue) input;
-            }
+            values[i] = nativeValue(inputs[i]);
         }
         return values;
+    }
+
+    private static JSValue nativeValue(Object input) {
+        if (input instanceof String string) {
+            return new JSString(string);
+        }
+        if (input instanceof Number number) {
+            return new JSNumber(number.doubleValue());
+        }
+        return (JSValue) input;
     }
 
     protected static JSValue[] numberArgs(double... values) {
@@ -295,5 +319,10 @@ public abstract class BaseTest {
         public void expectValue(JSValue expected, Object... arguments) {
             assertThat(call(arguments)).isEqualTo(expected);
         }
+    }
+
+    @FunctionalInterface
+    protected interface NativeMethod {
+        JSValue call(Object receiver, Object... arguments);
     }
 }

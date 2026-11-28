@@ -200,6 +200,13 @@ public final class LexerTemplateScanner {
         throw new JSSyntaxErrorException("Unterminated block comment in template expression");
     }
 
+    private static int skipDecimalDigits(String source, int position) {
+        while (position < source.length() && Character.isDigit(source.charAt(position))) {
+            position++;
+        }
+        return position;
+    }
+
     private static int skipLineComment(String source, int position) {
         while (position < source.length() && source.charAt(position) != '\n' && source.charAt(position) != '\r') {
             position++;
@@ -220,24 +227,17 @@ public final class LexerTemplateScanner {
             }
         }
 
-        while (position < source.length() && Character.isDigit(source.charAt(position))) {
-            position++;
-        }
+        position = skipDecimalDigits(source, position);
         if (position < source.length() && source.charAt(position) == '.') {
             position++;
-            while (position < source.length() && Character.isDigit(source.charAt(position))) {
-                position++;
-            }
+            position = skipDecimalDigits(source, position);
         }
         if (position < source.length() && (source.charAt(position) == 'e' || source.charAt(position) == 'E')) {
             int expPos = position + 1;
             if (expPos < source.length() && (source.charAt(expPos) == '+' || source.charAt(expPos) == '-')) {
                 expPos++;
             }
-            while (expPos < source.length() && Character.isDigit(source.charAt(expPos))) {
-                expPos++;
-            }
-            position = expPos;
+            position = skipDecimalDigits(source, expPos);
         }
         if (position < source.length() && source.charAt(position) == 'n') {
             position++;

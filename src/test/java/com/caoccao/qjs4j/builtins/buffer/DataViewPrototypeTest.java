@@ -34,28 +34,28 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView view = new JSDataView(context, buffer);
         buffer.getBuffer().put(0, (byte) value);
-        assertNumberValue(get.call(context, view, nativeArguments(0)), value);
-        assertThat(set.call(context, view, numberArgs(1, value))).isEqualTo(JSUndefined.INSTANCE);
+        assertNumberValue(callBuiltin(get, view, 0), value);
+        assertThat(callBuiltin(set, view, 1, value)).isEqualTo(JSUndefined.INSTANCE);
         assertThat(buffer.getBuffer().get(1)).isEqualTo((byte) value);
         assertInvalidAccess(get, set, view, invalidReceiver);
     }
 
     private void assertInvalidAccess(JSNativeCallback get, JSNativeCallback set, JSDataView view, JSValue receiver) {
-        assertPendingTypeError(context, get.call(context, receiver, nativeArguments(0)));
-        assertPendingTypeError(context, set.call(context, receiver, nativeArguments(0, 1)));
-        assertPendingRangeError(context, get.call(context, view, nativeArguments(20)));
-        assertPendingRangeError(context, set.call(context, view, nativeArguments(20, 1)));
+        assertPendingTypeError(callBuiltin(get, receiver, 0));
+        assertPendingTypeError(callBuiltin(set, receiver, 0, 1));
+        assertPendingRangeError(callBuiltin(get, view, 20));
+        assertPendingRangeError(callBuiltin(set, view, 20, 1));
     }
 
     private void assertMultibyteAccess(JSNativeCallback get, JSNativeCallback set, double bigEndian,
             double littleEndian, int secondOffset, JSValue invalidReceiver) {
         JSDataView view = new JSDataView(context, new JSArrayBuffer(context, 16));
-        assertThat(set.call(context, view, numberArgs(0, bigEndian))).isEqualTo(JSUndefined.INSTANCE);
-        assertNumberValue(get.call(context, view, nativeArguments(0)), bigEndian);
+        assertThat(callBuiltin(set, view, 0, bigEndian)).isEqualTo(JSUndefined.INSTANCE);
+        assertNumberValue(callBuiltin(get, view, 0), bigEndian);
         JSNumber offset = JSNumber.of(secondOffset);
-        assertThat(set.call(context, view, new JSValue[]{offset, JSNumber.of(littleEndian), JSBoolean.TRUE}))
+        assertThat(callBuiltin(set, view, new JSValue[]{offset, JSNumber.of(littleEndian), JSBoolean.TRUE}))
                 .isEqualTo(JSUndefined.INSTANCE);
-        assertNumberValue(get.call(context, view, new JSValue[]{offset, JSBoolean.TRUE}), littleEndian);
+        assertNumberValue(callBuiltin(get, view, new JSValue[]{offset, JSBoolean.TRUE}), littleEndian);
         assertInvalidAccess(get, set, view, invalidReceiver);
     }
 
@@ -76,12 +76,11 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = new JSDataView(context, buffer);
 
-        JSValue result = callBuiltin(DataViewPrototype::getBuffer, dataView);
-        assertThat(result).isEqualTo(buffer);
+        var getBuffer = nativeMethod(DataViewPrototype::getBuffer);
+        assertThat(getBuffer.call(dataView)).isEqualTo(buffer);
 
         // Edge case: called on non-DataView
-        result = callBuiltin(DataViewPrototype::getBuffer, new JSString("not a dataview"));
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getBuffer.call("not a dataview"));
     }
 
     @Test
@@ -89,17 +88,15 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = new JSDataView(context, buffer);
 
-        JSValue result = callBuiltin(DataViewPrototype::getByteLength, dataView);
-        assertNumberValue(result, 16.0);
+        var getByteLength = nativeMethod(DataViewPrototype::getByteLength);
+        assertNumberValue(getByteLength.call(dataView), 16.0);
 
         // With offset and length
         JSDataView dataView2 = new JSDataView(context, buffer, 4, 8);
-        result = callBuiltin(DataViewPrototype::getByteLength, dataView2);
-        assertNumberValue(result, 8.0);
+        assertNumberValue(getByteLength.call(dataView2), 8.0);
 
         // Edge case: called on non-DataView
-        result = callBuiltin(DataViewPrototype::getByteLength, new JSNumber(123));
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getByteLength.call(123));
     }
 
     @Test
@@ -107,17 +104,15 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = new JSDataView(context, buffer);
 
-        JSValue result = callBuiltin(DataViewPrototype::getByteOffset, dataView);
-        assertNumberValue(result, 0.0);
+        var getByteOffset = nativeMethod(DataViewPrototype::getByteOffset);
+        assertNumberValue(getByteOffset.call(dataView), 0.0);
 
         // With offset
         JSDataView dataView2 = new JSDataView(context, buffer, 4, 8);
-        result = callBuiltin(DataViewPrototype::getByteOffset, dataView2);
-        assertNumberValue(result, 4.0);
+        assertNumberValue(getByteOffset.call(dataView2), 4.0);
 
         // Edge case: called on non-DataView
-        result = callBuiltin(DataViewPrototype::getByteOffset, new JSObject(context));
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getByteOffset.call(new JSObject(context)));
     }
 
     @Test
@@ -143,27 +138,21 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSDataView dataView = new JSDataView(context, buffer);
 
         var setBigInt64 = builtin(DataViewPrototype::setBigInt64, dataView);
-        JSValue result = setBigInt64.call(0, "1");
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(setBigInt64.call(0, "1")).isEqualTo(JSUndefined.INSTANCE);
         var getBigInt64 = builtin(DataViewPrototype::getBigInt64, dataView);
-        result = getBigInt64.call(0);
-        assertThat(result).isEqualTo(new JSBigInt(1));
+        assertThat(getBigInt64.call(0)).isEqualTo(new JSBigInt(1));
 
-        result = setBigInt64.call(0, JSBoolean.TRUE);
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = getBigInt64.call(0);
-        assertThat(result).isEqualTo(new JSBigInt(1));
+        assertThat(setBigInt64.call(0, JSBoolean.TRUE)).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(getBigInt64.call(0)).isEqualTo(new JSBigInt(1));
 
-        result = callBuiltin(DataViewPrototype::setBigUint64, dataView, 8, new JSBigInt(-1));
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = callBuiltin(DataViewPrototype::getBigUint64, dataView, 8);
-        assertThat(result).isEqualTo(new JSBigInt("18446744073709551615"));
+        assertThat(callBuiltin(DataViewPrototype::setBigUint64, dataView, 8, new JSBigInt(-1)))
+                .isEqualTo(JSUndefined.INSTANCE);
+        assertThat(callBuiltin(DataViewPrototype::getBigUint64, dataView, 8))
+                .isEqualTo(new JSBigInt("18446744073709551615"));
 
-        result = setBigInt64.call(0, 1);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(setBigInt64.call(0, 1));
 
-        result = setBigInt64.call(0, JSUndefined.INSTANCE);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(setBigInt64.call(0, JSUndefined.INSTANCE));
     }
 
     @Test
@@ -171,21 +160,18 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = new JSDataView(context, buffer);
 
-        JSValue result = callBuiltin(DataViewPrototype::setFloat16, dataView, 0, 1.5, JSBoolean.TRUE);
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = callBuiltin(DataViewPrototype::getFloat16, dataView, 0, JSBoolean.TRUE);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class,
-                jsNum -> assertThat(jsNum.value()).isCloseTo(1.5, Offset.offset(0.001)));
+        assertThat(callBuiltin(DataViewPrototype::setFloat16, dataView, 0, 1.5, JSBoolean.TRUE))
+                .isEqualTo(JSUndefined.INSTANCE);
+        assertThat(callBuiltin(DataViewPrototype::getFloat16, dataView, 0, JSBoolean.TRUE)).isInstanceOfSatisfying(
+                JSNumber.class, jsNum -> assertThat(jsNum.value()).isCloseTo(1.5, Offset.offset(0.001)));
 
-        result = callBuiltin(DataViewPrototype::setUint16, dataView, 2, 65535, JSBoolean.TRUE);
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = callBuiltin(DataViewPrototype::getUint16, dataView, 2, JSBoolean.TRUE);
-        assertNumberValue(result, 65535.0);
+        assertThat(callBuiltin(DataViewPrototype::setUint16, dataView, 2, 65535, JSBoolean.TRUE))
+                .isEqualTo(JSUndefined.INSTANCE);
+        assertNumberValue(callBuiltin(DataViewPrototype::getUint16, dataView, 2, JSBoolean.TRUE), 65535.0);
 
-        result = callBuiltin(DataViewPrototype::setUint32, dataView, 4, 4294967295L, JSBoolean.TRUE);
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = callBuiltin(DataViewPrototype::getUint32, dataView, 4, JSBoolean.TRUE);
-        assertNumberValue(result, 4294967295.0);
+        assertThat(callBuiltin(DataViewPrototype::setUint32, dataView, 4, 4294967295L, JSBoolean.TRUE))
+                .isEqualTo(JSUndefined.INSTANCE);
+        assertNumberValue(callBuiltin(DataViewPrototype::getUint32, dataView, 4, JSBoolean.TRUE), 4294967295.0);
     }
 
     @Test
@@ -193,17 +179,13 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = new JSDataView(context, buffer);
 
-        JSValue result = callBuiltin(DataViewPrototype::setInt8, dataView, 1.9, 7);
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(callBuiltin(DataViewPrototype::setInt8, dataView, 1.9, 7)).isEqualTo(JSUndefined.INSTANCE);
         var getInt8 = builtin(DataViewPrototype::getInt8, dataView);
-        result = getInt8.call(1);
-        assertNumberValue(result, 7.0);
+        assertNumberValue(getInt8.call(1), 7.0);
 
-        result = getInt8.call(-1);
-        assertPendingRangeError(context, result);
+        assertPendingRangeError(getInt8.call(-1));
 
-        result = getInt8.call(new JSSymbol("offset"));
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getInt8.call(new JSSymbol("offset")));
     }
 
     @Test
@@ -217,26 +199,23 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSDataView detachedView = new JSDataView(context, detachedBuffer);
         detachedBuffer.detach();
 
-        JSValue result = callBuiltin(DataViewPrototype::getBuffer, detachedView);
-        assertThat(result).isEqualTo(detachedBuffer);
+        var getBuffer = nativeMethod(DataViewPrototype::getBuffer);
+        assertThat(getBuffer.call(detachedView)).isEqualTo(detachedBuffer);
 
-        result = callBuiltin(DataViewPrototype::getByteLength, detachedView);
-        assertPendingTypeError(context, result);
+        var getByteLength = nativeMethod(DataViewPrototype::getByteLength);
+        assertPendingTypeError(getByteLength.call(detachedView));
 
-        result = callBuiltin(DataViewPrototype::getByteOffset, detachedView);
-        assertPendingTypeError(context, result);
+        var getByteOffset = nativeMethod(DataViewPrototype::getByteOffset);
+        assertPendingTypeError(getByteOffset.call(detachedView));
 
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 16);
         JSDataView outOfBoundsView = new JSDataView(context, resizableBuffer, 8, 8);
         resizableBuffer.resize(4);
 
-        result = callBuiltin(DataViewPrototype::getBuffer, outOfBoundsView);
-        assertThat(result).isEqualTo(resizableBuffer);
+        assertThat(getBuffer.call(outOfBoundsView)).isEqualTo(resizableBuffer);
 
-        result = callBuiltin(DataViewPrototype::getByteLength, outOfBoundsView);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getByteLength.call(outOfBoundsView));
 
-        result = callBuiltin(DataViewPrototype::getByteOffset, outOfBoundsView);
-        assertPendingTypeError(context, result);
+        assertPendingTypeError(getByteOffset.call(outOfBoundsView));
     }
 }

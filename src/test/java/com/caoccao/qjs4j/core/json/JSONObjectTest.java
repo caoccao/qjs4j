@@ -123,15 +123,14 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(stringified.isString()).isTrue();
 
         // Parse again to ensure round-trip works
-        JSValue reparsed = parse(stringified);
-        JSObject reparsedObj = reparsed.asObject().orElseThrow();
+        JSObject reparsedObj = parse(stringified).asObject().orElseThrow();
     }
 
     @Test
     public void testParse() {
         assertThat(parse("null")).isEqualTo(JSNull.INSTANCE);
-        assertThat(parse("true").isBooleanTrue()).isTrue();
-        assertThat(parse("false").isBooleanFalse()).isTrue();
+        assertThat(parse("true")).isSameAs(JSBoolean.TRUE);
+        assertThat(parse("false")).isSameAs(JSBoolean.FALSE);
         assertNumberValue(parse("42"), 42.0);
         assertNumberValue(parse("-123.45"), -123.45);
         assertStringValue(parse("\"hello world\""), "hello world");
@@ -151,15 +150,14 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringValue(obj.get("name"), "test");
         assertNumberValue(obj.get("value"), 123.0);
 
-        obj = parse("{\"data\": {\"nested\": true}}").asObject().orElseThrow();
-        assertThat(obj.get("data").asObject().orElseThrow().get("nested")).isEqualTo(JSBoolean.TRUE);
+        assertThat(parse("{\"data\": {\"nested\": true}}").asObject().orElseThrow().get("data").asObject().orElseThrow()
+                .get("nested")).isEqualTo(JSBoolean.TRUE);
 
-        obj = parse("  {  \"key\"  :  \"value\"  }  ").asObject().orElseThrow();
-        assertStringValue(obj.get("key"), "value");
-        assertPendingSyntaxError(context, parse(""));
-        assertPendingSyntaxError(context, parse("{invalid}"));
-        assertPendingSyntaxError(context, parse("\"unterminated"));
-        assertPendingSyntaxError(context, parse());
+        assertStringValue(parse("  {  \"key\"  :  \"value\"  }  ").asObject().orElseThrow().get("key"), "value");
+        assertPendingSyntaxError(parse(""));
+        assertPendingSyntaxError(parse("{invalid}"));
+        assertPendingSyntaxError(parse("\"unterminated"));
+        assertPendingSyntaxError(parse());
         assertNumberValue(parse(nativeArguments(123)), 123.0);
     }
 
@@ -258,8 +256,7 @@ public class JSONObjectTest extends BaseJavetTest {
 
         JSFunction reviver = doubleNumbers("reviver");
 
-        JSValue result = parse(new JSString(json), reviver);
-        JSObject obj = result.asObject().orElseThrow();
+        JSObject obj = parse(new JSString(json), reviver).asObject().orElseThrow();
 
         assertNumberValue(obj.get("a"), 2.0);
         assertNumberValue(obj.get("b"), 4.0);
@@ -286,8 +283,7 @@ public class JSONObjectTest extends BaseJavetTest {
 
         JSFunction reviver = doubleNumbers("reviver");
 
-        JSValue result = parse(new JSString(json), reviver);
-        JSArray arr = result.asArray().orElseThrow();
+        JSArray arr = parse(new JSString(json), reviver).asArray().orElseThrow();
 
         assertNumberElements(arr, 0, 2.0, 4.0);
     }
@@ -319,8 +315,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = parse(new JSString(json), reviver);
-        JSObject obj = result.asObject().orElseThrow();
+        JSObject obj = parse(new JSString(json), reviver).asObject().orElseThrow();
 
         assertStringValue(obj.get("name"), "Alice");
         assertNumberValue(obj.get("age"), 30.0);
@@ -355,9 +350,8 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = parse(new JSString(json), reviver);
-        JSObject obj = result.asObject().orElseThrow();
-        assertStringValue(obj.get("user").asObject().orElseThrow().get("age"), "25 years");
+        assertStringValue(parse(new JSString(json), reviver).asObject().orElseThrow().get("user").asObject()
+                .orElseThrow().get("age"), "25 years");
     }
 
     @Test
@@ -497,8 +491,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(jsonString.asString().isPresent()).isTrue();
 
         // Parse back
-        JSValue parsed = parse(jsonString);
-        JSObject parsedObj = parsed.asObject().orElseThrow();
+        JSObject parsedObj = parse(jsonString).asObject().orElseThrow();
         assertStringValue(parsedObj.get("string"), "hello");
         assertNumberValue(parsedObj.get("number"), 42.0);
         assertThat(parsedObj.get("boolean")).isEqualTo(JSBoolean.TRUE);
@@ -752,8 +745,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = stringify(objWithBigInt, replacer);
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
+        String jsonStr = stringify(objWithBigInt, replacer).asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr).contains("\"num\":246");
         assertThat(jsonStr).contains("\"str\":\"test\"");
     }
@@ -846,8 +838,7 @@ public class JSONObjectTest extends BaseJavetTest {
 
         JSFunction replacer = doubleNumbers("replacer");
 
-        JSValue result = stringify(obj, replacer);
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
+        String jsonStr = stringify(obj, replacer).asString().map(JSString::value).orElseThrow();
 
         // toJSON returns 20, then replacer doubles it to 40
         assertThat(jsonStr).isEqualTo("40");
@@ -865,8 +856,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Create a replacer array with only allowed properties
         JSArray replacer = new JSArray(context, new JSString("name"), new JSString("age"));
 
-        JSValue result = stringify(obj, replacer);
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
+        String jsonStr = stringify(obj, replacer).asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"name\":\"Alice\"");
         assertThat(jsonStr).contains("\"age\":30");
@@ -889,8 +879,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Only allow "data" and "x", "y" properties
         JSArray replacer = new JSArray(context, new JSString("data"), new JSString("x"), new JSString("y"));
 
-        JSValue result = stringify(outer, replacer);
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
+        String jsonStr = stringify(outer, replacer).asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"data\":");
         assertThat(jsonStr).contains("\"x\":1");
@@ -922,8 +911,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Replacer array with numbers
         JSArray replacer = nativeArray(0, 2);
 
-        JSValue result = stringify(obj, replacer);
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
+        String jsonStr = stringify(obj, replacer).asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"0\":\"zero\"");
         assertThat(jsonStr).contains("\"2\":\"two\"");
@@ -960,8 +948,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = stringify(obj, replacer);
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
+        String jsonStr = stringify(obj, replacer).asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"name\":\"test\"");
         assertThat(jsonStr).contains("\"value\":100");
@@ -997,8 +984,7 @@ public class JSONObjectTest extends BaseJavetTest {
         });
         obj.set("toJSON", toJSON);
 
-        JSValue result = stringify(obj);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("\"custom\"");
+        assertThat(stringify(obj).asString().map(JSString::value).orElseThrow()).isEqualTo("\"custom\"");
     }
 
     @Test

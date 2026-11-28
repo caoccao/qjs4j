@@ -121,11 +121,11 @@ public class RegExpLegacyStaticsTest extends BaseJavetTest {
     public void testEveryCaptureIsAddressableAndUnmatchedOnesAreEmpty() {
         assertStringWithJavet("""
                 /(a)(b)(c)/.exec('abc');
-                [RegExp.$1, RegExp.$2, RegExp.$3, RegExp.$4].join('|')""");
-        // An alternative that did not participate leaves its capture empty rather than undefined.
-        assertStringWithJavet("""
-                /(a)|(z)/.exec('a');
-                [RegExp.$1, RegExp.$2, RegExp.lastParen].join('|')""");
+                [RegExp.$1, RegExp.$2, RegExp.$3, RegExp.$4].join('|')""",
+                // An alternative that did not participate leaves its capture empty rather than undefined.
+                """
+                        /(a)|(z)/.exec('a');
+                        [RegExp.$1, RegExp.$2, RegExp.lastParen].join('|')""");
     }
 
     @Test

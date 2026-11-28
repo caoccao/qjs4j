@@ -41,7 +41,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     }
 
     private void assertInvalidReceiver(JSNativeCallback method, JSValue receiver) {
-        assertPendingTypeError(context, method.call(context, receiver, JSValue.NO_ARGS));
+        assertPendingTypeError(callBuiltin(method, receiver));
     }
 
     private void assertValues(JSIterator iterator, JSValue... values) {
@@ -62,7 +62,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     }
 
     private JSIterator iterator(JSNativeCallback method, JSValue receiver) {
-        return method.call(context, receiver, JSValue.NO_ARGS).asIterator().orElseThrow();
+        return callBuiltin(method, receiver).asIterator().orElseThrow();
     }
 
     @Test
@@ -223,16 +223,13 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertIteratorResult(result, new JSNumber(1.0), false);
 
         // Continue iteration
-        result = next.call();
-        assertIteratorResult(result, new JSNumber(2.0), false);
+        assertIteratorResult(next.call(), new JSNumber(2.0), false);
 
         // End of iteration
-        result = next.call();
-        assertIteratorResult(result, JSUndefined.INSTANCE, true);
+        assertIteratorResult(next.call(), JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-iterator
-        result = callBuiltin(IteratorPrototype::next, new JSString("not an iterator"));
-        assertTypeError(result);
+        assertTypeError(callBuiltin(IteratorPrototype::next, "not an iterator"));
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -256,7 +253,8 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSNumber(5));
 
         // Normal case: keys() should be same as values() for Set
-        JSValue result = callBuiltin(IteratorPrototype::setKeysIterator, set);
+        var setKeysIterator = nativeMethod(IteratorPrototype::setKeysIterator);
+        JSValue result = setKeysIterator.call(set);
         result.asIterator().orElseThrow();
 
         // Should behave identically to values iterator
@@ -264,8 +262,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         // Note: In a full test, we'd verify they produce the same results
 
         // Edge case: called on non-set (should delegate to setValuesIterator)
-        result = callBuiltin(IteratorPrototype::setKeysIterator, new JSArray(context));
-        assertTypeError(result);
+        assertTypeError(setKeysIterator.call(new JSArray(context)));
         assertThat(context.getPendingException()).isNotNull();
     }
 

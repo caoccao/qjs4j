@@ -27,8 +27,8 @@ public final class StaticBlock extends ClassElement {
     public StaticBlock(List<Statement> body) {
         super(body != null
                 ? body.stream().filter(statement -> statement != null).map(Statement::getLocation).findFirst()
-                        .orElse(new SourceLocation(0, 0, 0, 0))
-                : new SourceLocation(0, 0, 0, 0));
+                        .orElse(SourceLocation.UNKNOWN)
+                : SourceLocation.UNKNOWN);
         this.body = body;
     }
 

@@ -21,7 +21,7 @@ public final class VariableDeclarator extends ASTNode {
     private final Expression init;
 
     public VariableDeclarator(Pattern id, Expression init) {
-        super(id != null ? id.getLocation() : (init != null ? init.getLocation() : new SourceLocation(0, 0, 0, 0)));
+        super(SourceLocation.firstOf(id, init));
         this.id = id;
         this.init = init;
     }

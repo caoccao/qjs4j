@@ -85,7 +85,8 @@ record RegExpQuantifier(int min, int max) {
             switch (opcode) {
                 case RANGE, RANGE_I, RANGE32, RANGE32_I, NOT_RANGE, NOT_RANGE_I -> {
                     advances = true;
-                    length = 5 + readRangePayloadLength(code, pos);
+                    // RANGE stores its payload length as a little-endian u32 immediately after the opcode.
+                    length = 5 + RegExpBytecode.readU32(code, pos + 1);
                 }
                 case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE, PREV -> advances = true;
                 case LINE_START, LINE_START_M, LINE_END, LINE_END_M, WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY,
@@ -161,8 +162,7 @@ record RegExpQuantifier(int min, int max) {
             // atom is not executed at all (following QuickJS). This is also needed when
             // per-iteration resets are injected, because the zero-iteration branch skips
             // the atom bytecode entirely.
-            context.buffer.appendU8(RegExpOpcode.SAVE_RESET.getCode());
-            context.buffer.appendU16(captureCountBeforeAtom);
+            context.emitU16(RegExpOpcode.SAVE_RESET, captureCountBeforeAtom);
             context.buffer.appendU16(captureCount - 1);
         }
 
@@ -176,16 +176,13 @@ record RegExpQuantifier(int min, int max) {
             // Greedy: try atom first, then skip
             // Non-greedy: try skip first, then atom
             if (addZeroAdvanceCheck) {
-                context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                context.buffer.appendU8(advReg);
+                context.emitU8(RegExpOpcode.SET_CHAR_POS, advReg);
             }
-            context.buffer.appendU8(
-                    greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-            context.buffer.appendU32(atomSize + (addZeroAdvanceCheck ? 2 : 0));
+            context.emitU32(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST : RegExpOpcode.SPLIT_GOTO_FIRST,
+                    atomSize + (addZeroAdvanceCheck ? 2 : 0));
             context.buffer.append(atomCode);
             if (addZeroAdvanceCheck) {
-                context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                context.buffer.appendU8(advReg);
+                context.emitU8(RegExpOpcode.CHECK_ADVANCE, advReg);
             }
         } else if (min == 0 && max == Integer.MAX_VALUE) {
             // * quantifier: SPLIT (skip or continue), SET_CHAR_POS?, atom, CHECK_ADVANCE?, GOTO back
@@ -202,8 +199,7 @@ record RegExpQuantifier(int min, int max) {
             } else {
                 context.buffer.append(atomCode);
                 int loopStart = context.buffer.size() - atomSize;
-                context.buffer.appendU8(
-                        greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() : RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                context.emit(greedy ? RegExpOpcode.SPLIT_GOTO_FIRST : RegExpOpcode.SPLIT_NEXT_FIRST);
                 int offset = loopStart - (context.buffer.size() + 4);
                 context.buffer.appendU32(offset);
             }
@@ -231,9 +227,8 @@ record RegExpQuantifier(int min, int max) {
                     int register = allocateRegister(context);
                     emitCounter(context, register, remaining);
                     int loopStart = context.buffer.size();
-                    context.buffer.appendU8(
-                            greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-                    context.buffer.appendU32(atomSize + 6 + (addZeroAdvanceCheck ? 4 : 0));
+                    context.emitU32(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST : RegExpOpcode.SPLIT_GOTO_FIRST,
+                            atomSize + 6 + (addZeroAdvanceCheck ? 4 : 0));
                     emitRepeatedAtom(context, atomCode, addZeroAdvanceCheck, advReg);
                     emitLoop(context, register, loopStart);
                 }
@@ -257,27 +252,23 @@ record RegExpQuantifier(int min, int max) {
     }
 
     private void emitCounter(CompileContext context, int register, int count) {
-        context.buffer.appendU8(RegExpOpcode.SET_I32.getCode());
-        context.buffer.appendU8(register);
+        context.emitU8(RegExpOpcode.SET_I32, register);
         context.buffer.appendU32(count);
     }
 
     private void emitLoop(CompileContext context, int register, int target) {
-        context.buffer.appendU8(RegExpOpcode.LOOP.getCode());
-        context.buffer.appendU8(register);
+        context.emitU8(RegExpOpcode.LOOP, register);
         context.buffer.appendU32(target - (context.buffer.size() + 4));
     }
 
     private static void emitRepeatedAtom(CompileContext context, byte[] atomCode, boolean addZeroAdvanceCheck,
             int advReg) {
         if (addZeroAdvanceCheck) {
-            context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-            context.buffer.appendU8(advReg);
+            context.emitU8(RegExpOpcode.SET_CHAR_POS, advReg);
         }
         context.buffer.append(atomCode);
         if (addZeroAdvanceCheck) {
-            context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-            context.buffer.appendU8(advReg);
+            context.emitU8(RegExpOpcode.CHECK_ADVANCE, advReg);
         }
     }
 
@@ -285,32 +276,12 @@ record RegExpQuantifier(int min, int max) {
             boolean addZeroAdvanceCheck, int advReg) {
         int advCheckSize = addZeroAdvanceCheck ? 4 : 0; // SET_CHAR_POS(2) + CHECK_ADVANCE(2)
         int loopStart = context.buffer.size();
-        context.buffer
-                .appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-        context.buffer.appendU32(atomCode.length + 5 + advCheckSize); // Skip atom + GOTO + advance checks
+        context.emitU32(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST : RegExpOpcode.SPLIT_GOTO_FIRST,
+                atomCode.length + 5 + advCheckSize); // Skip atom + GOTO + advance checks
         emitRepeatedAtom(context, atomCode, addZeroAdvanceCheck, advReg);
-        context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
+        context.emit(RegExpOpcode.GOTO);
         int offset = loopStart - (context.buffer.size() + 4);
         context.buffer.appendU32(offset);
     }
 
-    /**
-     * The declared payload length of a {@code RANGE}-family instruction.
-     * <p>
-     * The compiler re-reads its own bytecode when it decides whether a quantifier body always advances and whether it
-     * needs per-iteration capture resets, so the header layout is known in two places besides the matcher. When the
-     * length field was widened from 16 to 32 bits these readers kept decoding two bytes, walked off the end of the
-     * instruction, and concluded that a body as ordinary as {@code \D} might not advance — which added an advance check
-     * and a register to every iteration and made a long subject exhaust the backtracking budget.
-     *
-     * @param code
-     *            the atom bytecode
-     * @param offset
-     *            the offset of the opcode byte
-     * @return the number of payload bytes following the length field
-     */
-    private static int readRangePayloadLength(byte[] code, int offset) {
-        return (code[offset + 1] & 0xFF) | ((code[offset + 2] & 0xFF) << 8) | ((code[offset + 3] & 0xFF) << 16)
-                | ((code[offset + 4] & 0xFF) << 24);
-    }
 }

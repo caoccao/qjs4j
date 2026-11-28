@@ -67,9 +67,7 @@ public class SetConstructorTest extends BaseJavetTest {
     void testSetConstructorIterableEdgeCases() {
         assertBooleanWithJavet("""
                 var set = new Set(new Set([0, 1, 2]));
-                set.size === 3 && set.has(0) && set.has(1) && set.has(2)""");
-
-        assertBooleanWithJavet("""
+                set.size === 3 && set.has(0) && set.has(1) && set.has(2)""", """
                 var set = new Set('aba');
                 set.size === 2 && set.has('a') && set.has('b')""");
 

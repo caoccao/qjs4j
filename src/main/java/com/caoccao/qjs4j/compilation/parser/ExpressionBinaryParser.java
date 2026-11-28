@@ -30,10 +30,7 @@ final class ExpressionBinaryParser {
     }
 
     private boolean isDisallowedExponentiationUnaryBaseToken(TokenType tokenType) {
-        return switch (tokenType) {
-            case BIT_NOT, DELETE, MINUS, NOT, PLUS, TYPEOF, VOID -> true;
-            default -> false;
-        };
+        return UnaryExpression.UnaryOperator.prefixOperator(tokenType) != null;
     }
 
     private Expression parseBinaryExpression(int minimumPrecedence) {

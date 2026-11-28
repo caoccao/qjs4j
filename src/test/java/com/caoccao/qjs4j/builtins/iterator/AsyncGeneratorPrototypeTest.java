@@ -107,8 +107,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() method
-        JSValue result = callBuiltin(AsyncGeneratorPrototype::next, generator);
-        JSPromise promise = result.asPromise().orElseThrow();
+        JSPromise promise = callBuiltin(AsyncGeneratorPrototype::next, generator).asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
 
         // Check the result
@@ -118,8 +117,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNextOnNonAsyncGenerator() {
         // Test next() called on non-async generator
-        JSValue result = callBuiltin(AsyncGeneratorPrototype::next, new JSString("not a generator"));
-        assertInvalidReceiverRejection(result);
+        assertInvalidReceiverRejection(callBuiltin(AsyncGeneratorPrototype::next, "not a generator"));
     }
 
     @Test
@@ -143,9 +141,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() with a value parameter
-        JSValue result = callBuiltin(AsyncGeneratorPrototype::next, generator, "ignored");
-
-        JSPromise promise = result.asPromise().orElseThrow();
+        JSPromise promise = callBuiltin(AsyncGeneratorPrototype::next, generator, "ignored").asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
 
         // Check the result
@@ -160,9 +156,8 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
         // Test return() method
         JSValue returnValue = new JSString("early return");
-        JSValue result = callBuiltin(AsyncGeneratorPrototype::return_, generator, returnValue);
-
-        JSPromise promise = result.asPromise().orElseThrow();
+        JSPromise promise = callBuiltin(AsyncGeneratorPrototype::return_, generator, returnValue).asPromise()
+                .orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
 
         // Check the result
@@ -172,8 +167,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testReturnOnNonAsyncGenerator() {
         // Test return() called on non-async generator
-        JSValue result = callBuiltin(AsyncGeneratorPrototype::return_, new JSNumber(123), "value");
-        assertInvalidReceiverRejection(result);
+        assertInvalidReceiverRejection(callBuiltin(AsyncGeneratorPrototype::return_, 123, "value"));
     }
 
     @Test
@@ -198,9 +192,8 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
         // Test throw() method
         JSValue exception = new JSString("test exception");
-        JSValue result = callBuiltin(AsyncGeneratorPrototype::throw_, generator, exception);
-
-        JSPromise promise = result.asPromise().orElseThrow();
+        JSPromise promise = callBuiltin(AsyncGeneratorPrototype::throw_, generator, exception).asPromise()
+                .orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
 
         // The promise should be rejected with the exception
@@ -211,8 +204,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testThrowOnNonAsyncGenerator() {
         // Test throw() called on non-async generator
-        JSValue result = callBuiltin(AsyncGeneratorPrototype::throw_, new JSObject(context), "error");
-        assertInvalidReceiverRejection(result);
+        assertInvalidReceiverRejection(callBuiltin(AsyncGeneratorPrototype::throw_, new JSObject(context), "error"));
     }
 
     @Test

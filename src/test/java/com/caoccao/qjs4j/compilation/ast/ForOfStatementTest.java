@@ -51,8 +51,7 @@ public class ForOfStatementTest extends BaseJavetTest {
                   return result;
                 }
                 test()""";
-        JSValue value = context.eval(code);
-        assertThat(value.toString()).isEqualTo("abc");
+        assertThat(context.eval(code).toString()).isEqualTo("abc");
     }
 
     @Test

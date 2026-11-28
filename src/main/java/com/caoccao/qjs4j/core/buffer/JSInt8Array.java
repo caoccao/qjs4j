@@ -31,19 +31,14 @@ public final class JSInt8Array extends JSTypedArray {
      * Create an Int8Array view on an existing buffer.
      */
     public JSInt8Array(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
+        super(context, buffer, byteOffset, length, TypedArrayKind.INT8);
     }
 
     /**
      * Create an Int8Array with a new buffer.
      */
     public JSInt8Array(JSContext context, long length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.INT8;
+        super(context, length, TypedArrayKind.INT8);
     }
 
     @Override

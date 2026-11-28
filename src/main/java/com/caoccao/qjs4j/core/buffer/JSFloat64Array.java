@@ -31,19 +31,14 @@ public final class JSFloat64Array extends JSTypedArray {
      * Create a Float64Array view on an existing buffer.
      */
     public JSFloat64Array(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
-        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
+        super(context, buffer, byteOffset, length, TypedArrayKind.FLOAT64);
     }
 
     /**
      * Create a Float64Array with a new buffer.
      */
     public JSFloat64Array(JSContext context, long length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    TypedArrayKind elementKind() {
-        return TypedArrayKind.FLOAT64;
+        super(context, length, TypedArrayKind.FLOAT64);
     }
 
     @Override
