@@ -59,7 +59,7 @@ public final class JSSuppressedError extends JSError {
         boolean hasMessage = args.length > 2 && !(args[2] instanceof JSUndefined);
         String messageStr = null;
         if (hasMessage) {
-            messageStr = JSTypeConversions.toString(context, args[2]).value();
+            messageStr = JSTypeConversions.toJavaString(context, args[2]);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

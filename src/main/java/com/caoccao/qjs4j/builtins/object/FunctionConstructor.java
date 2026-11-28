@@ -175,7 +175,7 @@ public final class FunctionConstructor {
 
     private static String toSourceString(JSContext context, JSValue value) {
         try {
-            String result = JSTypeConversions.toString(context, value).value();
+            String result = JSTypeConversions.toJavaString(context, value);
             if (context.hasPendingException()) {
                 return null;
             }

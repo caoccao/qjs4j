@@ -523,7 +523,7 @@ public final class AtomicsObject implements AutoCloseable {
 
     private static double getAtomicsWaitTimeout(JSContext context, JSValue[] args, int timeoutArgIndex) {
         JSValue timeoutValue = args.length > timeoutArgIndex ? args[timeoutArgIndex] : JSUndefined.INSTANCE;
-        double timeoutNumber = JSTypeConversions.toNumber(context, timeoutValue).value();
+        double timeoutNumber = JSTypeConversions.toDouble(context, timeoutValue);
         if (Double.isNaN(timeoutNumber)) {
             return Double.POSITIVE_INFINITY;
         }

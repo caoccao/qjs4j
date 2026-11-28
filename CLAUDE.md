@@ -86,7 +86,7 @@ Test262 time zone: UTC
 com.caoccao.qjs4j/
 ├── compilation/           ← Frontend pipeline
 │   ├── ast/               Records implementing sealed interfaces (Expression, Statement, etc.)
-│   ├── compiler/          Compiler (entry), BytecodeCompiler, CompilerContext, EmitHelpers
+│   ├── compiler/          Compiler (entry), BytecodeCompiler, CompilerContext, BytecodeEmitter
 │   ├── lexer/             Lexer, LexerTemplateScanner
 │   └── parser/            Parser, ParserContext, Expression*Parser, StatementParser
 ├── core/                  ← JSContext, JSRuntime, JSGlobalObject, JSValue hierarchy

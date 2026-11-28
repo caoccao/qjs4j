@@ -157,6 +157,11 @@ final class ExecutionContext {
         virtualMachine.context.clearPendingException();
     }
 
+    /** Compact integer and jump instructions carry a signed byte or short. */
+    int signedCompactOperand(Opcode op) {
+        return op.getSize() == 2 ? instructions[pc + 1] : (short) operandU16();
+    }
+
     JSStackValue[] stack() {
         return virtualMachine.valueStack.stack;
     }

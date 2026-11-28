@@ -658,7 +658,7 @@ public final class TemporalUtils {
      * was set.
      */
     public static int toIntegerThrowOnInfinity(JSContext context, JSValue value) {
-        double numericValue = JSTypeConversions.toNumber(context, value).value();
+        double numericValue = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return Integer.MIN_VALUE;
         }
@@ -674,7 +674,7 @@ public final class TemporalUtils {
      * rejects fractional values. Returns Long.MIN_VALUE if a pending exception was set.
      */
     public static long toLongIfIntegral(JSContext context, JSValue value) {
-        double numericValue = JSTypeConversions.toNumber(context, value).value();
+        double numericValue = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return Long.MIN_VALUE;
         }

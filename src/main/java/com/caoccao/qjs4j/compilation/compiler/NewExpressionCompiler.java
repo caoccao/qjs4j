@@ -32,7 +32,7 @@ final class NewExpressionCompiler {
 
         if (hasSpread) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            EmitHelpers.emitArgumentsArrayWithSpread(compilerContext, newExpr.getArguments());
+            ArrayExpressionCompiler.emitArray(compilerContext, newExpr.getArguments());
             // A frame stopped at a `new` reports the position of the `new` keyword, as V8 does.
             compilerContext.emitter.emitSourcePosition(newExpr.getLocation());
             compilerContext.emitter.emitCallDescription(CallPrinter.describeCallee(newExpr.getCallee()));

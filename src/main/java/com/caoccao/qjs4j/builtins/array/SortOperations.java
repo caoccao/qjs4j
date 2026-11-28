@@ -38,11 +38,11 @@ final class SortOperations {
         if (!(comparator instanceof JSUndefined)) {
             return compareWithCallback(context, comparator, left, right);
         }
-        String leftString = JSTypeConversions.toString(context, left).value();
+        String leftString = JSTypeConversions.toJavaString(context, left);
         if (context.hasPendingException()) {
             return 0;
         }
-        String rightString = JSTypeConversions.toString(context, right).value();
+        String rightString = JSTypeConversions.toJavaString(context, right);
         return leftString.compareTo(rightString);
     }
 
@@ -90,7 +90,7 @@ final class SortOperations {
         if (context.hasPendingException()) {
             return 0;
         }
-        double number = JSTypeConversions.toNumber(context, result).value();
+        double number = JSTypeConversions.toDouble(context, result);
         return Double.isNaN(number) || number == 0 ? 0 : number < 0 ? -1 : 1;
     }
 

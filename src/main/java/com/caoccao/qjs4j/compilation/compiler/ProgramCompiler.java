@@ -187,7 +187,7 @@ final class ProgramCompiler {
                     }
                     emitter.emitUndefinedLocal(localIndex);
                 } else {
-                    EmitHelpers.emitConditionalVarInit(compilerContext, varName);
+                    compilerContext.emitter.emitConditionalVarInit(varName);
                 }
             }
         }
@@ -256,7 +256,7 @@ final class ProgramCompiler {
     private static void finishProgram(CompilerContext compilerContext) {
         BytecodeEmitter emitter = compilerContext.emitter;
         int programResultLocalIndex = compilerContext.storeTemporary("#program_result_");
-        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         emitter.emitGetLocal(programResultLocalIndex);
         emitter.emitOpcode(Opcode.RETURN);
 

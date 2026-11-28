@@ -67,9 +67,8 @@ final class StatementParser {
     }
 
     private static boolean isDebuggerKeyword(ParserContext parserContext) {
-        return parserContext.currentToken.type() == TokenType.IDENTIFIER
-                && JSKeyword.DEBUGGER.equals(parserContext.currentToken.value())
-                && !parserContext.currentToken.escaped();
+        TokenCursor tokens = parserContext.tokens;
+        return tokens.identifier(JSKeyword.DEBUGGER) && !tokens.current().escaped();
     }
 
     private static boolean isLabelledFunction(Statement statement) {
@@ -83,22 +82,23 @@ final class StatementParser {
     }
 
     private static boolean isLabelStart(ParserContext parserContext) {
-        Token lookaheadToken = parserContext.peek();
+        Token lookaheadToken = parserContext.tokens.next();
         if (lookaheadToken == null || lookaheadToken.type() != TokenType.COLON) {
             return false;
         }
-        return parserContext.currentToken.type().isIdentifierCandidate();
+        return parserContext.tokens.current().type().isIdentifierCandidate();
     }
 
     private static boolean isUsingDeclarationStartInForHead(ParserContext parserContext) {
-        if (!parserContext.isUsingDeclarationStart()) {
+        TokenCursor tokens = parserContext.tokens;
+        if (!tokens.isUsingDeclarationStart()) {
             return false;
         }
-        Token bindingIdentifierToken = parserContext.peek();
+        Token bindingIdentifierToken = tokens.next();
         if (bindingIdentifierToken == null || bindingIdentifierToken.type() != TokenType.OF) {
             return true;
         }
-        Token tokenAfterBindingIdentifier = parserContext.lexer.peekToken();
+        Token tokenAfterBindingIdentifier = tokens.lookAheadAfterNext();
         if (tokenAfterBindingIdentifier == null) {
             return true;
         }
@@ -106,16 +106,15 @@ final class StatementParser {
     }
 
     private static boolean isWithKeyword(ParserContext parserContext) {
-        return parserContext.currentToken.type() == TokenType.IDENTIFIER
-                && JSKeyword.WITH.equals(parserContext.currentToken.value());
+        return parserContext.tokens.identifier(JSKeyword.WITH);
     }
 
     static Statement parseAsyncDeclaration(ParserContext parserContext) {
+        TokenCursor tokens = parserContext.tokens;
         // ES2024: [no LineTerminator here] between `async` and `function`.
         // If there's a line terminator, `async` is an identifier expression statement.
-        if (parserContext.nextToken.type() == TokenType.FUNCTION
-                && parserContext.nextToken.line() == parserContext.currentToken.line()) {
-            SourceLocation asyncLocation = parserContext.consumeLocation(); // consume async
+        if (tokens.nextOnSameLine(TokenType.FUNCTION)) {
+            SourceLocation asyncLocation = tokens.consumeLocation(); // consume async
             return FunctionClassParser.parseFunctionDeclaration(parserContext, true, false, asyncLocation);
         } else {
             return parseExpressionStatement(parserContext);
@@ -134,11 +133,12 @@ final class StatementParser {
      * @return the block
      */
     static BlockStatement parseBlockStatement(ParserContext parserContext, boolean functionBody) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACE);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.LBRACE);
 
-        if (parserContext.match(TokenType.RBRACE)) {
-            parserContext.expect(TokenType.RBRACE);
+        if (tokens.match(TokenType.RBRACE)) {
+            tokens.expect(TokenType.RBRACE);
             return new BlockStatement(List.of(), location);
         }
 
@@ -150,26 +150,27 @@ final class StatementParser {
         } else {
             parserContext.declarations.validateBlockEarlyErrors(body);
         }
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
         return new BlockStatement(body, location);
     }
 
     static BlockStatement parseBlockStatementAsBody(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACE);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.LBRACE);
 
         List<Statement> body = new ArrayList<>();
         boolean hasUseStrict = parserContext.parseDirectives(body);
 
         parseFunctionStatements(parserContext, body);
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
         BlockStatement block = new BlockStatement(body, location);
         block.setHasUseStrictDirective(hasUseStrict);
         return block;
     }
 
     private static void parseBlockStatements(ParserContext parserContext, List<Statement> body) {
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+        while (!parserContext.tokens.match(TokenType.RBRACE) && !parserContext.tokens.match(TokenType.EOF)) {
             Statement stmt = parseStatement(parserContext);
             if (stmt != null) {
                 body.add(stmt);
@@ -178,37 +179,38 @@ final class StatementParser {
     }
 
     static Statement parseBreakStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.BREAK);
+        SourceLocation location = parserContext.tokens.getLocation();
+        parserContext.tokens.expect(TokenType.BREAK);
         return new BreakStatement(parseJumpLabel(parserContext), location);
     }
 
     static Statement parseContinueStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.CONTINUE);
+        SourceLocation location = parserContext.tokens.getLocation();
+        parserContext.tokens.expect(TokenType.CONTINUE);
         return new ContinueStatement(parseJumpLabel(parserContext), location);
     }
 
     private static Statement parseDebuggerStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.consumeLocation();
+        SourceLocation location = parserContext.tokens.consumeLocation();
         parserContext.consumeSemicolon();
         return new DebuggerStatement(location);
     }
 
     static Statement parseDoWhileStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.DO);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.DO);
         Statement body = parseIterationBody(parserContext, "do-while");
-        parserContext.expect(TokenType.WHILE);
-        parserContext.expect(TokenType.LPAREN);
+        tokens.expect(TokenType.WHILE);
+        tokens.expect(TokenType.LPAREN);
         Expression test = ExpressionAssignmentParser.parseExpression(parserContext);
-        parserContext.expect(TokenType.RPAREN);
-        parserContext.consumeIf(TokenType.SEMICOLON);
+        tokens.expect(TokenType.RPAREN);
+        tokens.consumeIf(TokenType.SEMICOLON);
         return new DoWhileStatement(body, test, location);
     }
 
     static Statement parseExpressionStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
+        SourceLocation location = parserContext.tokens.getLocation();
         Expression expression = ExpressionAssignmentParser.parseExpression(parserContext);
         if (expression instanceof ObjectExpression objectExpression && containsCoverInitializedName(objectExpression)) {
             throw new JSSyntaxErrorException("Invalid shorthand property initializer");
@@ -218,15 +220,16 @@ final class StatementParser {
     }
 
     private static VariableDeclaration parseForDeclaration(ParserContext parserContext, boolean using) {
-        SourceLocation location = parserContext.getLocation();
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
         VariableKind kind;
-        if (parserContext.isAwaitUsingDeclarationStart()) {
-            parserContext.expect(TokenType.AWAIT);
+        if (tokens.isAwaitUsingDeclarationStart()) {
+            tokens.expect(TokenType.AWAIT);
             kind = VariableKind.AWAIT_USING;
         } else {
-            kind = using ? VariableKind.USING : VariableKind.fromKeyword(parserContext.currentToken.value());
+            kind = using ? VariableKind.USING : VariableKind.fromKeyword(tokens.current().value());
         }
-        parserContext.advance();
+        tokens.advance();
         boolean savedIn = parserContext.inOperatorAllowed;
         parserContext.inOperatorAllowed = false;
         try {
@@ -238,7 +241,8 @@ final class StatementParser {
 
     private static Statement parseForEach(ParserContext parserContext, ASTNode left, boolean isAwait,
             SourceLocation location) {
-        boolean of = parserContext.match(TokenType.OF);
+        TokenCursor tokens = parserContext.tokens;
+        boolean of = tokens.match(TokenType.OF);
         String kind = of ? "for-of" : "for-in";
         if (!of) {
             requireSynchronousFor(isAwait);
@@ -260,13 +264,13 @@ final class StatementParser {
                 validateForInDeclarationInitializers(parserContext, declaration);
             }
         } else {
-            validateForTarget(parserContext, (Expression) left, parserContext.currentToken.offset());
+            validateForTarget(parserContext, (Expression) left, tokens.current().offset());
         }
-        parserContext.advance();
+        tokens.advance();
         Expression right = of
                 ? ExpressionAssignmentParser.parseAssignmentExpression(parserContext)
                 : ExpressionAssignmentParser.parseExpression(parserContext);
-        parserContext.expect(TokenType.RPAREN);
+        tokens.expect(TokenType.RPAREN);
         Statement body = parseIterationBody(parserContext, kind);
         if (left instanceof VariableDeclaration declaration) {
             parserContext.declarations.validateForInOfDeclarationBodyEarlyErrors(declaration, body);
@@ -277,28 +281,29 @@ final class StatementParser {
     }
 
     static Statement parseForStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.FOR);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.FOR);
 
         // Check for 'await' keyword (for await...of)
         boolean isAwait = false;
-        if (parserContext.match(TokenType.AWAIT)) {
+        if (tokens.match(TokenType.AWAIT)) {
             if (!parserContext.isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
             isAwait = true;
-            parserContext.advance();
+            tokens.advance();
         }
 
-        parserContext.expect(TokenType.LPAREN);
+        tokens.expect(TokenType.LPAREN);
 
         boolean using = isUsingDeclarationStartInForHead(parserContext);
         Statement init = null;
-        if (using || parserContext.isAwaitUsingDeclarationStart() || parserContext.match(TokenType.VAR)
-                || parserContext.match(TokenType.CONST)
-                || (parserContext.match(TokenType.LET) && shouldParseLetAsLexicalDeclarationInForHead(parserContext))) {
+        if (using || tokens.isAwaitUsingDeclarationStart() || tokens.match(TokenType.VAR)
+                || tokens.match(TokenType.CONST)
+                || (tokens.match(TokenType.LET) && shouldParseLetAsLexicalDeclarationInForHead(parserContext))) {
             VariableDeclaration declaration = parseForDeclaration(parserContext, using);
-            if (parserContext.match(TokenType.OF) || parserContext.match(TokenType.IN)) {
+            if (tokens.match(TokenType.OF) || tokens.match(TokenType.IN)) {
                 return parseForEach(parserContext, declaration, isAwait, location);
             }
             requireSynchronousFor(isAwait);
@@ -307,12 +312,12 @@ final class StatementParser {
                 throw new JSSyntaxErrorException("Missing initializer in const declaration");
             }
             init = declaration;
-            parserContext.expect(TokenType.SEMICOLON);
-        } else if (parserContext.match(TokenType.SEMICOLON)) {
+            tokens.expect(TokenType.SEMICOLON);
+        } else if (tokens.match(TokenType.SEMICOLON)) {
             requireSynchronousFor(isAwait);
-            parserContext.advance();
+            tokens.advance();
         } else {
-            TokenType first = parserContext.currentToken.type();
+            TokenType first = tokens.current().type();
             boolean savedIn = parserContext.inOperatorAllowed;
             parserContext.inOperatorAllowed = first == TokenType.LBRACKET || first == TokenType.LBRACE;
             Expression expr;
@@ -322,26 +327,23 @@ final class StatementParser {
                 parserContext.inOperatorAllowed = savedIn;
             }
             if (expr instanceof BinaryExpression binary && binary.getOperator() == BinaryOperator.IN
-                    && parserContext.match(TokenType.RPAREN)) {
+                    && tokens.match(TokenType.RPAREN)) {
                 requireSynchronousFor(isAwait);
-                int offset = binary.getLocation() != null
-                        ? binary.getLocation().offset()
-                        : parserContext.currentToken.offset();
+                int offset = binary.getLocation() != null ? binary.getLocation().offset() : tokens.current().offset();
                 validateForTarget(parserContext, binary.getLeft(), offset);
-                parserContext.expect(TokenType.RPAREN);
+                tokens.expect(TokenType.RPAREN);
                 return new ForInStatement(binary.getLeft(), binary.getRight(),
                         parseIterationBody(parserContext, "for-in"), location);
             }
-            if (parserContext.match(TokenType.IN) || parserContext.match(TokenType.OF)) {
-                if (!isAwait && parserContext.match(TokenType.OF)
-                        && (first == TokenType.LET || (first == TokenType.ASYNC && expr instanceof Identifier id
-                                && JSKeyword.ASYNC.equals(id.getName())))) {
+            if (tokens.match(TokenType.IN) || tokens.match(TokenType.OF)) {
+                if (!isAwait && tokens.match(TokenType.OF) && (first == TokenType.LET || (first == TokenType.ASYNC
+                        && expr instanceof Identifier id && JSKeyword.ASYNC.equals(id.getName())))) {
                     throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
                 }
                 return parseForEach(parserContext, expr, isAwait, location);
             }
             requireSynchronousFor(isAwait);
-            while (parserContext.consumeIf(TokenType.COMMA)) {
+            while (tokens.consumeIf(TokenType.COMMA)) {
                 Expression right = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                 expr = new SequenceExpression(List.of(expr, right), expr.getLocation());
             }
@@ -351,17 +353,17 @@ final class StatementParser {
 
         // Test
         Expression test = null;
-        if (!parserContext.match(TokenType.SEMICOLON)) {
+        if (!tokens.match(TokenType.SEMICOLON)) {
             test = ExpressionAssignmentParser.parseExpression(parserContext);
         }
-        parserContext.expect(TokenType.SEMICOLON);
+        tokens.expect(TokenType.SEMICOLON);
 
         // Update
         Expression update = null;
-        if (!parserContext.match(TokenType.RPAREN)) {
+        if (!tokens.match(TokenType.RPAREN)) {
             update = ExpressionAssignmentParser.parseExpression(parserContext);
         }
-        parserContext.expect(TokenType.RPAREN);
+        tokens.expect(TokenType.RPAREN);
 
         Statement body = parseIterationBody(parserContext, "for");
         if (init instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
@@ -382,11 +384,12 @@ final class StatementParser {
     }
 
     static Statement parseIfStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.IF);
-        parserContext.expect(TokenType.LPAREN);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.IF);
+        tokens.expect(TokenType.LPAREN);
         Expression test = ExpressionAssignmentParser.parseExpression(parserContext);
-        parserContext.expect(TokenType.RPAREN);
+        tokens.expect(TokenType.RPAREN);
 
         Statement consequent = parseStatement(parserContext);
         validateNoLexicalDeclarationInStatementPosition(consequent);
@@ -395,7 +398,7 @@ final class StatementParser {
         validateFunctionInStatementPosition(parserContext, consequent, "if");
         Statement alternate = null;
 
-        if (parserContext.consumeIf(TokenType.ELSE)) {
+        if (tokens.consumeIf(TokenType.ELSE)) {
             alternate = parseStatement(parserContext);
             validateNoLexicalDeclarationInStatementPosition(alternate);
             validateNoUsingDeclarationWithInitializerInStatementPosition(alternate);
@@ -417,7 +420,7 @@ final class StatementParser {
 
     private static Identifier parseJumpLabel(ParserContext parserContext) {
         Identifier label = null;
-        if (parserContext.currentToken.type().isIdentifierCandidate() && !parserContext.hasNewlineBefore()) {
+        if (parserContext.tokens.current().type().isIdentifierCandidate() && !parserContext.tokens.hasNewlineBefore()) {
             label = parserContext.parseIdentifier();
         }
         parserContext.consumeSemicolon();
@@ -429,7 +432,7 @@ final class StatementParser {
      * non-strict mode, labeled function declarations are allowed (Annex B).
      */
     static Statement parseLabeledStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
+        SourceLocation location = parserContext.tokens.getLocation();
         Identifier label = parserContext.parseIdentifier();
         // ES2024 14.13.1: It is a Syntax Error if any source text is matched by
         // this production that also matches the LabelIdentifier of an enclosing LabelledStatement.
@@ -438,7 +441,7 @@ final class StatementParser {
                 throw new JSSyntaxErrorException("Label '" + label.getName() + "' has already been declared");
             }
         }
-        parserContext.expect(TokenType.COLON);
+        parserContext.tokens.expect(TokenType.COLON);
         Set<String> currentLabels = new HashSet<>();
         currentLabels.add(label.getName());
         parserContext.labelStack.push(currentLabels);
@@ -454,16 +457,17 @@ final class StatementParser {
     }
 
     static Statement parseReturnStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
         // Return is only valid inside function bodies.
         if (parserContext.inClassStaticInit || parserContext.functionNesting == 0) {
             throw new JSSyntaxErrorException("return not in a function");
         }
-        parserContext.expect(TokenType.RETURN);
+        tokens.expect(TokenType.RETURN);
 
         Expression argument = null;
-        if (!parserContext.hasNewlineBefore() && !parserContext.match(TokenType.SEMICOLON)
-                && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+        if (!tokens.hasNewlineBefore() && !tokens.match(TokenType.SEMICOLON) && !tokens.match(TokenType.RBRACE)
+                && !tokens.match(TokenType.EOF)) {
             argument = ExpressionAssignmentParser.parseExpression(parserContext);
         }
 
@@ -472,13 +476,14 @@ final class StatementParser {
     }
 
     static Statement parseStatement(ParserContext parserContext) {
+        TokenCursor tokens = parserContext.tokens;
         parserContext.statementNesting++;
         try {
-            if (parserContext.isAwaitUsingDeclarationStart()) {
+            if (tokens.isAwaitUsingDeclarationStart()) {
                 validateAwaitUsingDeclarationPlacement(parserContext);
                 return parseUsingDeclaration(parserContext, true);
             }
-            if (parserContext.isUsingDeclarationStart()) {
+            if (tokens.isUsingDeclarationStart()) {
                 return parseUsingDeclaration(parserContext, false);
             }
             if (isDebuggerKeyword(parserContext)) {
@@ -492,7 +497,7 @@ final class StatementParser {
             if (isLabelStart(parserContext)) {
                 return parseLabeledStatement(parserContext);
             }
-            return switch (parserContext.currentToken.type()) {
+            return switch (tokens.current().type()) {
                 case IF -> parseIfStatement(parserContext);
                 case DO -> parseDoWhileStatement(parserContext);
                 case WHILE -> parseWhileStatement(parserContext);
@@ -508,9 +513,8 @@ final class StatementParser {
                     // In sloppy mode, 'let' can be an identifier (not a declaration keyword)
                     // when NOT followed by an identifier, '[', or '{'
                     if (!parserContext.strictMode) {
-                        Token nextTok = parserContext.peek();
-                        boolean hasLineTerminatorAfterLet = nextTok != null
-                                && nextTok.line() > parserContext.currentToken.line();
+                        Token nextTok = tokens.next();
+                        boolean hasLineTerminatorAfterLet = nextTok != null && nextTok.line() > tokens.current().line();
                         boolean treatLetAsExpressionByAsi = hasLineTerminatorAfterLet
                                 && (nextTok.type() == TokenType.IDENTIFIER || nextTok.type() == TokenType.LBRACE);
                         if (nextTok == null || treatLetAsExpressionByAsi
@@ -537,7 +541,7 @@ final class StatementParser {
                     yield parserContext.modules().parseExportDeclaration();
                 }
                 case IMPORT -> {
-                    Token nextToken = parserContext.peek();
+                    Token nextToken = tokens.next();
                     boolean isDynamicImportExpression = nextToken != null
                             && (nextToken.type() == TokenType.LPAREN || nextToken.type() == TokenType.DOT);
                     if (!isDynamicImportExpression) {
@@ -550,7 +554,7 @@ final class StatementParser {
                     yield parseExpressionStatement(parserContext);
                 }
                 case SEMICOLON -> {
-                    parserContext.advance(); // consume semicolon
+                    tokens.advance(); // consume semicolon
                     yield null; // empty statement
                 }
                 default -> parseExpressionStatement(parserContext);
@@ -561,32 +565,33 @@ final class StatementParser {
     }
 
     static Statement parseSwitchStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.SWITCH);
-        parserContext.expect(TokenType.LPAREN);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.SWITCH);
+        tokens.expect(TokenType.LPAREN);
         Expression discriminant = ExpressionAssignmentParser.parseExpression(parserContext);
-        parserContext.expect(TokenType.RPAREN);
-        parserContext.expect(TokenType.LBRACE);
+        tokens.expect(TokenType.RPAREN);
+        tokens.expect(TokenType.LBRACE);
 
         List<SwitchStatement.SwitchCase> cases = new ArrayList<>();
         boolean defaultClauseFound = false;
 
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+        while (!tokens.match(TokenType.RBRACE) && !tokens.match(TokenType.EOF)) {
             Expression test = null;
-            if (parserContext.consumeIf(TokenType.CASE)) {
+            if (tokens.consumeIf(TokenType.CASE)) {
                 test = ExpressionAssignmentParser.parseExpression(parserContext);
-            } else if (parserContext.consumeIf(TokenType.DEFAULT)) {
+            } else if (tokens.consumeIf(TokenType.DEFAULT)) {
                 if (defaultClauseFound) {
                     throw new JSSyntaxErrorException("More than one default clause in switch statement");
                 }
                 defaultClauseFound = true;
             } else {
-                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+                throw tokens.unexpectedToken();
             }
-            parserContext.expect(TokenType.COLON);
+            tokens.expect(TokenType.COLON);
             List<Statement> consequent = new ArrayList<>();
-            while (!parserContext.match(TokenType.CASE) && !parserContext.match(TokenType.DEFAULT)
-                    && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            while (!tokens.match(TokenType.CASE) && !tokens.match(TokenType.DEFAULT) && !tokens.match(TokenType.RBRACE)
+                    && !tokens.match(TokenType.EOF)) {
                 Statement stmt = parseStatement(parserContext);
                 if (stmt != null) {
                     consequent.add(stmt);
@@ -595,15 +600,16 @@ final class StatementParser {
             cases.add(new SwitchStatement.SwitchCase(test, consequent));
         }
 
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
         parserContext.declarations.validateSwitchCaseBlockEarlyErrors(cases);
         return new SwitchStatement(discriminant, cases, location);
     }
 
     static Statement parseThrowStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.THROW);
-        if (parserContext.hasNewlineBefore()) {
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.THROW);
+        if (tokens.hasNewlineBefore()) {
             throw new JSSyntaxErrorException("Illegal newline after throw");
         }
         Expression argument = ExpressionAssignmentParser.parseExpression(parserContext);
@@ -612,14 +618,15 @@ final class StatementParser {
     }
 
     static Statement parseTryStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.TRY);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.TRY);
         BlockStatement block = parseBlockStatement(parserContext);
 
         TryStatement.CatchClause handler = null;
-        if (parserContext.consumeIf(TokenType.CATCH)) {
+        if (tokens.consumeIf(TokenType.CATCH)) {
             Pattern param = null;
-            if (parserContext.consumeIf(TokenType.LPAREN)) {
+            if (tokens.consumeIf(TokenType.LPAREN)) {
                 param = PatternParser.parsePattern(parserContext);
                 Set<String> boundNames = new HashSet<>();
                 parserContext.declarations.collectPatternBoundNamesAndCheckDuplicates(param, boundNames);
@@ -630,7 +637,7 @@ final class StatementParser {
                         }
                     }
                 }
-                parserContext.expect(TokenType.RPAREN);
+                tokens.expect(TokenType.RPAREN);
             }
             BlockStatement catchBody = parseBlockStatement(parserContext);
             parserContext.declarations.validateCatchClauseEarlyErrors(param, catchBody);
@@ -638,7 +645,7 @@ final class StatementParser {
         }
 
         BlockStatement finalizer = null;
-        if (parserContext.consumeIf(TokenType.FINALLY)) {
+        if (tokens.consumeIf(TokenType.FINALLY)) {
             finalizer = parseBlockStatement(parserContext);
         }
 
@@ -650,32 +657,34 @@ final class StatementParser {
     }
 
     static Statement parseUsingDeclaration(ParserContext parserContext, boolean isAwaitUsing) {
-        SourceLocation location = parserContext.getLocation();
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
         VariableKind kind;
         if (isAwaitUsing) {
             if (!parserContext.isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
-            parserContext.expect(TokenType.AWAIT);
-            if (!parserContext.isUsingIdentifierToken(parserContext.currentToken)) {
-                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+            tokens.expect(TokenType.AWAIT);
+            if (!tokens.isUsingIdentifierToken(tokens.current())) {
+                throw tokens.unexpectedToken();
             }
-            parserContext.advance();
+            tokens.advance();
             kind = VariableKind.AWAIT_USING;
         } else {
-            if (!parserContext.isUsingIdentifierToken(parserContext.currentToken)) {
-                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+            if (!tokens.isUsingIdentifierToken(tokens.current())) {
+                throw tokens.unexpectedToken();
             }
-            parserContext.advance();
+            tokens.advance();
             kind = VariableKind.USING;
         }
         return parseVariableDeclarationBody(parserContext, kind, location);
     }
 
     static Statement parseVariableDeclaration(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        VariableKind kind = VariableKind.fromKeyword(parserContext.currentToken.value()); // VAR, LET, or CONST
-        parserContext.advance();
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        VariableKind kind = VariableKind.fromKeyword(tokens.current().value()); // VAR, LET, or CONST
+        tokens.advance();
         return parseVariableDeclarationBody(parserContext, kind, location);
     }
 
@@ -686,11 +695,12 @@ final class StatementParser {
 
     static VariableDeclaration parseVariableDeclarationBody(ParserContext parserContext, VariableKind kind,
             SourceLocation location, boolean consumeSemi) {
+        TokenCursor tokens = parserContext.tokens;
         boolean isUsingKind = kind == VariableKind.USING || kind == VariableKind.AWAIT_USING;
         List<VariableDeclarator> declarations = new ArrayList<>();
 
         do {
-            if (parserContext.consumeIf(TokenType.COMMA)) {
+            if (tokens.consumeIf(TokenType.COMMA)) {
             }
 
             Pattern id = PatternParser.parsePattern(parserContext);
@@ -715,7 +725,7 @@ final class StatementParser {
             }
             Expression init = null;
 
-            if (parserContext.consumeIf(TokenType.ASSIGN)) {
+            if (tokens.consumeIf(TokenType.ASSIGN)) {
                 init = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
             } else if (kind == VariableKind.CONST && consumeSemi) {
                 throw new JSSyntaxErrorException("Missing initializer in const declaration");
@@ -724,7 +734,7 @@ final class StatementParser {
             }
 
             declarations.add(new VariableDeclarator(id, init));
-        } while (parserContext.match(TokenType.COMMA));
+        } while (tokens.match(TokenType.COMMA));
 
         if (consumeSemi) {
             parserContext.consumeSemicolon();
@@ -733,28 +743,30 @@ final class StatementParser {
     }
 
     static Statement parseWhileStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.WHILE);
-        parserContext.expect(TokenType.LPAREN);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.WHILE);
+        tokens.expect(TokenType.LPAREN);
         Expression test = ExpressionAssignmentParser.parseExpression(parserContext);
-        parserContext.expect(TokenType.RPAREN);
+        tokens.expect(TokenType.RPAREN);
         Statement body = parseIterationBody(parserContext, "while");
 
         return new WhileStatement(test, body, location);
     }
 
     static Statement parseWithStatement(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
         if (parserContext.strictMode) {
             throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
         }
         if (!isWithKeyword(parserContext)) {
             throw new JSSyntaxErrorException("Unexpected token");
         }
-        parserContext.advance(); // consume 'with'
-        parserContext.expect(TokenType.LPAREN);
+        tokens.advance(); // consume 'with'
+        tokens.expect(TokenType.LPAREN);
         Expression object = ExpressionAssignmentParser.parseExpression(parserContext);
-        parserContext.expect(TokenType.RPAREN);
+        tokens.expect(TokenType.RPAREN);
         Statement body = parseStatement(parserContext);
         validateNoFunctionDeclarationInWithStatementPosition(body);
         validateNoLabelledFunctionInWithStatementPosition(body);
@@ -769,13 +781,13 @@ final class StatementParser {
     }
 
     private static boolean shouldParseLetAsLexicalDeclarationInForHead(ParserContext parserContext) {
-        if (!parserContext.match(TokenType.LET)) {
+        if (!parserContext.tokens.match(TokenType.LET)) {
             return true;
         }
         if (parserContext.strictMode) {
             return true;
         }
-        Token lookahead = parserContext.peek();
+        Token lookahead = parserContext.tokens.next();
         if (lookahead == null) {
             return true;
         }

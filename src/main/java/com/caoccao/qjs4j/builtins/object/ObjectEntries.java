@@ -31,7 +31,7 @@ final class ObjectEntries {
             // Step 4d: If nextItem is not an Object, close iterator and throw TypeError
             if (!(nextItem instanceof JSObject entryObj)) {
                 closeIteratorAndThrow(context, iterator, "Iterator value "
-                        + JSTypeConversions.toString(context, nextItem).value() + " is not an entry object");
+                        + JSTypeConversions.toJavaString(context, nextItem) + " is not an entry object");
                 return false;
             }
 

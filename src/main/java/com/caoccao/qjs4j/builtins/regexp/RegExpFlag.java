@@ -69,7 +69,7 @@ enum RegExpFlag {
             if (context.hasPendingException()) {
                 return null;
             }
-            if (JSTypeConversions.toBoolean(value).value()) {
+            if (JSTypeChecking.isTruthy(value)) {
                 flags.append(flag.character);
             }
         }

@@ -62,7 +62,7 @@ public final class RegExpCompiler {
             compilePattern(context);
             if (context.pos != context.codePoints.length) {
                 throw new RegExpSyntaxException(
-                        context.codePoints[context.pos] == ')' ? "Unmatched ')'" : "Unexpected character in pattern");
+                        context.peek() == ')' ? "Unmatched ')'" : "Unexpected character in pattern");
             }
             // End with MATCH opcode
             context.emit(RegExpOpcode.MATCH);
@@ -84,8 +84,8 @@ public final class RegExpCompiler {
     private void compileAlternative(CompileContext context, boolean isBackwardDirection) {
         // An alternative is a sequence of terms (atoms with optional quantifiers)
         int alternativeStart = context.buffer.size();
-        while (context.pos < context.codePoints.length) {
-            int ch = context.codePoints[context.pos];
+        while (context.hasMore()) {
+            int ch = context.peek();
 
             // Check for end of alternative
             if (ch == '|' || ch == ')') {
@@ -102,12 +102,12 @@ public final class RegExpCompiler {
     }
 
     private void compileAtom(CompileContext context, boolean isBackwardDirection) {
-        if (context.pos >= context.codePoints.length) {
+        if (!context.hasMore()) {
             return;
         }
         context.lastAtomCanRepeat = true;
 
-        int ch = context.codePoints[context.pos];
+        int ch = context.peek();
 
         switch (ch) {
             case '^' -> {
@@ -205,8 +205,7 @@ public final class RegExpCompiler {
         compileAlternative(context, isBackwardDirection);
 
         // Handle additional alternatives
-        while (context.pos < context.codePoints.length && context.codePoints[context.pos] == '|') {
-            context.pos++; // Skip '|'
+        while (context.consume('|')) {
 
             int len = context.buffer.size() - start;
 
@@ -226,11 +225,11 @@ public final class RegExpCompiler {
     }
 
     private void compileEscape(CompileContext context, boolean isBackwardDirection) {
-        if (context.pos >= context.codePoints.length) {
+        if (!context.hasMore()) {
             throw new RegExpSyntaxException("Incomplete escape sequence");
         }
 
-        int ch = context.codePoints[context.pos++];
+        int ch = context.read();
         switch (ch) {
             case 'n', 'r', 't', 'f', 'v', '0', 'x', 'u' ->
                 compileLiteralChar(context, readCharacterEscape(context, ch), isBackwardDirection);
@@ -269,10 +268,9 @@ public final class RegExpCompiler {
                     compileLiteralChar(context, 'k', isBackwardDirection);
                     break;
                 }
-                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '<') {
+                if (!context.consume('<')) {
                     throw new RegExpSyntaxException("expecting group name");
                 }
-                context.pos++; // Skip '<'
 
                 String name = RegExpCaptures.readName(context);
                 Integer groupNum = context.captures.indexOf(name);
@@ -295,8 +293,8 @@ public final class RegExpCompiler {
                 int groupNum = ch - '0';
                 int savedPos = context.pos;
                 // Check for multi-digit group numbers
-                while (context.pos < context.codePoints.length) {
-                    int nextCh = context.codePoints[context.pos];
+                while (context.hasMore()) {
+                    int nextCh = context.peek();
                     if (nextCh >= '0' && nextCh <= '9') {
                         groupNum = groupNum * 10 + (nextCh - '0');
                         context.pos++;
@@ -357,9 +355,8 @@ public final class RegExpCompiler {
         // Check for special group syntax
         boolean isCapturing = true;
         String captureName = null;
-        if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '?') {
-            context.pos++;
-            if (context.pos >= context.codePoints.length) {
+        if (context.consume('?')) {
+            if (!context.hasMore()) {
                 throw new RegExpSyntaxException("Invalid group");
             }
             InlineModifierGroupParseResult inlineModifierGroupParseResult = tryParseInlineModifierGroup(context);
@@ -371,14 +368,13 @@ public final class RegExpCompiler {
                 } finally {
                     context.currentFlags = savedFlags;
                 }
-                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
+                if (!context.consume(')')) {
                     throw new RegExpSyntaxException("Unterminated group");
                 }
-                context.pos++;
                 context.lastAtomCanRepeat = true;
                 return;
             }
-            int groupType = context.codePoints[context.pos++];
+            int groupType = context.read();
             if (groupType == ':') {
                 // Non-capturing group (?:...)
                 isCapturing = false;
@@ -393,9 +389,8 @@ public final class RegExpCompiler {
                 context.lastAtomCanRepeat = !context.isUnicodeMode();
                 return;
             } else if (groupType == '<') {
-                if (context.pos < context.codePoints.length
-                        && (context.codePoints[context.pos] == '=' || context.codePoints[context.pos] == '!')) {
-                    boolean isNegative = context.codePoints[context.pos] == '!';
+                if (context.hasMore() && (context.peek() == '=' || context.peek() == '!')) {
+                    boolean isNegative = context.peek() == '!';
                     context.pos++;
                     compileLookaround(context, isNegative, true);
                     context.lastAtomCanRepeat = false;
@@ -423,10 +418,9 @@ public final class RegExpCompiler {
             context.emitU16(isBackwardDirection ? RegExpOpcode.SAVE_START : RegExpOpcode.SAVE_END, groupIndex);
         }
 
-        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
+        if (!context.consume(')')) {
             throw new RegExpSyntaxException("Unterminated group");
         }
-        context.pos++; // Skip ')'
         context.lastAtomCanRepeat = true;
     }
 
@@ -444,10 +438,9 @@ public final class RegExpCompiler {
         compileDisjunction(context, backward);
         context.emit(match);
         context.patchJumpToHere(target);
-        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
+        if (!context.consume(')')) {
             throw new RegExpSyntaxException("Unterminated group");
         }
-        context.pos++; // Skip ')'
     }
 
     private void compilePattern(CompileContext context) {
@@ -476,8 +469,8 @@ public final class RegExpCompiler {
         context.registerPeak = Math.max(enclosingPeak, atomPeak);
 
         // Check for quantifier
-        if (context.pos < context.codePoints.length) {
-            int ch = context.codePoints[context.pos];
+        if (context.hasMore()) {
+            int ch = context.peek();
 
             RegExpQuantifier quantifier = RegExpQuantifier.read(context);
             if (quantifier != null) {
@@ -526,10 +519,10 @@ public final class RegExpCompiler {
      */
 
     private InlineModifierGroupParseResult tryParseInlineModifierGroup(CompileContext context) {
-        if (context.pos >= context.codePoints.length) {
+        if (!context.hasMore()) {
             return null;
         }
-        int startChar = context.codePoints[context.pos];
+        int startChar = context.peek();
         if (!(isInlineModifierFlag(startChar) || startChar == '-')) {
             return null;
         }
@@ -540,8 +533,8 @@ public final class RegExpCompiler {
         boolean sawDash = false;
         boolean sawModifierFlag = false;
 
-        while (context.pos < context.codePoints.length) {
-            int currentChar = context.codePoints[context.pos];
+        while (context.hasMore()) {
+            int currentChar = context.peek();
             if (currentChar == ':') {
                 if (!sawModifierFlag) {
                     throw new RegExpSyntaxException("Invalid flag group");
@@ -646,8 +639,12 @@ public final class RegExpCompiler {
             this.pos = 0;
         }
 
+        boolean at(int codePoint) {
+            return hasMore() && peek() == codePoint;
+        }
+
         boolean consume(int codePoint) {
-            if (pos == codePoints.length || codePoints[pos] != codePoint) {
+            if (!at(codePoint)) {
                 return false;
             }
             pos++;
@@ -680,6 +677,10 @@ public final class RegExpCompiler {
             buffer.appendU8(operand);
         }
 
+        boolean hasMore() {
+            return pos < codePoints.length;
+        }
+
         boolean isDotAll() {
             return (currentFlags & RegExpBytecode.FLAG_DOTALL) != 0;
         }
@@ -702,6 +703,14 @@ public final class RegExpCompiler {
 
         void patchJumpToHere(int operand) {
             buffer.setU32(operand, buffer.size() - operand - Integer.BYTES);
+        }
+
+        int peek() {
+            return codePoints[pos];
+        }
+
+        int read() {
+            return codePoints[pos++];
         }
     }
 

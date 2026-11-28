@@ -114,6 +114,45 @@ final class PatternCompiler {
         }
     }
 
+    /**
+     * Emit CLOSE_LOC opcodes for variables in a pattern. Recursively handles Identifier, ArrayPattern, ObjectPattern,
+     * AssignmentPattern, and RestElement.
+     */
+    static void emitCloseLocForPattern(CompilerContext compilerContext, Pattern pattern) {
+        if (pattern != null) {
+            for (String name : pattern.getBoundNames()) {
+                Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
+                if (localIndex != null) {
+                    compilerContext.emitter.emitIntOperand(Opcode.CLOSE_LOC, localIndex);
+                }
+            }
+        }
+    }
+
+    /**
+     * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration. Used at the end of for-loop iteration
+     * bodies to freeze VarRefs for per-iteration binding.
+     */
+    static void emitCloseLocForPattern(CompilerContext compilerContext, VariableDeclaration varDecl) {
+        for (VariableDeclarator decl : varDecl.getDeclarations()) {
+            emitCloseLocForPattern(compilerContext, decl.getId());
+        }
+    }
+
+    /** Stack: value -> value, evaluating the initializer only for undefined. */
+    static void emitDefaultValue(CompilerContext compilerContext, String inferredName, Expression initializer) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        emitter.emitOpcode(Opcode.DUP);
+        emitter.emitOpcode(Opcode.IS_UNDEFINED);
+        int skip = emitter.emitJump(Opcode.IF_FALSE);
+        emitter.emitOpcode(Opcode.DROP);
+        compilerContext.compileExpression(initializer);
+        if (inferredName != null && initializer.isAnonymousFunction()) {
+            emitter.emitOpcodeAtom(Opcode.SET_NAME, inferredName);
+        }
+        emitter.patchJumpToHere(skip);
+    }
+
     static void markPatternConstBindings(CompilerContext compilerContext, Pattern pattern) {
         if (pattern instanceof Identifier id) {
             compilerContext.scopeManager.currentScope().markConstLocal(id.getName());
@@ -144,5 +183,4 @@ final class PatternCompiler {
             markPatternConstBindings(compilerContext, restElement.getArgument());
         }
     }
-
 }

@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
-import com.caoccao.qjs4j.compilation.lexer.LexerState;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
@@ -27,8 +26,7 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.*;
 
 /**
- * Shared mutable state for the parser. Holds all fields, token utilities, validation methods, and context management
- * that are shared across the delegate parser classes.
+ * Grammar state, lexical scopes and early errors shared across productions in one parse.
  */
 final class ParserContext {
     private static final Set<String> ALWAYS_RESERVED_IDENTIFIER_NAMES = Set.of(JSKeyword.BREAK, JSKeyword.CASE,
@@ -39,11 +37,10 @@ final class ParserContext {
             JSKeyword.SUPER, JSKeyword.SWITCH, JSKeyword.THIS, JSKeyword.THROW, JSKeyword.TRUE, JSKeyword.TRY,
             JSKeyword.TYPEOF, JSKeyword.VAR, JSKeyword.VOID, JSKeyword.WHILE, JSKeyword.WITH);
     final boolean allowNewTargetInEval;
-
     int asyncFunctionNesting;
 
     int classBodyNesting;
-    Token currentToken;
+
     final DeclarationEarlyErrors declarations = new DeclarationEarlyErrors(this);
     final Set<String> evalPrivateNames;
     int functionNesting;
@@ -56,7 +53,6 @@ final class ParserContext {
     boolean inOperatorAllowed;
     final boolean isEval;
     Deque<Set<String>> labelStack = new ArrayDeque<>();
-    final Lexer lexer;
     // Module-level early error tracking (ES2024 16.2.1.1)
     final Set<String> moduleExportedNames = new HashSet<>();
     final Set<String> moduleLexicalNames = new HashSet<>();
@@ -65,22 +61,19 @@ final class ParserContext {
     final Set<String> moduleVarNames = new HashSet<>();
     boolean needsArguments;
     int newTargetNesting;
-    Token nextToken;
     final Set<Expression> parenthesizedExpressions;
     boolean parsingClassWithSuper;
     final List<String> pendingExportBindings = new ArrayList<>();
-    int previousTokenEndOffset;
-    int previousTokenLine;
     final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
     int statementNesting;
     boolean strictMode;
     boolean superPropertyAllowed;
+    final TokenCursor tokens;
     ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode, int functionNesting,
             int asyncFunctionNesting, int generatorFunctionNesting, int newTargetNesting,
             boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval, Set<String> evalPrivateNames) {
         inFunctionBody = true;
         inOperatorAllowed = true;
-        this.lexer = lexer;
         this.moduleMode = moduleMode;
         this.isEval = isEval;
         this.allowNewTargetInEval = allowNewTargetInEval;
@@ -92,63 +85,27 @@ final class ParserContext {
         this.superPropertyAllowed = initialSuperPropertyAllowed;
         this.evalPrivateNames = evalPrivateNames != null ? Set.copyOf(evalPrivateNames) : Set.of();
         this.parenthesizedExpressions = Collections.newSetFromMap(new IdentityHashMap<>());
-        lexer.setModuleMode(moduleMode);
-        this.currentToken = lexer.nextToken();
-        this.nextToken = lexer.nextToken();
-    }
-
-    void advance() {
-        previousTokenLine = currentToken.line();
-        previousTokenEndOffset = currentToken.offset() + currentToken.value().length();
-        currentToken = nextToken;
-        nextToken = lexer.nextToken();
-    }
-
-    Identifier consumeIdentifierName() {
-        SourceLocation location = getLocation();
-        String name = currentToken.value();
-        advance();
-        return new Identifier(name, location);
-    }
-
-    boolean consumeIf(TokenType type) {
-        if (!match(type)) {
-            return false;
-        }
-        advance();
-        return true;
-    }
-
-    SourceLocation consumeLocation() {
-        SourceLocation location = getLocation();
-        advance();
-        return location;
+        tokens = new TokenCursor(lexer, moduleMode);
     }
 
     PrivateIdentifier consumePrivateName() {
-        SourceLocation location = getLocation();
-        String fieldName = currentToken.value().substring(1);
+        SourceLocation location = tokens.getLocation();
+        String fieldName = tokens.current().value().substring(1);
         if (!isPrivateNameAccessible(fieldName)) {
             throw new JSSyntaxErrorException("undefined private field '#" + fieldName + "'");
         }
-        advance();
+        tokens.advance();
         return new PrivateIdentifier(fieldName, location);
     }
 
     void consumeSemicolon() {
-        if (consumeIf(TokenType.SEMICOLON)) {
+        if (tokens.consumeIf(TokenType.SEMICOLON)) {
             return;
         }
-        if (hasNewlineBefore() || match(TokenType.RBRACE) || match(TokenType.EOF)) {
+        if (tokens.hasNewlineBefore() || tokens.match(TokenType.RBRACE) || tokens.match(TokenType.EOF)) {
             return;
         }
         throw new JSSyntaxErrorException(describeUnexpectedToken());
-    }
-
-    String consumeValue() {
-        String value = currentToken.value();
-        advance();
-        return value;
     }
 
     /**
@@ -163,8 +120,8 @@ final class ParserContext {
      * @return the diagnostic message
      */
     String describeUnexpectedToken() {
-        String value = currentToken.value();
-        return switch (currentToken.type()) {
+        String value = tokens.current().value();
+        return switch (tokens.current().type()) {
             case EOF -> "Unexpected end of input";
             case NUMBER, BIGINT -> "Unexpected number";
             case STRING -> "Unexpected string";
@@ -255,37 +212,8 @@ final class ParserContext {
         functionNesting--;
     }
 
-    Token expect(TokenType type) {
-        if (!match(type)) {
-            if (currentToken.type() == TokenType.EOF) {
-                // Source that simply stops early is not a token mismatch, and naming the token type
-                // the parser wanted describes the parser rather than the program. `export {} from`
-                // reported "Expected STRING but got EOF at line 1, column 15" where every engine
-                // says the input ended.
-                throw new JSSyntaxErrorException("Unexpected end of input");
-            }
-            throw new JSSyntaxErrorException("Expected " + type + " but got " + currentToken.type() + " at line "
-                    + currentToken.line() + ", column " + currentToken.column());
-        }
-        Token token = currentToken;
-        advance();
-        return token;
-    }
-
-    SourceLocation getLocation() {
-        return new SourceLocation(currentToken.line(), currentToken.column(), currentToken.offset());
-    }
-
-    boolean hasNewlineBefore() {
-        return currentToken.line() > previousTokenLine;
-    }
-
     boolean isAlwaysReservedIdentifier(String name) {
         return isAlwaysReservedIdentifierName(name);
-    }
-
-    boolean isASIToken() {
-        return isASIToken(currentToken.type());
     }
 
     boolean isAwaitExpressionAllowed() {
@@ -308,49 +236,8 @@ final class ParserContext {
         }
     }
 
-    boolean isAwaitUsingDeclarationStart() {
-        boolean awaitToken = match(TokenType.AWAIT)
-                || (match(TokenType.IDENTIFIER) && JSKeyword.AWAIT.equals(currentToken.value()));
-        if (!awaitToken || !isUsingIdentifierToken(nextToken)) {
-            return false;
-        }
-        // [no LineTerminator here] between 'await' and 'using'
-        if (nextToken.line() != currentToken.line()) {
-            return false;
-        }
-        // [no LineTerminator here] between 'using' and BindingIdentifier
-        // Also verify the next token is a valid BindingIdentifier start.
-        Token afterUsing = lexer.peekToken();
-        return isBindingIdentifierStartToken(afterUsing) && afterUsing.line() == nextToken.line();
-    }
-
-    private boolean isBindingIdentifierStartToken(Token token) {
-        return switch (token.type()) {
-            case IDENTIFIER, ASYNC, AWAIT, YIELD, FROM, OF, AS, LET -> true;
-            default -> false;
-        };
-    }
-
-    boolean isExpressionStartToken(TokenType tokenType) {
-        return switch (tokenType) {
-            case ASYNC, AWAIT, BIGINT, CLASS, FALSE, FUNCTION, IDENTIFIER, LBRACE, LBRACKET, LPAREN, NEW, NULL, NUMBER,
-                    REGEX, STRING, TEMPLATE, THIS, TRUE ->
-                true;
-            default -> false;
-        };
-    }
-
-    private boolean isLineTerminator(char c) {
-        return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
-    }
-
     boolean isParenthesizedExpression(Expression expression) {
         return expression != null && parenthesizedExpressions.contains(expression);
-    }
-
-    boolean isPatternStartToken(TokenType tokenType) {
-        return tokenType == TokenType.IDENTIFIER || tokenType == TokenType.LBRACE || tokenType == TokenType.LBRACKET
-                || tokenType == TokenType.AWAIT;
     }
 
     boolean isPrivateNameAccessible(String privateName) {
@@ -360,55 +247,8 @@ final class ParserContext {
         return isEval && evalPrivateNames.contains(privateName);
     }
 
-    private boolean isRawUseStrictDirective(Token directiveToken) {
-        if (directiveToken.type() != TokenType.STRING || !JSKeyword.USE_STRICT.equals(directiveToken.value())) {
-            return false;
-        }
-
-        int offset = directiveToken.offset();
-        String source = lexer.getSource();
-        if (offset < 0 || offset >= source.length()) {
-            return false;
-        }
-
-        char quote = source.charAt(offset);
-        if (quote != '\'' && quote != '"') {
-            return false;
-        }
-
-        final String strictDirective = JSKeyword.USE_STRICT;
-        int sourceIndex = offset + 1;
-        int directiveIndex = 0;
-
-        while (sourceIndex < source.length()) {
-            char current = source.charAt(sourceIndex);
-            if (current == quote) {
-                return directiveIndex == strictDirective.length();
-            }
-            if (current == '\\' || isLineTerminator(current)) {
-                return false;
-            }
-            if (directiveIndex >= strictDirective.length() || current != strictDirective.charAt(directiveIndex)) {
-                return false;
-            }
-            sourceIndex++;
-            directiveIndex++;
-        }
-
-        return false;
-    }
-
     boolean isStrictReservedIdentifier(String name) {
         return isStrictReservedIdentifierName(name);
-    }
-
-    boolean isUsingDeclarationStart() {
-        return currentToken.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(currentToken.value())
-                && isBindingIdentifierStartToken(nextToken) && nextToken.line() == currentToken.line();
-    }
-
-    boolean isUsingIdentifierToken(Token token) {
-        return token.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(token.value());
     }
 
     boolean isValidForInOfTarget(Expression expr) {
@@ -434,10 +274,6 @@ final class ParserContext {
         }
     }
 
-    boolean match(TokenType type) {
-        return currentToken.type() == type;
-    }
-
     ModuleDeclarationParser modules() {
         if (modules == null) {
             modules = new ModuleDeclarationParser(this);
@@ -446,8 +282,8 @@ final class ParserContext {
     }
 
     String parseBindingIdentifierName() {
-        String name = currentToken.value();
-        switch (currentToken.type()) {
+        String name = tokens.current().value();
+        switch (tokens.current().type()) {
             case IDENTIFIER -> validateIdentifierName(name);
             case ASYNC, FROM, OF, AS -> {
                 // Contextual keywords can bind a name here.
@@ -470,7 +306,7 @@ final class ParserContext {
             }
             default -> throw new JSSyntaxErrorException("Unexpected token '" + name + "'");
         }
-        advance();
+        tokens.advance();
         return name;
     }
 
@@ -492,24 +328,23 @@ final class ParserContext {
         boolean hasUseStrict = false;
         List<Token> prologueTokens = new ArrayList<>();
 
-        while (match(TokenType.STRING)) {
-            Token directiveToken = currentToken;
-            String stringValue = currentToken.value();
-            int stringLine = currentToken.line();
-            SourceLocation directiveLocation = getLocation();
+        while (tokens.match(TokenType.STRING)) {
+            Token directiveToken = tokens.current();
+            String stringValue = tokens.current().value();
+            int stringLine = tokens.current().line();
+            SourceLocation directiveLocation = tokens.getLocation();
 
-            Token next = peek();
+            Token next = tokens.next();
             TokenType nextType = next.type();
             boolean hasSemi = nextType == TokenType.SEMICOLON || nextType == TokenType.RBRACE
-                    || nextType == TokenType.EOF || next.line() > stringLine && isASIToken(nextType);
+                    || nextType == TokenType.EOF || next.line() > stringLine && TokenCursor.isASIToken(nextType);
             if (!hasSemi) {
                 break;
             }
 
             prologueTokens.add(directiveToken);
-            advance();
-            if (consumeIf(TokenType.SEMICOLON)) {
-            }
+            tokens.advance();
+            tokens.consumeIf(TokenType.SEMICOLON);
 
             // Directive strings are also expression statements per ES spec.
             // This is important for eval() which returns the completion value.
@@ -518,7 +353,7 @@ final class ParserContext {
                 body.add(new ExpressionStatement(literal, directiveLocation));
             }
 
-            if (isRawUseStrictDirective(directiveToken)) {
+            if (tokens.isRawUseStrictDirective(directiveToken)) {
                 hasUseStrict = true;
             }
         }
@@ -537,30 +372,13 @@ final class ParserContext {
     }
 
     Identifier parseIdentifier() {
-        SourceLocation location = getLocation();
+        SourceLocation location = tokens.getLocation();
         return new Identifier(parseBindingIdentifierName(), location);
     }
 
-    Token peek() {
-        return nextToken;
-    }
-
-    void requireUnescapedToken(String message) {
-        if (currentToken.escaped()) {
-            throw new JSSyntaxErrorException(message);
-        }
-    }
-
-    void restoreTokenPosition(TokenPosition position) {
-        currentToken = position.current();
-        nextToken = position.next();
-        previousTokenLine = position.previousLine();
-        previousTokenEndOffset = position.previousEnd();
-        lexer.restoreState(position.lexerState());
-    }
-
-    TokenPosition saveTokenPosition() {
-        return new TokenPosition(currentToken, nextToken, previousTokenLine, previousTokenEndOffset, lexer.saveState());
+    void setStrictMode(boolean strict) {
+        strictMode = strict;
+        tokens.setStrictMode(strict);
     }
 
     void validateBindingIdentifier(String name) {
@@ -586,7 +404,7 @@ final class ParserContext {
         if (isAlwaysReservedIdentifierName(name)) {
             // ES2024 12.7.1: Escaped keywords are tokenized as IDENTIFIER but
             // their StringValue still matches a reserved word — use V8's message.
-            requireUnescapedToken("Keyword must not contain escaped characters");
+            tokens.requireUnescapedToken("Keyword must not contain escaped characters");
             // V8 reports "Unexpected reserved word" for enum (a future reserved word)
             // but "Unexpected token 'X'" for regular keywords (with, debugger, etc.)
             if (JSKeyword.ENUM.equals(name)) {
@@ -595,16 +413,16 @@ final class ParserContext {
             throw new JSSyntaxErrorException("Unexpected token '" + name + "'");
         }
         if (strictMode && isStrictReservedIdentifierName(name)) {
-            requireUnescapedToken("Keyword must not contain escaped characters");
+            tokens.requireUnescapedToken("Keyword must not contain escaped characters");
             throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
         }
         // Contextual keywords via unicode escapes: use V8's escaped keyword message.
         if (JSKeyword.AWAIT.equals(name) && !isAwaitIdentifierAllowed()) {
-            requireUnescapedToken("Keyword must not contain escaped characters");
+            tokens.requireUnescapedToken("Keyword must not contain escaped characters");
             throw new JSSyntaxErrorException("Unexpected 'await' keyword");
         }
         if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
-            requireUnescapedToken("Keyword must not contain escaped characters");
+            tokens.requireUnescapedToken("Keyword must not contain escaped characters");
             if (strictMode) {
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
@@ -623,15 +441,6 @@ final class ParserContext {
 
     static boolean isAlwaysReservedIdentifierName(String name) {
         return ALWAYS_RESERVED_IDENTIFIER_NAMES.contains(name);
-    }
-
-    private static boolean isASIToken(TokenType type) {
-        return switch (type) {
-            case NUMBER, STRING, IDENTIFIER, INC, DEC, NULL, FALSE, TRUE, IF, RETURN, VAR, THIS, DELETE, TYPEOF, NEW,
-                    DO, WHILE, FOR, SWITCH, THROW, TRY, FUNCTION, CLASS, CONST, LET ->
-                true;
-            default -> false;
-        };
     }
 
     /**
@@ -661,8 +470,6 @@ final class ParserContext {
                 true;
             default -> false;
         };
-    }
-    record TokenPosition(Token current, Token next, int previousLine, int previousEnd, LexerState lexerState) {
     }
 
 }

@@ -65,11 +65,11 @@ final class ReturnStatementCompiler {
 
         int returnValueIndex = compilerContext.storeTemporary("#return_value_");
 
-        EmitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, 0);
+        UsingScopeCompiler.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, 0);
 
         // Execute active finally blocks via GOSUB before returning.
         // Walk from innermost to outermost finally context.
-        EmitHelpers.emitActiveFinallyGosubs(compilerContext);
+        TryStatementCompiler.emitActiveFinallyGosubs(compilerContext);
 
         if (compilerContext.finallySubroutineDepth > 0) {
             // Return from a finally subroutine must discard the caller completion value
@@ -78,7 +78,7 @@ final class ReturnStatementCompiler {
         }
 
         if (compilerContext.loopManager.hasActiveIteratorLoops()) {
-            EmitHelpers.emitAbruptCompletionIteratorClose(compilerContext);
+            IteratorCompiler.emitIteratorCloseForLoopsUntil(compilerContext, null);
         }
 
         compilerContext.emitter.emitGetLocal(returnValueIndex);

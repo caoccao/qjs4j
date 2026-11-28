@@ -33,71 +33,73 @@ final class PatternParser {
     }
 
     static ArrayPattern parseArrayPattern(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACKET);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.LBRACKET);
         List<Pattern> elements = new ArrayList<>();
-        while (!parserContext.match(TokenType.RBRACKET) && !parserContext.match(TokenType.EOF)) {
+        while (!tokens.match(TokenType.RBRACKET) && !tokens.match(TokenType.EOF)) {
             if (!elements.isEmpty()) {
-                parserContext.expect(TokenType.COMMA);
-                if (parserContext.match(TokenType.RBRACKET)) {
+                tokens.expect(TokenType.COMMA);
+                if (tokens.match(TokenType.RBRACKET)) {
                     break;
                 }
             }
-            if (parserContext.match(TokenType.COMMA)) {
+            if (tokens.match(TokenType.COMMA)) {
                 elements.add(null);
-            } else if (parserContext.match(TokenType.ELLIPSIS)) {
-                SourceLocation restLocation = parserContext.consumeLocation();
+            } else if (tokens.match(TokenType.ELLIPSIS)) {
+                SourceLocation restLocation = tokens.consumeLocation();
                 Pattern argument = parsePattern(parserContext);
                 elements.add(new RestElement(argument, restLocation));
-                if (parserContext.match(TokenType.COMMA)) {
+                if (tokens.match(TokenType.COMMA)) {
                     throw new RuntimeException("Rest element must be last in array pattern at line "
-                            + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                            + tokens.current().line() + ", column " + tokens.current().column());
                 }
                 break;
             } else {
                 Pattern element = parsePattern(parserContext);
-                if (parserContext.match(TokenType.ASSIGN)) {
-                    SourceLocation assignLoc = parserContext.consumeLocation();
+                if (tokens.match(TokenType.ASSIGN)) {
+                    SourceLocation assignLoc = tokens.consumeLocation();
                     Expression defaultValue = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                     element = new AssignmentPattern(element, defaultValue, assignLoc);
                 }
                 elements.add(element);
             }
         }
-        parserContext.expect(TokenType.RBRACKET);
+        tokens.expect(TokenType.RBRACKET);
         return new ArrayPattern(elements, location);
     }
 
     static ObjectPattern parseObjectPattern(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACE);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.LBRACE);
         List<ObjectPatternProperty> properties = new ArrayList<>();
         RestElement restElement = null;
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+        while (!tokens.match(TokenType.RBRACE) && !tokens.match(TokenType.EOF)) {
             if (!properties.isEmpty() || restElement != null) {
-                parserContext.expect(TokenType.COMMA);
-                if (parserContext.match(TokenType.RBRACE)) {
+                tokens.expect(TokenType.COMMA);
+                if (tokens.match(TokenType.RBRACE)) {
                     break;
                 }
             }
-            if (parserContext.match(TokenType.ELLIPSIS)) {
-                SourceLocation restLoc = parserContext.consumeLocation();
+            if (tokens.match(TokenType.ELLIPSIS)) {
+                SourceLocation restLoc = tokens.consumeLocation();
                 Pattern restArgument = parsePattern(parserContext);
                 restElement = new RestElement(restArgument, restLoc);
-                if (!parserContext.match(TokenType.RBRACE)) {
+                if (!tokens.match(TokenType.RBRACE)) {
                     throw new JSSyntaxErrorException("Rest element must be last element");
                 }
                 break;
             }
-            boolean computed = parserContext.match(TokenType.LBRACKET);
-            Token propertyNameToken = parserContext.currentToken;
+            boolean computed = tokens.match(TokenType.LBRACKET);
+            Token propertyNameToken = tokens.current();
             Expression key = ExpressionPrimaryParser.parsePropertyName(parserContext);
             Pattern value;
             boolean shorthand = false;
-            if (parserContext.consumeIf(TokenType.COLON)) {
+            if (tokens.consumeIf(TokenType.COLON)) {
                 value = parsePattern(parserContext);
-                if (parserContext.match(TokenType.ASSIGN)) {
-                    SourceLocation assignLoc = parserContext.consumeLocation();
+                if (tokens.match(TokenType.ASSIGN)) {
+                    SourceLocation assignLoc = tokens.consumeLocation();
                     Expression defaultValue = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }
@@ -105,25 +107,25 @@ final class PatternParser {
                 validateObjectPatternShorthandIdentifier(parserContext, keyIdentifier, propertyNameToken);
                 value = keyIdentifier;
                 shorthand = true;
-                if (parserContext.match(TokenType.ASSIGN)) {
-                    SourceLocation assignLoc = parserContext.consumeLocation();
+                if (tokens.match(TokenType.ASSIGN)) {
+                    SourceLocation assignLoc = tokens.consumeLocation();
                     Expression defaultValue = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }
             } else {
                 throw new JSSyntaxErrorException("Expected ':' in object binding pattern at line "
-                        + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                        + tokens.current().line() + ", column " + tokens.current().column());
             }
             properties.add(new ObjectPatternProperty(key, value, computed, shorthand));
         }
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
         return new ObjectPattern(properties, restElement, location);
     }
 
     static Pattern parsePattern(ParserContext parserContext) {
-        if (parserContext.match(TokenType.LBRACE)) {
+        if (parserContext.tokens.match(TokenType.LBRACE)) {
             return parseObjectPattern(parserContext);
-        } else if (parserContext.match(TokenType.LBRACKET)) {
+        } else if (parserContext.tokens.match(TokenType.LBRACKET)) {
             return parseArrayPattern(parserContext);
         } else {
             return parserContext.parseIdentifier();

@@ -39,7 +39,7 @@ final class IdentifierDestructuringAssignmentCompiler {
         }
         if (localIndex != null) {
             if (compilerContext.scopeManager.isLocalBindingConst(name)) {
-                EmitHelpers.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
+                IdentifierCompiler.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
                 return;
             }
             if (compilerContext.tdzLocals.contains(name)) {
@@ -51,7 +51,7 @@ final class IdentifierDestructuringAssignmentCompiler {
             Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
             if (capturedIndex != null) {
                 if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
-                    EmitHelpers.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
+                    IdentifierCompiler.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
                     return;
                 }
                 emitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK, capturedIndex);

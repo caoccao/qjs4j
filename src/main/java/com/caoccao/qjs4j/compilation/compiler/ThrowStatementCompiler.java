@@ -52,7 +52,7 @@ final class ThrowStatementCompiler {
         int throwValueIndex = compilerContext.storeTemporary("#throw_value_");
 
         int disposalCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
-        EmitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, 0);
+        UsingScopeCompiler.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, 0);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         compilerContext.emitter.emitGetLocal(throwValueIndex);

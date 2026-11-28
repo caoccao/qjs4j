@@ -579,7 +579,7 @@ public final class JSIntlDurationFormat extends IntlLocaleObject {
                 result.put(unitName, 0.0);
             } else {
                 anyDefined = true;
-                double numericValue = JSTypeConversions.toNumber(context, val).value();
+                double numericValue = JSTypeConversions.toDouble(context, val);
                 if (context.hasPendingException()) {
                     return null;
                 }

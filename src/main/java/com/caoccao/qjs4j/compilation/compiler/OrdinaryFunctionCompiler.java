@@ -156,7 +156,7 @@ final class OrdinaryFunctionCompiler {
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
 
-        EmitHelpers.emitCapturedValues(functionCompiler, function);
+        functionCompiler.context().captureResolver.initializeTemplate(function);
         // Emit FCLOSURE opcode with function in constant pool
         compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
         return function;

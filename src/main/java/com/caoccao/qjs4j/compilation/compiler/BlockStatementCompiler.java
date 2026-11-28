@@ -81,14 +81,14 @@ final class BlockStatementCompiler {
         // The CATCH is emitted BEFORE Phase 3 so the CatchOffset is below all
         // statement values. Each statement is net-zero stack effect, so the
         // CatchOffset stays at the bottom.
-        int usingCatchJump = EmitHelpers.beginUsingScope(compilerContext, hasUsingDeclarations);
+        int usingCatchJump = UsingScopeCompiler.beginUsingScope(compilerContext, hasUsingDeclarations);
 
         // Phase 3: compile non-function statements in source order.
         // For function declarations, emit the Annex B var store at the source position
         // (the function itself was already hoisted in Phase 2).
         StatementCompiler.compileBlockStatements(compilerContext, block.getBody());
 
-        EmitHelpers.finishUsingScope(compilerContext, usingCatchJump, false);
+        UsingScopeCompiler.finishUsingScope(compilerContext, usingCatchJump, false);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }

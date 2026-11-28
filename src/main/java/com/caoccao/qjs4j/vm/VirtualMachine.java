@@ -1058,17 +1058,6 @@ public final class VirtualMachine {
         }
     }
 
-    boolean isBranchTruthy(JSValue conditionValue) {
-        if (conditionValue instanceof JSBoolean booleanValue) {
-            return booleanValue.value();
-        }
-        if (conditionValue instanceof JSNumber numberValue) {
-            double d = numberValue.value();
-            return d != 0.0 && !Double.isNaN(d);
-        }
-        return JSTypeConversions.toBoolean(conditionValue) == JSBoolean.TRUE;
-    }
-
     private boolean isErrorConstructorType(JSConstructorType constructorType) {
         return switch (constructorType) {
             case ERROR, EVAL_ERROR, RANGE_ERROR, REFERENCE_ERROR, SYNTAX_ERROR, TYPE_ERROR, URI_ERROR, AGGREGATE_ERROR,

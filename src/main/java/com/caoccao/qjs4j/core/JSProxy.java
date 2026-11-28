@@ -313,7 +313,7 @@ public final class JSProxy extends JSObject {
         if (JSTypeChecking.isCallable(trap)) {
             return trap;
         }
-        String trapValue = JSTypeConversions.toString(executionContext, trap).value();
+        String trapValue = JSTypeConversions.toJavaString(executionContext, trap);
         return executionContext.rejectTypeError(
                 "'" + trapValue + "' returned for property '" + trapName + "' of object '#<Object>' is not a function");
     }
@@ -352,7 +352,7 @@ public final class JSProxy extends JSObject {
                             String keyStr = key.isString() ? key.asString() : String.valueOf(key.getValue());
                             return executionContext.rejectTypeError("'get' on proxy: property '" + keyStr
                                     + "' is a non-configurable accessor property on the proxy target and does not have a getter function, but the trap did not return 'undefined' (got '"
-                                    + JSTypeConversions.toString(executionContext, trapResult).value() + "')");
+                                    + JSTypeConversions.toJavaString(executionContext, trapResult) + "')");
                         }
                     }
 
@@ -364,8 +364,8 @@ public final class JSProxy extends JSObject {
                             String keyStr = key.isString() ? key.asString() : String.valueOf(key.getValue());
                             return executionContext.rejectTypeError("'get' on proxy: property '" + keyStr
                                     + "' is a read-only and non-configurable data property on the proxy target but the proxy did not return its actual value (expected '"
-                                    + JSTypeConversions.toString(executionContext, targetDesc.getValue()).value()
-                                    + "' but got '" + JSTypeConversions.toString(executionContext, trapResult).value()
+                                    + JSTypeConversions.toJavaString(executionContext, targetDesc.getValue())
+                                    + "' but got '" + JSTypeConversions.toJavaString(executionContext, trapResult)
                                     + "')");
                         }
                     }

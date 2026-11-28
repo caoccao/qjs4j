@@ -287,7 +287,7 @@ public final class StringPrototype {
         String s = toStringCheckObject(context, thisArg).value();
 
         // A missing search string is undefined, which converts to "undefined"; it used to answer -1.
-        String searchStr = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0)).value();
+        String searchStr = JSTypeConversions.toJavaString(context, JSValue.argumentOrUndefined(args, 0));
         long position = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : 0;
         position = Math.max(0, Math.min(position, s.length()));
 
@@ -333,7 +333,7 @@ public final class StringPrototype {
         if (all && argument instanceof JSRegExp regexp) {
             pattern = regexp.getPattern();
         } else {
-            pattern = argument instanceof JSUndefined ? "" : JSTypeConversions.toString(context, argument).value();
+            pattern = argument instanceof JSUndefined ? "" : JSTypeConversions.toJavaString(context, argument);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -369,11 +369,11 @@ public final class StringPrototype {
         String s = toStringCheckObject(context, thisArg).value();
 
         // A missing search string is undefined, which converts to "undefined"; it used to answer -1.
-        String searchStr = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0)).value();
+        String searchStr = JSTypeConversions.toJavaString(context, JSValue.argumentOrUndefined(args, 0));
         // ES2024 22.1.3.9: If numPos is NaN, let pos be +∞; otherwise let pos be ToIntegerOrInfinity(numPos)
         long position;
         if (args.length > 1 && !args[1].isUndefined()) {
-            double numPos = JSTypeConversions.toNumber(context, args[1]).value();
+            double numPos = JSTypeConversions.toDouble(context, args[1]);
             if (Double.isNaN(numPos)) {
                 position = s.length();
             } else {
@@ -500,7 +500,7 @@ public final class StringPrototype {
         }
 
         String fillStr = args.length > 1 && !args[1].isUndefined()
-                ? JSTypeConversions.toString(context, args[1]).value()
+                ? JSTypeConversions.toJavaString(context, args[1])
                 : " ";
         if (fillStr.isEmpty()) {
             return str;
@@ -624,12 +624,12 @@ public final class StringPrototype {
             return JSUndefined.INSTANCE;
         }
         String s = str.value();
-        String searchStr = JSTypeConversions.toString(context, searchValue).value();
+        String searchStr = JSTypeConversions.toJavaString(context, searchValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         boolean functionalReplace = JSTypeChecking.isCallable(replaceValue);
-        String replaceStr = functionalReplace ? null : JSTypeConversions.toString(context, replaceValue).value();
+        String replaceStr = functionalReplace ? null : JSTypeConversions.toJavaString(context, replaceValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -736,7 +736,7 @@ public final class StringPrototype {
             return context.throwTypeError("regexp not supported");
         }
 
-        String search = JSTypeConversions.toString(context, needle).value();
+        String search = JSTypeConversions.toJavaString(context, needle);
         long position = args.length > 1 && !args[1].isUndefined()
                 ? (long) JSTypeConversions.toInteger(context, args[1])
                 : (mode == SearchMode.SUFFIX ? value.length() : 0);
@@ -809,7 +809,7 @@ public final class StringPrototype {
         // object (step 6). It used to be matched as a pattern anyway: /,/ split "a,b" where V8 looks for "/,/".
         String separator = null;
         if (!(separatorArg instanceof JSUndefined)) {
-            separator = JSTypeConversions.toString(context, separatorArg).value();
+            separator = JSTypeConversions.toJavaString(context, separatorArg);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

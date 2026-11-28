@@ -448,7 +448,7 @@ public final class TypedArrayPrototype {
         if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
             return context.rejectTypeError(args.length == 0 || args[0].isUndefined()
                     ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
+                    : JSTypeConversions.toJavaString(context, args[0]) + " is not a function");
         }
         return typedArray;
     }

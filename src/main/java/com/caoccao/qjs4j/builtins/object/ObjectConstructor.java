@@ -176,7 +176,7 @@ public final class ObjectConstructor {
                 proto = jsObject;
             } else {
                 return context.throwTypeError("Object prototype may only be an Object or null: "
-                        + JSTypeConversions.toString(context, firstArg).value());
+                        + JSTypeConversions.toJavaString(context, firstArg));
             }
         }
         // Create new object

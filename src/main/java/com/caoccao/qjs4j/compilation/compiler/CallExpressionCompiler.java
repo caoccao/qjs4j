@@ -25,10 +25,11 @@ final class CallExpressionCompiler {
     }
 
     static void compile(CompilerContext compilerContext, CallExpression callExpr) {
-        boolean joinsOptionalChain = EmitHelpers.consumeOptionalChainLink(compilerContext, callExpr);
+        boolean joinsOptionalChain = OptionalChainCompiler.consumeOptionalChainLink(compilerContext, callExpr);
         if (!joinsOptionalChain && callExpr.isPartOfOptionalChain()) {
             // The last link of an optional chain: every `?.` in it exits here.
-            EmitHelpers.compileOptionalChain(compilerContext, () -> compileCall(compilerContext, callExpr), null);
+            OptionalChainCompiler.compileOptionalChain(compilerContext, () -> compileCall(compilerContext, callExpr),
+                    null);
         } else {
             compileCall(compilerContext, callExpr);
         }
@@ -44,7 +45,7 @@ final class CallExpressionCompiler {
             emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 3);
             emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 2);
             emitter.emitOpcode(Opcode.GET_SUPER);
-            EmitHelpers.emitArgumentsArrayWithSpread(compilerContext, callExpr.getArguments());
+            ArrayExpressionCompiler.emitArray(compilerContext, callExpr.getArguments());
             emitter.emitIntOperand(Opcode.APPLY, 1);
             emitter.emitOpcode(Opcode.INIT_CTOR);
             emitPendingPostSuperInitialization(compilerContext);
@@ -83,7 +84,7 @@ final class CallExpressionCompiler {
             // Stack: -> receiver function -> function receiver
             emitMemberCalleeWithReceiver(compilerContext, memberExpr, callExpr.isPartOfOptionalChain());
             if (callExpr.isOptional()) {
-                EmitHelpers.emitOptionalChainTest(compilerContext, 2);
+                OptionalChainCompiler.emitOptionalChainTest(compilerContext, 2);
             }
             emitter.emitOpcode(Opcode.SWAP);
             callOpcode = isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD;
@@ -104,7 +105,7 @@ final class CallExpressionCompiler {
         compilerContext.emitTailCalls = false;
         if (callExpr.isDirectEvalCall()) {
             compilerContext.compileExpression(callExpr.getCallee());
-            EmitHelpers.emitArgumentsArrayWithSpread(compilerContext, callExpr.getArguments());
+            ArrayExpressionCompiler.emitArray(compilerContext, callExpr.getArguments());
             emitter.emitIntOperand(Opcode.APPLY_EVAL, 0);
             return;
         }
@@ -112,7 +113,7 @@ final class CallExpressionCompiler {
             // Stack: -> receiver function
             emitMemberCalleeWithReceiver(compilerContext, memberExpr, callExpr.isPartOfOptionalChain());
             if (callExpr.isOptional()) {
-                EmitHelpers.emitOptionalChainTest(compilerContext, 2);
+                OptionalChainCompiler.emitOptionalChainTest(compilerContext, 2);
             }
         } else {
             // Stack: -> function receiver -> receiver function
@@ -120,7 +121,7 @@ final class CallExpressionCompiler {
             emitter.emitOpcode(Opcode.SWAP);
         }
 
-        EmitHelpers.emitArgumentsArrayWithSpread(compilerContext, callExpr.getArguments());
+        ArrayExpressionCompiler.emitArray(compilerContext, callExpr.getArguments());
         emitCallSourcePosition(compilerContext, callExpr);
         emitter.emitIntOperand(Opcode.APPLY, 0);
     }
@@ -137,14 +138,14 @@ final class CallExpressionCompiler {
             IdentifierCompiler.emitWithAwareIdentifierLookupForCall(compilerContext, calleeId.getName());
             if (callExpr.isOptional()) {
                 emitter.emitOpcode(Opcode.SWAP);
-                EmitHelpers.emitOptionalChainTest(compilerContext, 2);
+                OptionalChainCompiler.emitOptionalChainTest(compilerContext, 2);
                 emitter.emitOpcode(Opcode.SWAP);
             }
             return;
         }
-        EmitHelpers.compileOptionalChainLinkTarget(compilerContext, callExpr, callExpr.getCallee());
+        OptionalChainCompiler.compileOptionalChainLinkTarget(compilerContext, callExpr, callExpr.getCallee());
         if (callExpr.isOptional()) {
-            EmitHelpers.emitOptionalChainTest(compilerContext, 1);
+            OptionalChainCompiler.emitOptionalChainTest(compilerContext, 1);
         }
         emitter.emitOpcode(Opcode.UNDEFINED);
     }
@@ -184,9 +185,9 @@ final class CallExpressionCompiler {
     static void emitMemberCalleeWithReceiver(CompilerContext compilerContext, MemberExpression memberExpr,
             boolean callIsPartOfOptionalChain) {
         if (memberExpr.getObject().isSuperIdentifier()) {
-            EmitHelpers.emitGetSuperValue(compilerContext, memberExpr, true);
+            MemberExpressionCompiler.emitGetSuperValue(compilerContext, memberExpr, true);
         } else if (memberExpr.isPartOfOptionalChain() && !callIsPartOfOptionalChain) {
-            EmitHelpers.compileOptionalChain(compilerContext,
+            OptionalChainCompiler.compileOptionalChain(compilerContext,
                     () -> emitMemberLinkWithReceiver(compilerContext, memberExpr),
                     () -> compilerContext.emitter.emitOpcode(Opcode.UNDEFINED));
         } else {
@@ -196,9 +197,9 @@ final class CallExpressionCompiler {
 
     private static void emitMemberLinkWithReceiver(CompilerContext compilerContext, MemberExpression memberExpr) {
         // Stack: -> object -> object function
-        EmitHelpers.compileOptionalChainLinkTarget(compilerContext, memberExpr, memberExpr.getObject());
+        OptionalChainCompiler.compileOptionalChainLinkTarget(compilerContext, memberExpr, memberExpr.getObject());
         if (memberExpr.isOptional()) {
-            EmitHelpers.emitOptionalChainTest(compilerContext, 1);
+            OptionalChainCompiler.emitOptionalChainTest(compilerContext, 1);
         }
         MemberExpressionCompiler.emitPropertyAccess(compilerContext, memberExpr, true);
     }

@@ -96,7 +96,7 @@ public final class Parser {
 
     // Package-private: used by LiteralParser for nested template expression parsing
     Token currentToken() {
-        return parserContext.currentToken;
+        return parserContext.tokens.current();
     }
 
     /**
@@ -106,7 +106,7 @@ public final class Parser {
         try {
             return parseProgram();
         } catch (JSSyntaxErrorException e) {
-            throw e.withSourceLocation(parserContext.getLocation());
+            throw e.withSourceLocation(parserContext.tokens.getLocation());
         }
     }
 
@@ -116,17 +116,17 @@ public final class Parser {
     }
 
     private Program parseProgram() {
+        TokenCursor tokens = parserContext.tokens;
         List<Statement> body = new ArrayList<>();
-        SourceLocation location = parserContext.getLocation();
+        SourceLocation location = tokens.getLocation();
 
         // Parse directives (like "use strict") at the beginning
         // Pass body so directive strings are also added as expression statements
         // (required for eval completion value per ES spec)
         boolean strict = parserContext.parseDirectives(body);
-        parserContext.strictMode = strict || parserContext.moduleMode || parserContext.inheritedStrictMode;
-        parserContext.lexer.setStrictMode(parserContext.strictMode);
+        parserContext.setStrictMode(strict || parserContext.moduleMode || parserContext.inheritedStrictMode);
 
-        while (!parserContext.match(TokenType.EOF)) {
+        while (!tokens.match(TokenType.EOF)) {
             Statement stmt = StatementParser.parseStatement(parserContext);
             if (stmt != null) {
                 body.add(stmt);

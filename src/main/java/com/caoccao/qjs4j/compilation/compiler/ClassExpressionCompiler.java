@@ -185,7 +185,7 @@ final class ClassExpressionCompiler {
                 JSBytecodeFunction methodFunc = ClassDeclarationCompiler.compileMethodAsFunction(compilerContext,
                         method, methodName, false, List.of(), privateSymbols, computedFieldSymbols,
                         autoAccessorBackingSymbols, List.of(), false);
-                EmitHelpers.emitClassMethodDefinition(compilerContext, method, methodFunc, methodName);
+                ClassDeclarationCompiler.emitClassMethodDefinition(compilerContext, method, methodFunc, methodName);
                 if (method.isStatic()) {
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 }

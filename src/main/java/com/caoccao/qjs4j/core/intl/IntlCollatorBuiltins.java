@@ -54,8 +54,8 @@ final class IntlCollatorBuiltins {
         if (!(thisArg instanceof JSIntlCollator collator)) {
             return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
         }
-        String left = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "undefined";
-        String right = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : "undefined";
+        String left = args.length > 0 ? JSTypeConversions.toJavaString(context, args[0]) : "undefined";
+        String right = args.length > 1 ? JSTypeConversions.toJavaString(context, args[1]) : "undefined";
         return JSNumber.of(collator.compare(left, right));
     }
 
@@ -137,7 +137,7 @@ final class IntlCollatorBuiltins {
                     return context.getPendingException();
                 }
                 if (numericValue != null && !numericValue.isNullOrUndefined()) {
-                    numeric = JSTypeConversions.toBoolean(numericValue).value();
+                    numeric = JSTypeChecking.isTruthy(numericValue);
                     numericSet = true;
                 }
             }
@@ -183,7 +183,7 @@ final class IntlCollatorBuiltins {
                     return context.getPendingException();
                 }
                 if (ipValue != null && !ipValue.isNullOrUndefined()) {
-                    ignorePunctuation = JSTypeConversions.toBoolean(ipValue).value();
+                    ignorePunctuation = JSTypeChecking.isTruthy(ipValue);
                 }
             }
 

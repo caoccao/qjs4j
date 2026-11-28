@@ -34,11 +34,11 @@ final class JumpStatementCompiler {
         String label = statement.getLabel() == null ? null : statement.getLabel().getName();
         LoopContext target = findTarget(compilerContext, statement, label, continuing);
         if (label != null) {
-            EmitHelpers.emitIteratorCloseForLoopsUntil(compilerContext, target);
+            IteratorCompiler.emitIteratorCloseForLoopsUntil(compilerContext, target);
         }
         int scopeDepth = continuing ? target.continueTargetScopeDepth : target.breakTargetScopeDepth;
-        EmitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, scopeDepth);
-        EmitHelpers.emitActiveFinallyGosubs(compilerContext);
+        UsingScopeCompiler.emitUsingDisposalsForScopeDepthGreaterThan(compilerContext, scopeDepth);
+        TryStatementCompiler.emitActiveFinallyGosubs(compilerContext);
         int jump = emitter.emitJump(Opcode.GOTO);
         if (continuing) {
             target.continuePositions.add(jump);

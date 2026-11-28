@@ -113,7 +113,7 @@ final class IteratorHelpers {
 
     private static Long toPositiveLimit(JSContext context, JSValue[] args) {
         JSValue limitValue = JSValue.argumentOrUndefined(args, 0);
-        double number = JSTypeConversions.toNumber(context, limitValue).value();
+        double number = JSTypeConversions.toDouble(context, limitValue);
         if (context.hasPendingException()) {
             return null;
         }

@@ -55,10 +55,10 @@ public final class JSStackTrace {
         String messageText = "";
         JSValue nameValue = owner.get(PropertyKey.NAME);
         if (!context.hasPendingException() && !(nameValue instanceof JSUndefined)) {
-            name = JSTypeConversions.toString(context, nameValue).value();
+            name = JSTypeConversions.toJavaString(context, nameValue);
         }
         if (!context.hasPendingException() && !(message instanceof JSUndefined)) {
-            messageText = JSTypeConversions.toString(context, message).value();
+            messageText = JSTypeConversions.toJavaString(context, message);
         }
         if (context.hasPendingException()) {
             JSValue exception = context.takePendingException();

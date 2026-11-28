@@ -19,21 +19,9 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents an expression statement.
  */
-public final class ExpressionStatement extends Statement {
-    private final Expression expression;
-
+public final class ExpressionStatement extends SingleExpressionStatement {
     public ExpressionStatement(Expression expression, SourceLocation location) {
-        super(location);
-        this.expression = expression;
-    }
-
-    @Override
-    boolean containsSuspension(SyntaxQuery kind) {
-        return kind.in(expression);
-    }
-
-    public Expression getExpression() {
-        return expression;
+        super(expression, location);
     }
 
 }

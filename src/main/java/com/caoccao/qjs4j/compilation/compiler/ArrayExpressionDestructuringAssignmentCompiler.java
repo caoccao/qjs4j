@@ -32,12 +32,12 @@ final class ArrayExpressionDestructuringAssignmentCompiler {
             restIndex++;
         }
         boolean hasRest = restIndex < elements.size();
-        int doneLocal = EmitHelpers.startArrayDestructuring(compilerContext, "#arrayAssignIterDone", hasRest);
+        int doneLocal = IteratorCompiler.startArrayDestructuring(compilerContext, "#arrayAssignIterDone", hasRest);
         for (int i = 0; i < restIndex; i++) {
             Expression element = elements.get(i);
             // Evaluate the assignment reference before advancing the iterator.
             int depth = ExpressionCompiler.preEvaluateAssignmentTarget(compilerContext, element);
-            EmitHelpers.emitNextDestructuringValue(compilerContext, depth, doneLocal);
+            IteratorCompiler.emitNextDestructuringValue(compilerContext, depth, doneLocal);
             if (element == null) {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
@@ -45,12 +45,12 @@ final class ArrayExpressionDestructuringAssignmentCompiler {
             }
         }
         if (!hasRest) {
-            EmitHelpers.emitIteratorCloseUnlessDone(compilerContext, doneLocal);
+            IteratorCompiler.emitIteratorCloseUnlessDone(compilerContext, doneLocal);
             return;
         }
         Expression restTarget = ((SpreadElement) elements.get(restIndex)).getArgument();
         int depth = ExpressionCompiler.preEvaluateAssignmentTarget(compilerContext, restTarget);
-        EmitHelpers.emitIteratorRestArray(compilerContext, depth);
+        IteratorCompiler.emitIteratorRestArray(compilerContext, depth);
         // A nested assignment can throw. Remove the exhausted iterator before assigning.
         emitDropIteratorStatePreservingTopValues(compilerContext, depth + 1);
         ExpressionDestructuringAssignmentCompiler.compileFromPreEvaluated(compilerContext, restTarget, depth);
@@ -67,7 +67,7 @@ final class ArrayExpressionDestructuringAssignmentCompiler {
             preservedLocalIndexes[valueIndex] = localIndex;
         }
 
-        EmitHelpers.emitDropIteratorState(compilerContext);
+        compilerContext.emitter.emitDrops(3);
 
         for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
             emitter.emitGetLocal(preservedLocalIndexes[valueIndex]);

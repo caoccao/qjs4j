@@ -106,7 +106,7 @@ final class PropertyOpcodes {
             return stringKey.value();
         }
         if (keyValue instanceof JSNumber numberKey) {
-            return JSTypeConversions.toString(null, numberKey).value();
+            return JSTypeConversions.toJavaString(null, numberKey);
         }
         if (keyValue instanceof JSSymbol symbolKey) {
             return symbolKey.toJavaObject();

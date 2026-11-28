@@ -86,7 +86,7 @@ final class RegExpCharacterClass {
         UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
         while (!context.consume(']')) {
             int start = readRangeAtom(context, ranges);
-            boolean hasRange = context.pos + 1 < context.codePoints.length && context.codePoints[context.pos] == '-'
+            boolean hasRange = context.pos + 1 < context.codePoints.length && context.peek() == '-'
                     && context.codePoints[context.pos + 1] != ']';
             if (start == -1) {
                 if (hasRange && context.isUnicodeMode()) {
@@ -227,7 +227,7 @@ final class RegExpCharacterClass {
     }
 
     static int parseClassEscape(CompileContext context, UnicodeRangeBuilder ranges) {
-        int ch = context.codePoints[context.pos++];
+        int ch = context.read();
 
         return switch (ch) {
             case 'b' -> '\b'; // backspace (U+0008) inside character class
@@ -295,7 +295,7 @@ final class RegExpCharacterClass {
 
     private static String readPropertyIdentifier(CompileContext context) {
         int start = context.pos;
-        while (context.pos < context.codePoints.length && isUnicodePropertyChar(context.codePoints[context.pos])) {
+        while (context.hasMore() && isUnicodePropertyChar(context.peek())) {
             context.pos++;
         }
         return new String(context.codePoints, start, context.pos - start);
@@ -305,7 +305,7 @@ final class RegExpCharacterClass {
         if (context.pos == context.codePoints.length) {
             throw new RegExpSyntaxException("Unterminated character class");
         }
-        int ch = context.codePoints[context.pos++];
+        int ch = context.read();
         if (ch != '\\') {
             return ch;
         }

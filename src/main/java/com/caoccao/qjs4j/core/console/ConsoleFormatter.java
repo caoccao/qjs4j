@@ -418,7 +418,7 @@ final class ConsoleFormatter {
                 if (value instanceof JSSymbol) {
                     yield "NaN";
                 }
-                double number = JSTypeConversions.toNumber(context, value).value();
+                double number = JSTypeConversions.toDouble(context, value);
                 yield context.hasPendingException() ? "" : formatNumber(number);
             }
             case 'i', 'f' -> {

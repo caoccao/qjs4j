@@ -207,7 +207,7 @@ public class JSAsyncIterator extends JSObject {
         if (value instanceof JSSymbol symbol) {
             return symbol.toString();
         }
-        return JSTypeConversions.toString(null, value).value();
+        return JSTypeConversions.toJavaString(null, value);
     }
 
     /**

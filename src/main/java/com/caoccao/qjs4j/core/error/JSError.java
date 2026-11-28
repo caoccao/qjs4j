@@ -217,7 +217,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
             String prototypeToRefresh) {
         String message = "";
         if (args.length > 0 && !args[0].isUndefined()) {
-            message = JSTypeConversions.toString(context, args[0]).value();
+            message = JSTypeConversions.toJavaString(context, args[0]);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -309,7 +309,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
         if (nameValue instanceof JSUndefined) {
             name = NAME;
         } else {
-            name = JSTypeConversions.toString(context, nameValue).value();
+            name = JSTypeConversions.toJavaString(context, nameValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -323,7 +323,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
         if (messageValue instanceof JSUndefined) {
             message = "";
         } else {
-            message = JSTypeConversions.toString(context, messageValue).value();
+            message = JSTypeConversions.toJavaString(context, messageValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

@@ -287,7 +287,7 @@ public final class JSTypeConversions {
                         ? RelationalComparisonResult.TRUE
                         : RelationalComparisonResult.FALSE;
             }
-            double numberY = py instanceof JSNumber number ? number.value() : toNumber(context, py).value();
+            double numberY = toDouble(context, py);
             if (context.hasPendingException()) {
                 return RelationalComparisonResult.UNDEFINED;
             }
@@ -309,7 +309,7 @@ public final class JSTypeConversions {
                         ? RelationalComparisonResult.TRUE
                         : RelationalComparisonResult.FALSE;
             }
-            double numberX = px instanceof JSNumber number ? number.value() : toNumber(context, px).value();
+            double numberX = toDouble(context, px);
             if (context.hasPendingException()) {
                 return RelationalComparisonResult.UNDEFINED;
             }
@@ -321,11 +321,11 @@ public final class JSTypeConversions {
                     : RelationalComparisonResult.FALSE;
         }
 
-        double numberX = toNumber(context, px).value();
+        double numberX = toDouble(context, px);
         if (context.hasPendingException()) {
             return RelationalComparisonResult.UNDEFINED;
         }
-        double numberY = toNumber(context, py).value();
+        double numberY = toDouble(context, py);
         if (context.hasPendingException()) {
             return RelationalComparisonResult.UNDEFINED;
         }
@@ -504,6 +504,24 @@ public final class JSTypeConversions {
         return x == y;
     }
 
+    private static JSValue stringOperand(JSContext context, JSValue value) {
+        if (value instanceof JSSymbol) {
+            if (context != null) {
+                context.throwTypeError("Cannot convert a Symbol value to a string");
+            }
+            return JSString.EMPTY;
+        }
+        if (!(value instanceof JSObject) || value.isNullOrUndefined() || value.isBigInt() || value.isBoolean()
+                || value.isNumber() || value.isTypedArray()) {
+            return value;
+        }
+        JSValue primitive = toPrimitive(context, value, PreferredType.STRING);
+        if (context != null && context.hasPendingException()) {
+            return JSString.EMPTY;
+        }
+        return primitive == value ? new JSString("[object Object]") : stringOperand(context, primitive);
+    }
+
     /**
      * Convert string to BigInt following QuickJS JS_StringToBigInt semantics. Empty/whitespace-only strings convert to
      * 0n. Decimal strings allow an optional leading sign. Binary/octal/hex prefixes do not allow a leading sign.
@@ -639,32 +657,12 @@ public final class JSTypeConversions {
      * ToBoolean(argument) ES2020 7.1.2
      */
     public static JSBoolean toBoolean(JSValue value) {
-        if (value instanceof JSUndefined) {
-            return JSBoolean.FALSE;
-        }
-        if (value instanceof JSNull) {
-            return JSBoolean.FALSE;
-        }
-        if (value instanceof JSBoolean b) {
-            return b;
-        }
-        if (value instanceof JSNumber n) {
-            return n.value() == 0.0 || Double.isNaN(n.value()) ? JSBoolean.FALSE : JSBoolean.TRUE;
-        }
-        if (value instanceof JSString s) {
-            return s.value().isEmpty() ? JSBoolean.FALSE : JSBoolean.TRUE;
-        }
-        if (value instanceof JSBigInt b) {
-            return b.value().equals(BigInteger.ZERO) ? JSBoolean.FALSE : JSBoolean.TRUE;
-        }
-        if (value instanceof JSSymbol) {
-            return JSBoolean.TRUE; // Symbols are always truthy
-        }
-        if (value instanceof JSObject obj && obj.isHTMLDDA()) {
-            return JSBoolean.FALSE;
-        }
-        // Objects are truthy
-        return JSBoolean.TRUE;
+        return value instanceof JSBoolean bool ? bool : JSBoolean.valueOf(JSTypeChecking.isTruthy(value));
+    }
+
+    /** ToNumber for callers performing arithmetic on the result. */
+    public static double toDouble(JSContext context, JSValue value) {
+        return value instanceof JSNumber number ? number.value() : toNumber(context, value).value();
     }
 
     /**
@@ -748,6 +746,11 @@ public final class JSTypeConversions {
 
         // Truncate towards zero
         return d > 0 ? Math.floor(d) : Math.ceil(d);
+    }
+
+    /** ToString for callers that need UTF-16 text rather than a JavaScript string value. */
+    public static String toJavaString(JSContext context, JSValue value) {
+        return String.valueOf(stringOperand(context, value));
     }
 
     /**
@@ -925,29 +928,8 @@ public final class JSTypeConversions {
      * ToString(argument) ES2020 7.1.17
      */
     public static JSString toString(JSContext context, JSValue value) {
-        if (value == null) {
-            return new JSString("null");
-        } else if (value.isNullOrUndefined() || value.isBigInt() || value.isBoolean() || value.isNumber()
-                || value.isTypedArray()) {
-            return new JSString(value.toString());
-        } else if (value instanceof JSString s) {
-            return s;
-        } else if (value instanceof JSSymbol s) {
-            if (context != null) {
-                context.throwTypeError("Cannot convert a Symbol value to a string");
-            }
-            return JSString.EMPTY;
-        }
-
-        // For objects, call ToPrimitive with STRING hint
-        JSValue primitive = toPrimitive(context, value, PreferredType.STRING);
-        if (context != null && context.hasPendingException()) {
-            return JSString.EMPTY;
-        }
-        if (primitive == value) {
-            return new JSString("[object Object]");
-        }
-        return toString(context, primitive);
+        JSValue operand = stringOperand(context, value);
+        return operand instanceof JSString string ? string : new JSString(String.valueOf(operand));
     }
 
     /**
@@ -991,7 +973,7 @@ public final class JSTypeConversions {
      * ToUint8Clamp(value) ES operation used by Uint8ClampedArray element writes.
      */
     public static int toUint8Clamp(JSContext context, JSValue value) {
-        return toUint8Clamp(toNumber(context, value).value());
+        return toUint8Clamp(toDouble(context, value));
     }
 
     private static JSBigInt tryStringToBigInt(String value) {

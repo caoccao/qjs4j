@@ -815,7 +815,7 @@ final class IteratorOpcodes {
                     if (executionContext.capturePendingException()) {
                         return;
                     }
-                    if (JSTypeConversions.toBoolean(doneValue).value()) {
+                    if (JSTypeChecking.isTruthy(doneValue)) {
                         if (reuseDelegateIterator && vm.yieldSkipCount > 0) {
                             vm.yieldSkipCount--;
                         }
@@ -867,7 +867,7 @@ final class IteratorOpcodes {
         if (execution.capturePendingException()) {
             return ReplayStep.ABRUPT;
         }
-        if (!JSTypeConversions.toBoolean(done).value()) {
+        if (!JSTypeChecking.isTruthy(done)) {
             return ReplayStep.YIELDED;
         }
         JSValue value = result.get(PropertyKey.VALUE);
@@ -911,7 +911,7 @@ final class IteratorOpcodes {
             if (executionContext.capturePendingException()) {
                 return false;
             }
-            if (!JSTypeConversions.toBoolean(done).value()) {
+            if (!JSTypeChecking.isTruthy(done)) {
                 yieldDelegateResult(executionContext, iterator, result, null, synchronous ? executionContext.pc : -1,
                         nativeAsync);
                 return true;

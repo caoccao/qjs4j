@@ -37,7 +37,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
     }
 
     private static boolean isUnicodeSetsClassEnd(CompileContext context) {
-        return context.pos >= context.codePoints.length || context.codePoints[context.pos] == ']';
+        return !context.hasMore() || context.peek() == ']';
     }
 
     private static boolean isUnicodeSetsOperatorAt(CompileContext context, String operator) {
@@ -59,10 +59,10 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
     }
 
     private static RegExpUnicodeSet parseUnicodeSetsElement(CompileContext context) {
-        if (context.pos >= context.codePoints.length) {
+        if (!context.hasMore()) {
             throw new RegExpSyntaxException("Unterminated character class");
         }
-        int currentChar = context.codePoints[context.pos];
+        int currentChar = context.peek();
         if (currentChar == '\\') {
             context.pos++;
             return parseUnicodeSetsEscapeElement(context);
@@ -82,10 +82,10 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
     }
 
     private static RegExpUnicodeSet parseUnicodeSetsEscapeElement(CompileContext context) {
-        if (context.pos >= context.codePoints.length) {
+        if (!context.hasMore()) {
             throw new RegExpSyntaxException("Incomplete escape in character class");
         }
-        int escapedChar = context.codePoints[context.pos];
+        int escapedChar = context.peek();
         if (escapedChar == 'q') {
             return parseUnicodeSetsStringLiteralSet(context);
         }
@@ -134,8 +134,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
             while (isUnicodeSetsOperatorAt(context, operator)) {
                 context.pos += 2;
                 // ClassIntersection :: ClassSetOperand && [lookahead ≠ &] ClassSetOperand
-                if ("&&".equals(operator) && context.pos < context.codePoints.length
-                        && context.codePoints[context.pos] == '&') {
+                if ("&&".equals(operator) && context.at('&')) {
                     throw new RegExpSyntaxException("Invalid character in character class");
                 }
                 context.lastUnicodeSetsOperandWasRange = false;
@@ -165,10 +164,10 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
     }
 
     private static RegExpUnicodeSet parseUnicodeSetsOperand(CompileContext context) {
-        if (context.pos >= context.codePoints.length) {
+        if (!context.hasMore()) {
             throw new RegExpSyntaxException("Unterminated character class");
         }
-        if (context.codePoints[context.pos] == '[') {
+        if (context.peek() == '[') {
             RegExpUnicodeSet nested = read(context);
             context.lastUnicodeSetsOperandWasRange = false;
             return nested;
@@ -177,12 +176,11 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
         if (firstElement.singleCodePoint() == null) {
             return firstElement;
         }
-        if (context.pos + 1 == context.codePoints.length && context.codePoints[context.pos] == '-') {
+        if (context.pos + 1 == context.codePoints.length && context.peek() == '-') {
             // A range cut off by the end of the pattern: the class is unterminated, as V8 reports it.
             throw new RegExpSyntaxException("Unterminated character class");
         }
-        if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '-'
-                && !isUnicodeSetsOperatorAt(context, "--") && context.pos + 1 < context.codePoints.length
+        if (context.at('-') && !isUnicodeSetsOperatorAt(context, "--") && context.pos + 1 < context.codePoints.length
                 && context.codePoints[context.pos + 1] != ']') {
             int rangeStart = firstElement.singleCodePoint();
             context.pos++;
@@ -210,22 +208,21 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
 
     private static RegExpUnicodeSet parseUnicodeSetsStringLiteralSet(CompileContext context) {
         context.pos++; // Skip 'q'
-        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
+        if (!context.consume('{')) {
             throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
         }
-        context.pos++;
 
         List<int[]> sequences = new ArrayList<>();
         while (true) {
             List<Integer> sequenceCodePoints = new ArrayList<>();
-            while (context.pos < context.codePoints.length) {
-                int currentChar = context.codePoints[context.pos];
+            while (context.hasMore()) {
+                int currentChar = context.peek();
                 if (currentChar == '|' || currentChar == '}') {
                     break;
                 }
                 if (currentChar == '\\') {
                     context.pos++;
-                    if (context.pos >= context.codePoints.length) {
+                    if (!context.hasMore()) {
                         throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
                     }
                     EscapedCodePoint unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context.codePoints,
@@ -234,7 +231,7 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
                         sequenceCodePoints.add(unicodeEscapeParseResult.codePoint());
                         context.pos = unicodeEscapeParseResult.nextPos();
                     } else {
-                        int escapedChar = context.codePoints[context.pos++];
+                        int escapedChar = context.read();
                         sequenceCodePoints.add(escapedChar);
                     }
                 } else {
@@ -245,10 +242,10 @@ record RegExpUnicodeSet(int[] ranges, List<int[]> sequences, Integer singleCodeP
 
             sequences.add(toIntArray(sequenceCodePoints));
 
-            if (context.pos >= context.codePoints.length) {
+            if (!context.hasMore()) {
                 throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
             }
-            if (context.codePoints[context.pos] == '}') {
+            if (context.peek() == '}') {
                 context.pos++;
                 break;
             }

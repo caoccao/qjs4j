@@ -104,7 +104,7 @@ public class TemporalPropertyBag {
             return string.value();
         }
         if (value instanceof JSObject) {
-            return JSTypeConversions.toString(context, value).value();
+            return JSTypeConversions.toJavaString(context, value);
         }
         return context.rejectTypeError("Temporal error: Offset must be string.");
     }

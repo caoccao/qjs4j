@@ -84,7 +84,7 @@ public final class StringConstructor {
         StringBuilder result = new StringBuilder();
         for (JSValue arg : args) {
             // Convert to number
-            double value = JSTypeConversions.toNumber(context, arg).value();
+            double value = JSTypeConversions.toDouble(context, arg);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -171,7 +171,7 @@ public final class StringConstructor {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            String nextSeg = JSTypeConversions.toString(context, nextVal).value();
+            String nextSeg = JSTypeConversions.toJavaString(context, nextVal);
             result.append(nextSeg);
 
             // Add substitution if available (substitutions start from args[1])
@@ -179,7 +179,7 @@ public final class StringConstructor {
                 int subIndex = (int) i + 1;
                 if (subIndex < args.length) {
                     JSValue sub = args[subIndex];
-                    String subStr = JSTypeConversions.toString(context, sub).value();
+                    String subStr = JSTypeConversions.toJavaString(context, sub);
                     result.append(subStr);
                 }
             }

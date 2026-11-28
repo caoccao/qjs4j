@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.core.JSSymbol;
-import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -52,7 +50,7 @@ final class ExpressionDestructuringAssignmentCompiler {
         if (element instanceof AssignmentExpression assignment
                 && assignment.getOperator() == AssignmentOperator.ASSIGN) {
             target = assignment.getLeft();
-            EmitHelpers.emitDefaultValue(compilerContext, target instanceof Identifier id ? id.getName() : null,
+            PatternCompiler.emitDefaultValue(compilerContext, target instanceof Identifier id ? id.getName() : null,
                     assignment.getRight());
         }
         if (depth == 0) {
@@ -68,8 +66,7 @@ final class ExpressionDestructuringAssignmentCompiler {
             emitter.emitOpcode(Opcode.DROP);
             compilerContext.compileExpression(leftExpression);
             emitter.emitOpcode(Opcode.DROP);
-            emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            emitter.emitU8(5);
+            emitter.emitThrowError("invalid assignment left-hand side", 5);
             return;
         }
         compile(compilerContext, leftExpression);

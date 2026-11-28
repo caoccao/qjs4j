@@ -142,7 +142,7 @@ public final class StringReplacement {
                         return null;
                     }
                     if (!(groupValue instanceof JSUndefined)) {
-                        String replacement = JSTypeConversions.toString(context, groupValue).value();
+                        String replacement = JSTypeConversions.toJavaString(context, groupValue);
                         if (context.hasPendingException() || resultBuilder.exceedsMaxLength(replacement.length())) {
                             return null;
                         }

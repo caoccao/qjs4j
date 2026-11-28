@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.AssignmentPattern;
 import com.caoccao.qjs4j.compilation.ast.Identifier;
-import com.caoccao.qjs4j.vm.Opcode;
 
 /**
  * Compiles AssignmentPattern (destructuring with default value) into bytecode. Handles patterns like [x = defaultVal]
@@ -30,7 +29,7 @@ final class AssignmentPatternCompiler {
     }
 
     static void compile(CompilerContext compilerContext, AssignmentPattern assignPattern) {
-        EmitHelpers.emitDefaultValue(compilerContext,
+        PatternCompiler.emitDefaultValue(compilerContext,
                 assignPattern.getLeft() instanceof Identifier id ? id.getName() : null, assignPattern.getRight());
         compilerContext.compilePattern(assignPattern.getLeft());
     }

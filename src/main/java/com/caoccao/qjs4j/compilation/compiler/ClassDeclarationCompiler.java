@@ -17,14 +17,12 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.core.JSBytecodeFunction;
-import com.caoccao.qjs4j.core.JSKeyword;
-import com.caoccao.qjs4j.core.JSSymbol;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.math.BigInteger;
 import java.util.*;
 
 /**
@@ -204,7 +202,7 @@ final class ClassDeclarationCompiler {
         methodFunc.setHasParameterExpressions(functionExpression.getFunctionParams().hasNonSimpleParameters());
 
         // Set up capture source infos for outer variable closure capture
-        EmitHelpers.emitCapturedValues(methodCompiler, methodFunc);
+        methodCompiler.context().captureResolver.initializeTemplate(methodFunc);
 
         return methodFunc;
     }
@@ -263,7 +261,7 @@ final class ClassDeclarationCompiler {
         int returnValueIndex = blockCtx.scopeManager.currentScope()
                 .declareLocal("#static_block_return_" + blockCtx.emitter.currentOffset());
         blockCtx.emitter.emitPutLocal(returnValueIndex);
-        EmitHelpers.emitCurrentScopeUsingDisposal(blockCtx);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(blockCtx);
         blockCtx.emitter.emitGetLocal(returnValueIndex);
         blockCtx.emitter.emitOpcode(Opcode.RETURN);
 
@@ -353,9 +351,50 @@ final class ClassDeclarationCompiler {
                 "constructor() { [default] }");
 
         // Set up capture source infos for outer variable closure capture
-        EmitHelpers.emitCapturedValues(constructorCompiler, ctorFunc);
+        constructorCompiler.context().captureResolver.initializeTemplate(ctorFunc);
 
         return ctorFunc;
+    }
+
+    /**
+     * Emit the correct opcode sequence for a class method definition. Class methods always use DEFINE_METHOD_COMPUTED
+     * so attributes and DefinePropertyOrThrow semantics match ECMAScript class semantics. Stack before: ... obj Stack
+     * after: ... obj (method added to obj)
+     */
+    static void emitClassMethodDefinition(CompilerContext compilerContext, MethodDefinition method,
+            JSBytecodeFunction methodFunc, String methodName) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        String kind = method.getKind();
+        boolean isComputedKey = method.isComputed() && !(method.getKey() instanceof Literal);
+        // Class definitions must create fresh function objects per evaluation.
+
+        if (isComputedKey) {
+            // Per ES2024 10.2.1, all parts of a class are strict mode code.
+            if (compilerContext.inClassBody) {
+                FunctionExpressionCompiler.emitStrictClassBodyExpression(compilerContext, method.getKey());
+            } else {
+                compilerContext.compileExpression(method.getKey());
+            }
+        } else if (method.getKey() instanceof Identifier) {
+            emitter.emitPushConstant(new JSString(methodName));
+        } else {
+            // For Literal keys (numeric, null, string), compile the expression directly
+            // to preserve the correct type (e.g., JSNumber for numeric property names)
+            compilerContext.compileExpression(method.getKey());
+        }
+
+        emitter.emitOpcodeConstant(Opcode.FCLOSURE, methodFunc);
+
+        int methodKind;
+        if (JSKeyword.GET.equals(kind)) {
+            methodKind = 1;
+        } else if (JSKeyword.SET.equals(kind)) {
+            methodKind = 2;
+        } else {
+            methodKind = 0;
+        }
+        // Class methods are non-enumerable, so enumerable bit is not set.
+        emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
     }
 
     private static void emitFieldDefinition(CompilerContext ctx, PropertyDefinition field,
@@ -409,7 +448,7 @@ final class ClassDeclarationCompiler {
             ctx.emitter.emitPushConstant(symbol);
             ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         } else {
-            EmitHelpers.emitNonComputedPublicFieldKey(ctx, field.getKey());
+            emitNonComputedPublicFieldKey(ctx, field.getKey());
         }
         emitFieldValue(ctx, field);
         ctx.emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, 4);
@@ -423,6 +462,32 @@ final class ClassDeclarationCompiler {
         }
     }
 
+    static void emitNonComputedPublicFieldKey(CompilerContext compilerContext, Expression key) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        if (key instanceof Identifier id) {
+            emitter.emitPushConstant(new JSString(id.getName()));
+            return;
+        }
+        if (key instanceof Literal literal) {
+            Object value = literal.getValue();
+            if (value == null) {
+                emitter.emitOpcode(Opcode.NULL);
+            } else if (value instanceof Boolean bool) {
+                emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
+            } else if (value instanceof BigInteger bigInt) {
+                emitter.emitPushConstant(new JSBigInt(bigInt));
+            } else if (value instanceof Number num) {
+                emitter.emitPushConstant(JSNumber.of(num.doubleValue()));
+            } else if (value instanceof String str) {
+                emitter.emitPushConstant(new JSString(str));
+            } else {
+                throw new JSCompilerException("Unsupported field key literal type: " + value.getClass(), key);
+            }
+            return;
+        }
+        throw new JSCompilerException("Invalid non-computed field key", key);
+    }
+
     private static JSBytecodeFunction finishStaticInitializer(CompilerContext compilerContext,
             BytecodeCompiler compiler, String name, String source) {
         CompilerContext ctx = compiler.context();
@@ -431,7 +496,7 @@ final class ClassDeclarationCompiler {
         Bytecode bytecode = ctx.emitter.build(localCount);
         JSBytecodeFunction initializer = new JSBytecodeFunction(compilerContext.context, bytecode, name, 0,
                 JSValue.NO_ARGS, null, false, false, false, false, true, source);
-        EmitHelpers.emitCapturedValues(compiler, initializer);
+        compiler.context().captureResolver.initializeTemplate(initializer);
         return initializer;
     }
 

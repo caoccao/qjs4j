@@ -61,24 +61,25 @@ final class ModuleDeclarationParser {
     }
 
     private void expectContextualKeyword(TokenType type, String keyword) {
-        if (!parserContext.match(type) || parserContext.currentToken.escaped()) {
-            throw new JSSyntaxErrorException(
-                    "Expected '" + keyword + "' but got '" + parserContext.currentToken.value() + "' at line "
-                            + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+        TokenCursor tokens = parserContext.tokens;
+        if (!tokens.match(type) || tokens.current().escaped()) {
+            throw new JSSyntaxErrorException("Expected '" + keyword + "' but got '" + tokens.current().value()
+                    + "' at line " + tokens.current().line() + ", column " + tokens.current().column());
         }
-        parserContext.advance();
+        tokens.advance();
     }
 
     Statement parseExportDeclaration() {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.EXPORT);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.EXPORT);
 
-        if (parserContext.match(TokenType.DEFAULT)) {
-            parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
+        if (tokens.match(TokenType.DEFAULT)) {
+            tokens.requireUnescapedToken("Unexpected token IDENTIFIER");
             addModuleExportedName("default");
-            parserContext.advance();
+            tokens.advance();
 
-            if (parserContext.match(TokenType.CLASS)) {
+            if (tokens.match(TokenType.CLASS)) {
                 // export default class { ... } — infer name "default" per spec
                 ClassExpression classExpr = FunctionClassParser.parseClassExpression(parserContext);
                 String className = classExpr.getId() != null ? classExpr.getId().getName() : null;
@@ -91,17 +92,15 @@ final class ModuleDeclarationParser {
                     parserContext.declarations.addModuleLexicalName(className);
                 }
                 return new ExpressionStatement(classExpr, location);
-            } else if (parserContext.match(TokenType.FUNCTION)) {
+            } else if (tokens.match(TokenType.FUNCTION)) {
                 Statement funcDecl = FunctionClassParser.parseExportDefaultFunctionDeclaration(parserContext, false);
-                if (parserContext.match(TokenType.LPAREN)) {
+                if (tokens.match(TokenType.LPAREN)) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 return funcDecl;
-            } else if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
-                    && parserContext.peek().type() == TokenType.FUNCTION
-                    && parserContext.peek().line() == parserContext.currentToken.line()) {
+            } else if (tokens.match(TokenType.ASYNC) && tokens.nextOnSameLine(TokenType.FUNCTION)) {
                 Statement asyncDecl = FunctionClassParser.parseExportDefaultAsyncFunctionDeclaration(parserContext);
-                if (parserContext.match(TokenType.LPAREN)) {
+                if (tokens.match(TokenType.LPAREN)) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 return asyncDecl;
@@ -116,10 +115,10 @@ final class ModuleDeclarationParser {
         // export * from 'module';
         // export * as name from 'module';
         // export * as "string" from 'module';
-        if (parserContext.consumeIf(TokenType.MUL)) {
-            if (parserContext.match(TokenType.AS)) {
-                parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
-                parserContext.advance();
+        if (tokens.consumeIf(TokenType.MUL)) {
+            if (tokens.match(TokenType.AS)) {
+                tokens.requireUnescapedToken("Unexpected token IDENTIFIER");
+                tokens.advance();
                 // export name can be identifier or string literal
                 String exportedName = parseModuleExportName();
                 addModuleExportedName(exportedName);
@@ -131,31 +130,28 @@ final class ModuleDeclarationParser {
         }
 
         // export var/let/const/function/class ...
-        if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET)
-                || parserContext.match(TokenType.CONST)) {
+        if (tokens.match(TokenType.VAR) || tokens.match(TokenType.LET) || tokens.match(TokenType.CONST)) {
             Statement decl = StatementParser.parseVariableDeclaration(parserContext);
             // Track exported names from declaration
             collectDeclaredNames(decl);
             return decl;
         }
-        if (parserContext.match(TokenType.FUNCTION)) {
+        if (tokens.match(TokenType.FUNCTION)) {
             Statement decl = FunctionClassParser.parseFunctionDeclaration(parserContext, false, false);
             collectDeclaredNames(decl);
             return decl;
         }
-        if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
-                && parserContext.peek().type() == TokenType.FUNCTION
-                && parserContext.peek().line() == parserContext.currentToken.line()) {
+        if (tokens.match(TokenType.ASYNC) && tokens.nextOnSameLine(TokenType.FUNCTION)) {
             Statement decl = StatementParser.parseAsyncDeclaration(parserContext);
             collectDeclaredNames(decl);
             return decl;
         }
-        if (parserContext.match(TokenType.CLASS)) {
+        if (tokens.match(TokenType.CLASS)) {
             Statement decl = FunctionClassParser.parseClassDeclaration(parserContext);
             collectDeclaredNames(decl);
             return decl;
         }
-        if (parserContext.match(TokenType.LBRACE)) {
+        if (tokens.match(TokenType.LBRACE)) {
             parseExportNamedSpecifiers();
             parserContext.consumeSemicolon();
             return new BlockStatement(List.of(), location);
@@ -169,42 +165,43 @@ final class ModuleDeclarationParser {
      * ModuleExportName.
      */
     private void parseExportNamedSpecifiers() {
-        parserContext.advance(); // consume '{'
+        TokenCursor tokens = parserContext.tokens;
+        tokens.advance(); // consume '{'
         boolean hasStringLocalName = false;
         exportSpecifiers.clear();
-        while (!parserContext.match(TokenType.RBRACE)) {
-            if (parserContext.consumeIf(TokenType.COMMA)) {
+        while (!tokens.match(TokenType.RBRACE)) {
+            if (tokens.consumeIf(TokenType.COMMA)) {
                 continue;
             }
             // The local name in export { local as exported }
-            boolean localIsString = parserContext.match(TokenType.STRING);
+            boolean localIsString = tokens.match(TokenType.STRING);
             if (localIsString) {
                 hasStringLocalName = true;
             }
             String localName = parseModuleExportName();
             String exportedName = localName;
-            if (parserContext.match(TokenType.IDENTIFIER) && JSKeyword.AS.equals(parserContext.currentToken.value())) {
+            if (tokens.identifier(JSKeyword.AS)) {
                 throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
             }
-            if (parserContext.match(TokenType.AS)) {
-                parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
-                parserContext.advance();
+            if (tokens.match(TokenType.AS)) {
+                tokens.requireUnescapedToken("Unexpected token IDENTIFIER");
+                tokens.advance();
                 // The exported name can also be identifier or string
                 exportedName = parseModuleExportName();
             }
             exportSpecifiers.add(new ExportSpecifier(localName, exportedName));
-            parserContext.consumeIf(TokenType.COMMA);
+            tokens.consumeIf(TokenType.COMMA);
         }
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
         boolean hasFrom = false;
-        if (parserContext.match(TokenType.FROM)) {
-            parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
+        if (tokens.match(TokenType.FROM)) {
+            tokens.requireUnescapedToken("Unexpected token IDENTIFIER");
             hasFrom = true;
-            parserContext.advance();
+            tokens.advance();
             parseSourceAndAttributes();
         } else if (hasStringLocalName) {
             // String local names require a 'from' clause per spec
-            throw new JSSyntaxErrorException("Expected 'from' but got '" + parserContext.currentToken.value() + "'");
+            throw new JSSyntaxErrorException("Expected 'from' but got '" + tokens.current().value() + "'");
         }
         // Register exported names and track local bindings
         for (ExportSpecifier spec : exportSpecifiers) {
@@ -217,11 +214,11 @@ final class ModuleDeclarationParser {
     }
 
     private void parseImportBindings() {
-        if (parserContext.consumeIf(TokenType.MUL)) {
+        if (parserContext.tokens.consumeIf(TokenType.MUL)) {
             expectContextualKeyword(TokenType.AS, "as");
             String name = parserContext.parseBindingIdentifierName();
             parserContext.declarations.addModuleLexicalName(name);
-        } else if (parserContext.match(TokenType.LBRACE)) {
+        } else if (parserContext.tokens.match(TokenType.LBRACE)) {
             parseNamedImportSpecifiers();
         } else {
             throw new JSSyntaxErrorException("Unsupported import declaration");
@@ -229,28 +226,28 @@ final class ModuleDeclarationParser {
     }
 
     Statement parseImportDeclarationStatement() {
+        TokenCursor tokens = parserContext.tokens;
         if (!parserContext.moduleMode || parserContext.functionNesting != 0) {
             throw new JSSyntaxErrorException("Cannot use import statement outside a module");
         }
 
-        parserContext.expect(TokenType.IMPORT);
+        tokens.expect(TokenType.IMPORT);
 
         // Side-effect-only import: import 'module';
-        if (parserContext.consumeIf(TokenType.STRING)) {
+        if (tokens.consumeIf(TokenType.STRING)) {
             parseWithClause();
             parserContext.consumeSemicolon();
             return null;
         }
 
         // In a deferred namespace import the rest of the clause has ordinary namespace syntax.
-        if (parserContext.match(TokenType.IDENTIFIER) && "defer".equals(parserContext.currentToken.value())
-                && parserContext.peek() != null && parserContext.peek().type() == TokenType.MUL) {
-            parserContext.advance();
+        if (tokens.identifier("defer") && tokens.nextIs(TokenType.MUL)) {
+            tokens.advance();
         }
-        if (parserContext.match(TokenType.IDENTIFIER)) {
+        if (tokens.match(TokenType.IDENTIFIER)) {
             String name = parserContext.parseBindingIdentifierName();
             parserContext.declarations.addModuleLexicalName(name);
-            if (parserContext.consumeIf(TokenType.COMMA)) {
+            if (tokens.consumeIf(TokenType.COMMA)) {
                 parseImportBindings();
             }
         } else {
@@ -263,33 +260,35 @@ final class ModuleDeclarationParser {
     }
 
     private String parseModuleExportName() {
-        TokenType type = parserContext.currentToken.type();
+        TokenCursor tokens = parserContext.tokens;
+        TokenType type = tokens.current().type();
         if (type == TokenType.STRING) {
-            String name = parserContext.currentToken.value();
+            String name = tokens.current().value();
             // ES2024: ModuleExportName string must not contain unpaired surrogates
             if (UnicodeStringUtils.hasUnpairedSurrogate(name)) {
                 throw new JSSyntaxErrorException("Invalid module export name: unpaired surrogate");
             }
-            parserContext.advance();
+            tokens.advance();
             return name;
         }
         // Any IdentifierName including reserved keywords is allowed as
         // import/export specifier names (ES2024 ModuleExportName).
         if (type.isIdentifierName()) {
-            String name = parserContext.consumeValue();
+            String name = tokens.consumeValue();
             return name;
         }
-        throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+        throw tokens.unexpectedToken();
     }
 
     private void parseNamedImportSpecifiers() {
-        parserContext.expect(TokenType.LBRACE);
-        if (!parserContext.match(TokenType.RBRACE)) {
+        TokenCursor tokens = parserContext.tokens;
+        tokens.expect(TokenType.LBRACE);
+        if (!tokens.match(TokenType.RBRACE)) {
             while (true) {
                 String importName = parseModuleExportName();
                 String localName;
-                if (parserContext.match(TokenType.AS) && !parserContext.currentToken.escaped()) {
-                    parserContext.advance();
+                if (tokens.match(TokenType.AS) && !tokens.current().escaped()) {
+                    tokens.advance();
                     localName = parserContext.parseBindingIdentifierName();
                 } else {
                     localName = importName;
@@ -300,54 +299,54 @@ final class ModuleDeclarationParser {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
                 parserContext.declarations.addModuleLexicalName(localName);
-                if (!parserContext.match(TokenType.COMMA)) {
+                if (!tokens.match(TokenType.COMMA)) {
                     break;
                 }
-                parserContext.advance();
-                if (parserContext.match(TokenType.RBRACE)) {
+                tokens.advance();
+                if (tokens.match(TokenType.RBRACE)) {
                     break;
                 }
             }
         }
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
     }
 
     private void parseSourceAndAttributes() {
-        parserContext.expect(TokenType.STRING);
+        parserContext.tokens.expect(TokenType.STRING);
         parseWithClause();
     }
 
     private void parseWithClause() {
-        if (parserContext.currentToken.type() == TokenType.IDENTIFIER
-                && "with".equals(parserContext.currentToken.value())) {
-            parserContext.advance(); // consume 'with'
-            parserContext.expect(TokenType.LBRACE);
+        TokenCursor tokens = parserContext.tokens;
+        if (tokens.identifier("with")) {
+            tokens.advance(); // consume 'with'
+            tokens.expect(TokenType.LBRACE);
             Set<String> attributeKeys = new HashSet<>();
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            while (!tokens.match(TokenType.RBRACE) && !tokens.match(TokenType.EOF)) {
                 // Parse key: either identifier or string
                 String key;
-                if (parserContext.match(TokenType.STRING)) {
-                    key = parserContext.currentToken.value();
-                    parserContext.advance();
-                } else if (parserContext.currentToken.type().isIdentifierName()) {
+                if (tokens.match(TokenType.STRING)) {
+                    key = tokens.current().value();
+                    tokens.advance();
+                } else if (tokens.current().type().isIdentifierName()) {
                     // AttributeKey is IdentifierName, not IdentifierReference, so a reserved word
                     // is a valid key: `import x from './m.js' with {if: ''}` parses.
-                    key = parserContext.currentToken.value();
-                    parserContext.advance();
+                    key = tokens.current().value();
+                    tokens.advance();
                 } else {
                     throw new JSSyntaxErrorException("identifier expected");
                 }
                 if (!attributeKeys.add(key)) {
                     throw new JSSyntaxErrorException("Duplicate attribute key '" + key + "'");
                 }
-                parserContext.expect(TokenType.COLON);
-                parserContext.expect(TokenType.STRING);
-                if (!parserContext.match(TokenType.COMMA)) {
+                tokens.expect(TokenType.COLON);
+                tokens.expect(TokenType.STRING);
+                if (!tokens.match(TokenType.COMMA)) {
                     break;
                 }
-                parserContext.advance();
+                tokens.advance();
             }
-            parserContext.expect(TokenType.RBRACE);
+            tokens.expect(TokenType.RBRACE);
         }
     }
 

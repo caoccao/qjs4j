@@ -139,7 +139,7 @@ final class IntlListFormatBuiltins {
         }
 
         if (!(list instanceof JSObject listObj)) {
-            context.throwTypeError(JSTypeConversions.toString(context, list).value() + " is not iterable");
+            context.throwTypeError(JSTypeConversions.toJavaString(context, list) + " is not iterable");
             return result;
         }
 
@@ -204,7 +204,7 @@ final class IntlListFormatBuiltins {
                 if (returnMethod instanceof JSFunction returnFunc) {
                     returnFunc.call(context, iterator);
                 }
-                context.throwTypeError("Iterable yielded " + JSTypeConversions.toString(context, value).value()
+                context.throwTypeError("Iterable yielded " + JSTypeConversions.toJavaString(context, value)
                         + " which is not a string");
                 return result;
             }

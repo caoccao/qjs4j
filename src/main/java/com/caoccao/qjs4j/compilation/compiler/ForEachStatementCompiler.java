@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.core.disposable.JSAsyncDisposableStack;
-import com.caoccao.qjs4j.core.disposable.JSDisposableStack;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -93,7 +91,7 @@ final class ForEachStatementCompiler {
         }
         StatementCompiler.compileNestedStatement(compilerContext, statement.getBody());
         if (lexical) {
-            EmitHelpers.emitCloseLocForPattern(compilerContext, pattern);
+            PatternCompiler.emitCloseLocForPattern(compilerContext, pattern);
         }
     }
 
@@ -142,7 +140,7 @@ final class ForEachStatementCompiler {
         emitter.emitOpcode(Opcode.DROP);
 
         compilerContext.loopManager.popLoop();
-        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
     }
 
@@ -212,20 +210,17 @@ final class ForEachStatementCompiler {
         if (isUsingForOf) {
             // Create a NEW DisposableStack for each iteration
             boolean useAsyncStack = isAwaitUsingForOf || compilerContext.isInAsyncFunction;
-            String constructorName = useAsyncStack ? JSAsyncDisposableStack.NAME : JSDisposableStack.NAME;
-            emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
-            emitter.emitIntOperand(Opcode.CALL_CONSTRUCTOR, 0);
-            emitter.emitPutLocal(forOfUsingStackLocal);
+            UsingScopeCompiler.emitCreateStack(emitter, forOfUsingStackLocal, useAsyncStack);
 
             // Call stack.use(value) - value is on the stack
-            EmitHelpers.emitMethodCallWithSingleArgOnLocalObject(compilerContext, forOfUsingStackLocal, "use");
+            UsingScopeCompiler.emitRegisterResource(compilerContext, forOfUsingStackLocal);
         }
 
         compileBody(compilerContext, forOfStmt, pattern, lexical);
 
         // Per-iteration disposal for using/await-using
         if (isUsingForOf) {
-            EmitHelpers.emitScopeUsingDisposal(compilerContext, compilerContext.scopeManager.currentScope());
+            UsingScopeCompiler.emitScopeUsingDisposal(compilerContext, compilerContext.scopeManager.currentScope());
         }
 
         emitter.emitGoto(loopStart);
@@ -243,7 +238,7 @@ final class ForEachStatementCompiler {
             jumpOverBreakTarget = emitter.emitJump(Opcode.GOTO);
         }
         int breakTarget = emitter.currentOffset();
-        EmitHelpers.emitLoopIteratorClose(compilerContext, loop);
+        IteratorCompiler.emitLoopIteratorClose(compilerContext, loop);
         if (jumpOverBreakTarget >= 0) {
             emitter.patchJumpToHere(jumpOverBreakTarget);
         }
@@ -254,7 +249,7 @@ final class ForEachStatementCompiler {
         compilerContext.loopManager.popLoop();
 
         if (!isUsingForOf) {
-            EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+            UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         }
         compilerContext.scopeManager.exitScope();
     }
@@ -300,8 +295,7 @@ final class ForEachStatementCompiler {
         compilerContext.compileExpression(callExpr);
         emitter.emitOpcode(Opcode.DROP);
         // Throw ReferenceError
-        emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-        emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+        emitter.emitThrowError("invalid assignment left-hand side", 5); // JS_THROW_ERROR_INVALID_LVALUE
 
         // End label (when done=true)
         emitter.patchJumpToHere(jumpToEnd);
@@ -311,7 +305,7 @@ final class ForEachStatementCompiler {
         // Clean up iterator: drop catch_offset, next, iter
         emitter.emitDrops(3);
 
-        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
     }
 

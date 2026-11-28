@@ -29,7 +29,7 @@ public final class SymbolConstructor {
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         String description = null;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            description = JSTypeConversions.toString(context, args[0]).value();
+            description = JSTypeConversions.toJavaString(context, args[0]);
         }
         return new JSSymbol(description);
     }
@@ -105,7 +105,7 @@ public final class SymbolConstructor {
      */
     public static JSValue symbolFor(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue keyValue = JSValue.argumentOrUndefined(args, 0);
-        String key = JSTypeConversions.toString(context, keyValue).value();
+        String key = JSTypeConversions.toJavaString(context, keyValue);
         return context.getRuntime().getOrCreateGlobalSymbol(key);
     }
 }

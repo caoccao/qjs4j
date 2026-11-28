@@ -112,7 +112,7 @@ final class IntlFormatOptions {
         if (JSTypeChecking.isUndefinedOrMissing(rawValue)) {
             return null;
         }
-        double numberValue = JSTypeConversions.toNumber(context, rawValue).value();
+        double numberValue = JSTypeConversions.toDouble(context, rawValue);
         if (context.hasPendingException()) {
             return null;
         }
@@ -137,7 +137,7 @@ final class IntlFormatOptions {
         if (options instanceof JSObject) {
             return options;
         }
-        context.throwTypeError("Cannot convert " + JSTypeConversions.toString(context, options).value() + " to object");
+        context.throwTypeError("Cannot convert " + JSTypeConversions.toJavaString(context, options) + " to object");
         return JSUndefined.INSTANCE;
     }
 
@@ -200,7 +200,7 @@ final class IntlFormatOptions {
         if (JSTypeChecking.isUndefinedOrMissing(rawValue)) {
             return null;
         }
-        return JSTypeConversions.toString(context, rawValue).value();
+        return JSTypeConversions.toJavaString(context, rawValue);
     }
 
     static String readTextWidth(JSContext context, JSObject options, PropertyKey key) {

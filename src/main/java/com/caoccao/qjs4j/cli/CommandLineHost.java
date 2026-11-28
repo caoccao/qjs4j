@@ -237,7 +237,7 @@ final class CommandLineHost {
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("The \"callback\" argument must be of type function");
         }
-        double delayMillis = args.length > 1 ? JSTypeConversions.toNumber(context, args[1]).value() : 1;
+        double delayMillis = args.length > 1 ? JSTypeConversions.toDouble(context, args[1]) : 1;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

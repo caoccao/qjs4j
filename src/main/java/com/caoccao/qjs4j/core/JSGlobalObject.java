@@ -1342,9 +1342,7 @@ public final class JSGlobalObject {
 
         private static String argumentString(JSContext context, JSValue[] args) {
             JSValue value = JSValue.argumentOrUndefined(args, 0);
-            return value instanceof JSString string
-                    ? string.value()
-                    : JSTypeConversions.toString(context, value).value();
+            return value instanceof JSString string ? string.value() : JSTypeConversions.toJavaString(context, value);
         }
 
         /**
@@ -1460,7 +1458,7 @@ public final class JSGlobalObject {
             if (error != null) {
                 return error;
             }
-            double number = JSTypeConversions.toNumber(context, value).value();
+            double number = JSTypeConversions.toDouble(context, value);
             return JSBoolean.valueOf(nan ? Double.isNaN(number) : Double.isFinite(number));
         }
 

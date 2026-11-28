@@ -121,48 +121,36 @@ final class JSValueFactory {
 
     JSDate createJSDate(double timeValue) {
         JSDate jsDate = new JSDate(context, timeValue);
-        if (context.getCachedDatePrototype() != null) {
-            jsDate.setPrototype(context.getCachedDatePrototype());
-        } else {
-            context.transferPrototype(jsDate, JSDate.NAME);
-        }
-        return jsDate;
+        return initializePrototype(jsDate, context.getCachedDatePrototype(), JSDate.NAME);
     }
 
     JSObject createJSObject() {
         JSObject jsObject = new JSObject(context);
-        if (context.getObjectPrototype() != null) {
-            jsObject.setPrototype(context.getObjectPrototype());
-        } else {
-            context.transferPrototype(jsObject, JSObject.NAME);
-        }
-        return jsObject;
+        return initializePrototype(jsObject, context.getObjectPrototype(), JSObject.NAME);
     }
 
     JSPromise createJSPromise() {
         JSPromise jsPromise = new JSPromise(context);
-        if (context.getCachedPromisePrototype() != null) {
-            jsPromise.setPrototype(context.getCachedPromisePrototype());
-        } else {
-            context.transferPrototype(jsPromise, JSPromise.NAME);
-        }
-        return jsPromise;
+        return initializePrototype(jsPromise, context.getCachedPromisePrototype(), JSPromise.NAME);
     }
 
     JSRegExp createJSRegExp(String pattern, String flags) {
         JSRegExp jsRegExp = new JSRegExp(context, pattern, flags);
-        if (context.getCachedRegExpPrototype() != null) {
-            jsRegExp.setPrototype(context.getCachedRegExpPrototype());
-        } else {
-            context.transferPrototype(jsRegExp, JSRegExp.NAME);
-        }
-        return jsRegExp;
+        return initializePrototype(jsRegExp, context.getCachedRegExpPrototype(), JSRegExp.NAME);
     }
 
     <T extends JSError> T initializeError(T error) {
         context.transferPrototype(error, error.getErrorName());
         context.captureStackTrace(error);
         return error;
+    }
+
+    private <T extends JSObject> T initializePrototype(T value, JSObject cached, String constructorName) {
+        if (cached != null) {
+            value.setPrototype(cached);
+            return value;
+        }
+        return initializePrototype(value, constructorName);
     }
 
     <T extends JSObject> T initializePrototype(T value, String constructorName) {

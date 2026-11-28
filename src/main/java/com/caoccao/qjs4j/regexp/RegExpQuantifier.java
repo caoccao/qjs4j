@@ -47,15 +47,13 @@ record RegExpQuantifier(int min, int max) {
         int min = readDecimal(context);
         if (min >= 0) {
             int max = min;
-            if (context.pos < context.codePoints.length && context.codePoints[context.pos] == ',') {
-                context.pos++;
+            if (context.consume(',')) {
                 max = readDecimal(context);
                 if (max < 0) {
                     max = Integer.MAX_VALUE;
                 }
             }
-            if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '}') {
-                context.pos++;
+            if (context.consume('}')) {
                 return new RegExpQuantifier(min, max);
             }
         }
@@ -66,8 +64,8 @@ record RegExpQuantifier(int min, int max) {
     private static int readDecimal(CompileContext context) {
         int start = context.pos;
         long value = 0;
-        while (context.pos < context.codePoints.length) {
-            int digit = context.codePoints[context.pos] - '0';
+        while (context.hasMore()) {
+            int digit = context.peek() - '0';
             if (digit < 0 || digit > 9) {
                 break;
             }
@@ -125,7 +123,7 @@ record RegExpQuantifier(int min, int max) {
         }
         boolean greedy = true;
         // Check for non-greedy modifier '?'
-        if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '?') {
+        if (context.at('?')) {
             greedy = false;
             context.pos++;
         }

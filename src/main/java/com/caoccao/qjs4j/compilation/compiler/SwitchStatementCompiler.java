@@ -122,7 +122,7 @@ final class SwitchStatementCompiler {
 
         compilerContext.loopManager.popLoop();
 
-        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }

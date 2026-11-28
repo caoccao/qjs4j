@@ -95,15 +95,15 @@ public enum Opcode {
     /** a b -> a/b */
     DIV(153, 1, 2, 1, NumericOpcodes::handleDivisionOrRemainder),
     /** a -> */
-    DROP(14, 1, 1, 0, OpcodeHandler::handleDrop),
+    DROP(14, 1, 1, 0, StackOpcodes::drop),
     /** a -> a a */
-    DUP(17, 1, 1, 2, OpcodeHandler::handleDup),
+    DUP(17, 1, 1, 2, (op, ctx) -> StackOpcodes.duplicate(ctx, 1, 1)),
     /** a b -> a a b */
-    DUP1(18, 1, 2, 3, OpcodeHandler::handleDup1),
+    DUP1(18, 1, 2, 3, (op, ctx) -> StackOpcodes.duplicate(ctx, 2, 1)),
     /** a b -> a b a b */
-    DUP2(19, 1, 2, 4, OpcodeHandler::handleDup2),
+    DUP2(19, 1, 2, 4, (op, ctx) -> StackOpcodes.duplicate(ctx, 2, 2)),
     /** a b c -> a b c a b c */
-    DUP3(20, 1, 3, 6, OpcodeHandler::handleDup3),
+    DUP3(20, 1, 3, 6, (op, ctx) -> StackOpcodes.duplicate(ctx, 3, 3)),
     /** a b -> a==b (abstract equality) */
     EQ(167, 1, 2, 1, NumericOpcodes::handleAbstractEquality),
     /** func args... -> ret_val */
@@ -189,23 +189,23 @@ public enum Opcode {
     /** jump to finally block (push return address) */
     GOSUB(108, 5, 0, 0, OpcodeHandler::handleGosub),
     /** unconditional jump (i32 label offset) */
-    GOTO(106, 5, 0, 0, OpcodeHandler::handleGoto),
+    GOTO(106, 5, 0, 0, OpcodeHandler::jumpI32),
     /** unconditional jump (i16 offset) */
-    GOTO16(235, 3, 0, 0, OpcodeHandler::handleGoto16),
+    GOTO16(235, 3, 0, 0, OpcodeHandler::jumpCompact),
     /** unconditional jump (i8 offset) */
-    GOTO8(234, 2, 0, 0, OpcodeHandler::handleGoto8),
+    GOTO8(234, 2, 0, 0, OpcodeHandler::jumpCompact),
     /** a b -> a>b */
     GT(163, 1, 2, 1, NumericOpcodes::handleGt),
     /** a b -> a>=b */
     GTE(164, 1, 2, 1, NumericOpcodes::handleGte),
     /** val -> (branch if false, i32 label offset) */
-    IF_FALSE(104, 5, 1, 0, OpcodeHandler::handleIfFalse),
+    IF_FALSE(104, 5, 1, 0, (op, ctx) -> OpcodeHandler.branchIf(op, ctx, false, false)),
     /** val -> (branch if false, i8 offset) */
-    IF_FALSE8(232, 2, 1, 0, OpcodeHandler::handleIfFalse8),
+    IF_FALSE8(232, 2, 1, 0, (op, ctx) -> OpcodeHandler.branchIf(op, ctx, false, true)),
     /** val -> (branch if true, i32 label offset) */
-    IF_TRUE(105, 5, 1, 0, OpcodeHandler::handleIfTrue),
+    IF_TRUE(105, 5, 1, 0, (op, ctx) -> OpcodeHandler.branchIf(op, ctx, true, false)),
     /** val -> (branch if true, i8 offset) */
-    IF_TRUE8(233, 2, 1, 0, OpcodeHandler::handleIfTrue8),
+    IF_TRUE8(233, 2, 1, 0, (op, ctx) -> OpcodeHandler.branchIf(op, ctx, true, true)),
     /** specifier options -> promise (dynamic module import) */
     IMPORT(54, 1, 2, 1, ModuleOpcodes::handleImport),
     /** prop obj -> bool (in operator) */
@@ -219,11 +219,11 @@ public enum Opcode {
     /** suspend generator at start */
     INITIAL_YIELD(133, 1, 0, 0, IteratorOpcodes::handleInitialYield),
     /** obj a -> a obj a (dup_x1) */
-    INSERT2(21, 1, 2, 3, OpcodeHandler::handleInsert2),
+    INSERT2(21, 1, 2, 3, (op, ctx) -> StackOpcodes.insertTop(ctx, 2)),
     /** obj prop a -> a obj prop a (dup_x2) */
-    INSERT3(22, 1, 3, 4, OpcodeHandler::handleInsert3),
+    INSERT3(22, 1, 3, 4, (op, ctx) -> StackOpcodes.insertTop(ctx, 3)),
     /** this obj prop a -> a this obj prop a */
-    INSERT4(23, 1, 4, 5, OpcodeHandler::handleInsert4),
+    INSERT4(23, 1, 4, 5, (op, ctx) -> StackOpcodes.insertTop(ctx, 4)),
     /** obj ctor -> bool (instanceof operator) */
     INSTANCEOF(165, 1, 2, 1, OpcodeHandler::handleInstanceof),
     /** never emitted */
@@ -267,7 +267,7 @@ public enum Opcode {
     /** a b -> a!=b */
     NEQ(168, 1, 2, 1, NumericOpcodes::handleAbstractEquality),
     /** a b -> b */
-    NIP(15, 1, 2, 1, OpcodeHandler::handleNip),
+    NIP(15, 1, 2, 1, StackOpcodes::nip),
     /** catch ... a -> a (remove catch handler) */
     NIP_CATCH(110, 1, 2, 1, OpcodeHandler::handleNipCatch),
     /** a b c -> b c */
@@ -283,11 +283,11 @@ public enum Opcode {
     /** a b -> a|b (bitwise OR) */
     OR(173, 1, 2, 1, NumericOpcodes::bitwise),
     /** obj a b -> a obj b */
-    PERM3(24, 1, 3, 3, OpcodeHandler::handlePerm3),
+    PERM3(24, 1, 3, 3, (op, ctx) -> StackOpcodes.rotateRight(ctx, 2, 1)),
     /** obj prop a b -> a obj prop b */
-    PERM4(25, 1, 4, 4, OpcodeHandler::handlePerm4),
+    PERM4(25, 1, 4, 4, (op, ctx) -> StackOpcodes.rotateRight(ctx, 3, 1)),
     /** this obj prop a b -> a this obj prop b */
-    PERM5(26, 1, 5, 5, OpcodeHandler::handlePerm5),
+    PERM5(26, 1, 5, 5, (op, ctx) -> StackOpcodes.rotateRight(ctx, 4, 1)),
     /** val -> +val (unary plus, ToNumber) */
     PLUS(139, 1, 1, 1, NumericOpcodes::handlePlus),
     /** val -> val-1 (postfix decrement value) */
@@ -329,11 +329,11 @@ public enum Opcode {
     /** push false -> false */
     PUSH_FALSE(9, 1, 0, 1, OpcodeHandler::handlePushFalse),
     /** -> val (push i16 immediate) */
-    PUSH_I16(188, 3, 0, 1, OpcodeHandler::handlePushI16),
+    PUSH_I16(188, 3, 0, 1, OpcodeHandler::pushCompactInteger),
     /** push i32 immediate -> val */
-    PUSH_I32(1, 5, 0, 1, OpcodeHandler::handlePushI32),
+    PUSH_I32(1, 5, 0, 1, OpcodeHandler::pushI32),
     /** -> val (push i8 immediate) */
-    PUSH_I8(187, 2, 0, 1, OpcodeHandler::handlePushI8),
+    PUSH_I8(187, 2, 0, 1, OpcodeHandler::pushCompactInteger),
     // SHORT_OPCODES — compact 1-2 byte variants of common operations
     /** -> -1 (push integer -1) */
     PUSH_MINUS1(178, 1, 0, 1, OpcodeHandler::pushSmallInteger),
@@ -409,13 +409,13 @@ public enum Opcode {
     /** return undefined from function */
     RETURN_UNDEF(41, 1, 0, 0, OpcodeHandler::handleReturnUndef),
     /** x a b -> a b x */
-    ROT3L(29, 1, 3, 3, OpcodeHandler::handleRot3l),
+    ROT3L(29, 1, 3, 3, (op, ctx) -> StackOpcodes.rotateLeft(ctx, 3)),
     /** a b x -> x a b */
-    ROT3R(30, 1, 3, 3, OpcodeHandler::handleRot3r),
+    ROT3R(30, 1, 3, 3, (op, ctx) -> StackOpcodes.rotateRight(ctx, 3, 0)),
     /** x a b c -> a b c x */
-    ROT4L(31, 1, 4, 4, OpcodeHandler::handleRot4l),
+    ROT4L(31, 1, 4, 4, (op, ctx) -> StackOpcodes.rotateLeft(ctx, 4)),
     /** x a b c d -> a b c d x */
-    ROT5L(32, 1, 5, 5, OpcodeHandler::handleRot5l),
+    ROT5L(32, 1, 5, 5, (op, ctx) -> StackOpcodes.rotateLeft(ctx, 5)),
     /** a b -> a>>b (signed right shift) */
     SAR(159, 1, 2, 1, NumericOpcodes::handleSar),
     /** val -> val (set argument, keep value) */
@@ -475,9 +475,9 @@ public enum Opcode {
     /** a b -> a-b */
     SUB(156, 1, 2, 1, NumericOpcodes::multiplyOrSubtract),
     /** a b -> b a */
-    SWAP(27, 1, 2, 2, OpcodeHandler::handleSwap),
+    SWAP(27, 1, 2, 2, StackOpcodes::swap),
     /** a b c d -> c d a b */
-    SWAP2(28, 1, 4, 4, OpcodeHandler::handleSwap2),
+    SWAP2(28, 1, 4, 4, StackOpcodes::swapPair),
     /** func args -> (npop args not counted) */
     TAIL_CALL(35, 3, -1, 0, CallOpcodes::handleTailCall),
     /** func receiver args -> (tail call) */

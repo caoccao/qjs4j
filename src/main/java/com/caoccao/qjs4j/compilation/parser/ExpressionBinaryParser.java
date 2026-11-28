@@ -30,18 +30,19 @@ final class ExpressionBinaryParser {
     }
 
     private static Expression parseBinaryExpression(ParserContext parserContext, int minimumPrecedence) {
+        TokenCursor tokens = parserContext.tokens;
         Expression left = minimumPrecedence <= BinaryOperator.Precedence.RELATIONAL.level
-                && parserContext.inOperatorAllowed && parserContext.match(TokenType.PRIVATE_NAME)
-                && parserContext.nextToken.type() == TokenType.IN
+                && parserContext.inOperatorAllowed && tokens.match(TokenType.PRIVATE_NAME)
+                && tokens.nextIs(TokenType.IN)
                         ? parserContext.consumePrivateName()
                         : parseExponentiationExpression(parserContext);
         while (true) {
-            BinaryOperator infix = BinaryOperator.infixOperator(parserContext.currentToken.type());
+            BinaryOperator infix = BinaryOperator.infixOperator(tokens.current().type());
             if (infix == null || infix.precedence().level < minimumPrecedence
                     || (infix == BinaryOperator.IN && !parserContext.inOperatorAllowed)) {
                 return left;
             }
-            SourceLocation location = parserContext.consumeLocation();
+            SourceLocation location = tokens.consumeLocation();
             // Only strictly tighter operators belong to the right operand of a left-associative operator.
             Expression right = parseBinaryExpression(parserContext, infix.precedence().level + 1);
             left = new BinaryExpression(infix, left, right, location);
@@ -49,15 +50,16 @@ final class ExpressionBinaryParser {
     }
 
     static Expression parseConditionalExpression(ParserContext parserContext) {
+        TokenCursor tokens = parserContext.tokens;
         Expression test = ExpressionBinaryParser.parseLogicalOrExpression(parserContext);
 
-        if (parserContext.match(TokenType.QUESTION)) {
-            SourceLocation location = parserContext.consumeLocation();
+        if (tokens.match(TokenType.QUESTION)) {
+            SourceLocation location = tokens.consumeLocation();
             boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
             parserContext.inOperatorAllowed = true;
             Expression consequent = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
             parserContext.inOperatorAllowed = savedInOperatorAllowed;
-            parserContext.expect(TokenType.COLON);
+            tokens.expect(TokenType.COLON);
             Expression alternate = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
 
             return new ConditionalExpression(test, consequent, alternate, location);
@@ -67,15 +69,16 @@ final class ExpressionBinaryParser {
     }
 
     static Expression parseExponentiationExpression(ParserContext parserContext) {
-        TokenType firstTokenType = parserContext.currentToken.type();
+        TokenCursor tokens = parserContext.tokens;
+        TokenType firstTokenType = tokens.current().type();
         Expression left = ExpressionPrimaryParser.parseUnaryExpression(parserContext);
 
-        if (parserContext.match(TokenType.EXP)) {
+        if (tokens.match(TokenType.EXP)) {
             if (isDisallowedExponentiationUnaryBaseToken(firstTokenType)
                     || (left instanceof AwaitExpression && !parserContext.isParenthesizedExpression(left))) {
                 throw new JSSyntaxErrorException("Unary operator used immediately before exponentiation expression");
             }
-            SourceLocation location = parserContext.consumeLocation();
+            SourceLocation location = tokens.consumeLocation();
             Expression right = parseExponentiationExpression(parserContext);
             return new BinaryExpression(BinaryOperator.EXP, left, right, location);
         }
@@ -84,17 +87,18 @@ final class ExpressionBinaryParser {
     }
 
     static Expression parseLogicalAndExpression(ParserContext parserContext) {
+        TokenCursor tokens = parserContext.tokens;
         Expression left = parseBinaryExpression(parserContext, BinaryOperator.Precedence.BIT_OR.level);
 
         boolean hasLogicalAnd = false;
-        while (parserContext.match(TokenType.LOGICAL_AND)) {
+        while (tokens.match(TokenType.LOGICAL_AND)) {
             hasLogicalAnd = true;
-            SourceLocation location = parserContext.consumeLocation();
+            SourceLocation location = tokens.consumeLocation();
             Expression right = parseBinaryExpression(parserContext, BinaryOperator.Precedence.BIT_OR.level);
             left = new BinaryExpression(BinaryOperator.LOGICAL_AND, left, right, location);
         }
 
-        if (hasLogicalAnd && parserContext.match(TokenType.NULLISH_COALESCING)) {
+        if (hasLogicalAnd && tokens.match(TokenType.NULLISH_COALESCING)) {
             throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
         }
 
@@ -102,31 +106,32 @@ final class ExpressionBinaryParser {
     }
 
     static Expression parseLogicalOrExpression(ParserContext parserContext) {
+        TokenCursor tokens = parserContext.tokens;
         Expression left = ExpressionBinaryParser.parseLogicalAndExpression(parserContext);
 
-        if (parserContext.match(TokenType.NULLISH_COALESCING)) {
+        if (tokens.match(TokenType.NULLISH_COALESCING)) {
             // Parse CoalesceExpression: left ?? right ?? ...
             // Cannot mix with || or && (ES2020 spec)
             do {
-                SourceLocation location = parserContext.consumeLocation();
+                SourceLocation location = tokens.consumeLocation();
                 Expression right = parseBinaryExpression(parserContext, BinaryOperator.Precedence.BIT_OR.level);
                 left = new BinaryExpression(BinaryOperator.NULLISH_COALESCING, left, right, location);
-            } while (parserContext.match(TokenType.NULLISH_COALESCING));
-            if (parserContext.match(TokenType.LOGICAL_OR) || parserContext.match(TokenType.LOGICAL_AND)) {
+            } while (tokens.match(TokenType.NULLISH_COALESCING));
+            if (tokens.match(TokenType.LOGICAL_OR) || tokens.match(TokenType.LOGICAL_AND)) {
                 throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
             }
             return left;
         }
 
         boolean hasLogicalOr = false;
-        while (parserContext.match(TokenType.LOGICAL_OR)) {
+        while (tokens.match(TokenType.LOGICAL_OR)) {
             hasLogicalOr = true;
-            SourceLocation location = parserContext.consumeLocation();
+            SourceLocation location = tokens.consumeLocation();
             Expression right = ExpressionBinaryParser.parseLogicalAndExpression(parserContext);
             left = new BinaryExpression(BinaryOperator.LOGICAL_OR, left, right, location);
         }
 
-        if (hasLogicalOr && parserContext.match(TokenType.NULLISH_COALESCING)) {
+        if (hasLogicalOr && tokens.match(TokenType.NULLISH_COALESCING)) {
             throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
         }
 

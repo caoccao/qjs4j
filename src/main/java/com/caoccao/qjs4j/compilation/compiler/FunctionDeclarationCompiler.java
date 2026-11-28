@@ -67,7 +67,7 @@ final class FunctionDeclarationCompiler {
         if (isAnnexB && !compilerContext.suppressAnnexBVarStore) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitPutLocal(localIndex);
-            EmitHelpers.emitAnnexBVarStore(compilerContext, functionName);
+            IdentifierCompiler.emitAnnexBVarStore(compilerContext, functionName);
         } else {
             compilerContext.emitter.emitPutLocal(localIndex);
         }

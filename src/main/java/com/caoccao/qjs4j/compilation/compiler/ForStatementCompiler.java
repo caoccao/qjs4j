@@ -37,7 +37,7 @@ final class ForStatementCompiler {
         boolean hasUsingInit = !initCompiled && forStmt.getInit() instanceof VariableDeclaration usingCheck
                 && usingCheck.getKind().isUsing();
 
-        int forUsingCatchJump = EmitHelpers.beginUsingScope(compilerContext, hasUsingInit);
+        int forUsingCatchJump = UsingScopeCompiler.beginUsingScope(compilerContext, hasUsingInit);
 
         if (!initCompiled && forStmt.getInit() != null) {
             if (forStmt.getInit() instanceof VariableDeclaration varDecl) {
@@ -59,7 +59,7 @@ final class ForStatementCompiler {
 
         if (forStmt.getInit() instanceof VariableDeclaration lexicalForInit
                 && lexicalForInit.getKind() != VariableKind.VAR) {
-            EmitHelpers.emitCloseLocForPattern(compilerContext, lexicalForInit);
+            PatternCompiler.emitCloseLocForPattern(compilerContext, lexicalForInit);
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
@@ -78,7 +78,7 @@ final class ForStatementCompiler {
 
         if (forStmt.getInit() instanceof VariableDeclaration varDeclForClose
                 && varDeclForClose.getKind() != VariableKind.VAR) {
-            EmitHelpers.emitCloseLocForPattern(compilerContext, varDeclForClose);
+            PatternCompiler.emitCloseLocForPattern(compilerContext, varDeclForClose);
         }
 
         int updateStart = compilerContext.emitter.currentOffset();
@@ -100,7 +100,7 @@ final class ForStatementCompiler {
 
         compilerContext.loopManager.popLoop();
 
-        EmitHelpers.finishUsingScope(compilerContext, forUsingCatchJump, false);
+        UsingScopeCompiler.finishUsingScope(compilerContext, forUsingCatchJump, false);
 
         // Patch break positions AFTER disposal code, since break already handles
         // its own disposal via emitUsingDisposalsForScopeDepthGreaterThan

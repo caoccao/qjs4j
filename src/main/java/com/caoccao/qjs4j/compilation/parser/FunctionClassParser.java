@@ -43,8 +43,9 @@ final class FunctionClassParser {
     }
 
     private static boolean hasFunctionNameToken(ParserContext parserContext) {
-        return parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET);
+        TokenCursor tokens = parserContext.tokens;
+        return tokens.match(TokenType.IDENTIFIER) || tokens.match(TokenType.AWAIT) || tokens.match(TokenType.YIELD)
+                || tokens.match(TokenType.LET);
     }
 
     private static boolean isPrivateConstructorName(Expression key, boolean isPrivate) {
@@ -58,19 +59,19 @@ final class FunctionClassParser {
     }
 
     private static <T extends ASTNode> T parseClass(ParserContext parserContext, ClassFactory<T> factory) {
-        SourceLocation startLocation = parserContext.getLocation();
-        int startOffset = parserContext.currentToken.offset();
-        parserContext.expect(TokenType.CLASS);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation startLocation = tokens.getLocation();
+        int startOffset = tokens.current().offset();
+        tokens.expect(TokenType.CLASS);
 
         boolean savedStrictMode = parserContext.strictMode;
-        parserContext.strictMode = true;
-        parserContext.lexer.setStrictMode(true);
+        parserContext.setStrictMode(true);
         try {
             // Parse optional class name
             // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
             Identifier id = null;
-            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
+            if (tokens.match(TokenType.IDENTIFIER) || tokens.match(TokenType.AWAIT) || tokens.match(TokenType.YIELD)
+                    || tokens.match(TokenType.LET)) {
                 id = parserContext.parseIdentifier();
                 validateClassBindingName(id);
             }
@@ -78,20 +79,20 @@ final class FunctionClassParser {
             // Parse optional extends clause
             // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
             Expression superClass = null;
-            if (parserContext.consumeIf(TokenType.EXTENDS)) {
+            if (tokens.consumeIf(TokenType.EXTENDS)) {
                 superClass = ExpressionPrimaryParser.parseCallExpression(parserContext);
             }
 
             // Parse class body
-            parserContext.expect(TokenType.LBRACE);
+            tokens.expect(TokenType.LBRACE);
             List<ClassElement> body = new ArrayList<>();
             boolean savedParsingClassWithSuper = parserContext.parsingClassWithSuper;
             parserContext.parsingClassWithSuper = superClass != null;
             parserContext.classBodyNesting++;
             try {
-                while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                while (!tokens.match(TokenType.RBRACE) && !tokens.match(TokenType.EOF)) {
                     // Skip empty semicolons
-                    if (parserContext.consumeIf(TokenType.SEMICOLON)) {
+                    if (tokens.consumeIf(TokenType.SEMICOLON)) {
                         continue;
                     }
 
@@ -107,16 +108,15 @@ final class FunctionClassParser {
             }
 
             // Capture the end position before advancing past the closing brace
-            int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
-            parserContext.expect(TokenType.RBRACE);
+            int endOffset = tokens.current().offset() + tokens.current().value().length();
+            tokens.expect(TokenType.RBRACE);
 
             SourceLocation location = new SourceLocation(startLocation.line(), startLocation.column(), startOffset,
                     endOffset);
 
             return factory.create(id, superClass, body, location);
         } finally {
-            parserContext.strictMode = savedStrictMode;
-            parserContext.lexer.setStrictMode(savedStrictMode);
+            parserContext.setStrictMode(savedStrictMode);
         }
     }
 
@@ -131,53 +131,53 @@ final class FunctionClassParser {
      * Parse a single class element (method, field, or static block).
      */
     static ClassElement parseClassElement(ParserContext parserContext) {
+        TokenCursor tokens = parserContext.tokens;
         boolean isStatic = false;
-        SourceLocation location = parserContext.getLocation();
+        SourceLocation location = tokens.getLocation();
         SourceLocation methodStartLocation = location;
 
-        if (parserContext.match(TokenType.AT)) {
+        if (tokens.match(TokenType.AT)) {
             parseDecoratorList(parserContext);
-            location = parserContext.getLocation();
+            location = tokens.getLocation();
             methodStartLocation = location;
         }
 
         // Check for 'static' keyword
-        if (parserContext.match(TokenType.IDENTIFIER) && JSKeyword.STATIC.equals(parserContext.currentToken.value())) {
-            TokenType nextType = parserContext.nextToken.type();
+        if (tokens.identifier(JSKeyword.STATIC)) {
+            TokenType nextType = tokens.next().type();
             boolean treatAsStaticModifier = nextType != TokenType.SEMICOLON && nextType != TokenType.RBRACE
                     && nextType != TokenType.LPAREN && nextType != TokenType.ASSIGN;
             if (treatAsStaticModifier) {
-                parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
-                parserContext.advance();
+                tokens.requireUnescapedToken("Keyword must not contain escaped characters");
+                tokens.advance();
                 isStatic = true;
-                methodStartLocation = parserContext.getLocation();
+                methodStartLocation = tokens.getLocation();
 
                 // Check for static block: static { }
-                if (parserContext.match(TokenType.LBRACE)) {
+                if (tokens.match(TokenType.LBRACE)) {
                     return parseStaticBlock(parserContext);
                 }
             } else {
                 Expression key = new Identifier(JSKeyword.STATIC, location);
-                parserContext.advance();
+                tokens.advance();
                 return parseMethodOrField(parserContext, key, false, false, false, location);
             }
         }
 
         // Check for private identifier (#name)
-        if (parserContext.match(TokenType.PRIVATE_NAME)) {
+        if (tokens.match(TokenType.PRIVATE_NAME)) {
             return parseMethodOrField(parserContext, parseClassElementName(parserContext), isStatic, true, true,
                     methodStartLocation);
         }
 
-        if (parserContext.match(TokenType.IDENTIFIER) && "accessor".equals(parserContext.currentToken.value())) {
-            TokenType nextType = parserContext.nextToken.type();
-            boolean hasNoLineTerminatorAfterAccessor = parserContext.nextToken.line() == parserContext.currentToken
-                    .line();
+        if (tokens.identifier("accessor")) {
+            TokenType nextType = tokens.next().type();
+            boolean hasNoLineTerminatorAfterAccessor = tokens.next().line() == tokens.current().line();
             if (hasNoLineTerminatorAfterAccessor && nextType != TokenType.LPAREN && nextType != TokenType.ASSIGN
                     && nextType != TokenType.SEMICOLON && nextType != TokenType.COMMA && nextType != TokenType.RBRACE) {
-                parserContext.advance(); // consume "accessor"
-                boolean computed = parserContext.match(TokenType.LBRACKET);
-                boolean isPrivate = parserContext.match(TokenType.PRIVATE_NAME);
+                tokens.advance(); // consume "accessor"
+                boolean computed = tokens.match(TokenType.LBRACKET);
+                boolean isPrivate = tokens.match(TokenType.PRIVATE_NAME);
                 Expression key = parseClassElementName(parserContext);
                 validateClassFieldName(key, computed, isPrivate);
                 Expression value = parseClassFieldInitializer(parserContext);
@@ -187,12 +187,12 @@ final class FunctionClassParser {
         }
 
         // Check for async method: async name() {} or async *name() {}
-        if (parserContext.match(TokenType.ASYNC)) {
+        if (tokens.match(TokenType.ASYNC)) {
             // Disambiguate: async as method modifier vs async as property name. `async` is a modifier only when
             // the element name follows on the same line: `async() {}` is a method named async, and `async` before
             // a line break is a field named async.
-            TokenType nextType = parserContext.nextToken.type();
-            boolean hasLineTerminatorAfterAsync = parserContext.nextToken.line() != parserContext.currentToken.line();
+            TokenType nextType = tokens.next().type();
+            boolean hasLineTerminatorAfterAsync = !tokens.nextOnSameLine();
             if (!hasLineTerminatorAfterAsync && (nextType == TokenType.COLON || nextType == TokenType.COMMA)) {
                 // An object-literal member in a class body: V8 reports it at `async`.
                 throw new JSSyntaxErrorException("Unexpected token 'async'");
@@ -201,53 +201,53 @@ final class FunctionClassParser {
                     || nextType == TokenType.LPAREN || nextType == TokenType.RBRACE) {
                 // async = value; async; async() {}; or async at the end of a line — element named "async"
                 Expression key = new Identifier(JSKeyword.ASYNC, methodStartLocation);
-                parserContext.advance();
+                tokens.advance();
                 return parseMethodOrField(parserContext, key, isStatic, false, false, methodStartLocation);
             }
-            if (parserContext.currentToken.escaped()
-                    && parserContext.nextToken.line() == parserContext.currentToken.line()) {
+            if (tokens.current().escaped() && tokens.nextOnSameLine()) {
                 throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
             }
 
-            parserContext.advance(); // consume 'async'
+            tokens.advance(); // consume 'async'
 
-            boolean generator = parserContext.consumeIf(TokenType.MUL);
+            boolean generator = tokens.consumeIf(TokenType.MUL);
             return parseNamedClassMethod(parserContext, "method", methodStartLocation, true, generator, isStatic);
         }
 
         // Check for generator method: *name() {}
-        if (parserContext.consumeIf(TokenType.MUL)) {
+        if (tokens.consumeIf(TokenType.MUL)) {
             return parseNamedClassMethod(parserContext, "method", methodStartLocation, false, true, isStatic);
         }
 
         // Check for getter/setter
-        if (parserContext.match(TokenType.IDENTIFIER)) {
-            String name = parserContext.currentToken.value();
-            Token peekNext = parserContext.nextToken;
-            boolean hasNoLineTerminatorAfterGetSet = peekNext.line() == parserContext.currentToken.line();
+        if (tokens.match(TokenType.IDENTIFIER)) {
+            String name = tokens.current().value();
+            Token peekNext = tokens.next();
+            boolean hasNoLineTerminatorAfterGetSet = peekNext.line() == tokens.current().line();
             if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) && hasNoLineTerminatorAfterGetSet
                     && peekNext.type() != TokenType.LPAREN && peekNext.type() != TokenType.ASSIGN
                     && peekNext.type() != TokenType.SEMICOLON) {
-                parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
+                tokens.requireUnescapedToken("Keyword must not contain escaped characters");
                 String kind = name;
-                parserContext.advance(); // consume 'get' or 'set'
+                tokens.advance(); // consume 'get' or 'set'
 
                 return parseNamedClassMethod(parserContext, kind, methodStartLocation, false, false, isStatic);
             }
         }
 
         // Regular property name (identifier, string, number, or reserved keyword)
-        boolean computed = parserContext.match(TokenType.LBRACKET);
+        boolean computed = tokens.match(TokenType.LBRACKET);
         Expression key = ExpressionPrimaryParser.parsePropertyName(parserContext);
 
         return parseMethodOrField(parserContext, key, isStatic, false, computed, methodStartLocation);
     }
 
     private static Expression parseClassElementName(ParserContext parserContext) {
-        if (parserContext.match(TokenType.PRIVATE_NAME)) {
-            SourceLocation location = parserContext.getLocation();
-            String name = parserContext.currentToken.value().substring(1);
-            parserContext.advance();
+        TokenCursor tokens = parserContext.tokens;
+        if (tokens.match(TokenType.PRIVATE_NAME)) {
+            SourceLocation location = tokens.getLocation();
+            String name = tokens.current().value().substring(1);
+            tokens.advance();
             return new PrivateIdentifier(name, location);
         }
         return ExpressionPrimaryParser.parsePropertyName(parserContext);
@@ -262,7 +262,7 @@ final class FunctionClassParser {
 
     private static Expression parseClassFieldInitializer(ParserContext parserContext) {
         Expression value = null;
-        if (parserContext.consumeIf(TokenType.ASSIGN)) {
+        if (parserContext.tokens.consumeIf(TokenType.ASSIGN)) {
             boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
             boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
             parserContext.inClassFieldInitializer = true;
@@ -309,8 +309,9 @@ final class FunctionClassParser {
     }
 
     static void parseDecoratorList(ParserContext parserContext) {
-        while (parserContext.consumeIf(TokenType.AT)) {
-            if (parserContext.consumeIf(TokenType.LPAREN)) {
+        TokenCursor tokens = parserContext.tokens;
+        while (tokens.consumeIf(TokenType.AT)) {
+            if (tokens.consumeIf(TokenType.LPAREN)) {
                 boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                 parserContext.inOperatorAllowed = true;
                 try {
@@ -318,23 +319,23 @@ final class FunctionClassParser {
                 } finally {
                     parserContext.inOperatorAllowed = savedInOperatorAllowed;
                 }
-                parserContext.expect(TokenType.RPAREN);
+                tokens.expect(TokenType.RPAREN);
                 continue;
             }
             parserContext.parseIdentifier();
-            while (parserContext.consumeIf(TokenType.DOT)) {
-                if (!parserContext.consumeIf(TokenType.PRIVATE_NAME)) {
+            while (tokens.consumeIf(TokenType.DOT)) {
+                if (!tokens.consumeIf(TokenType.PRIVATE_NAME)) {
                     ExpressionPrimaryParser.parsePropertyName(parserContext);
                 }
             }
-            if (parserContext.consumeIf(TokenType.LPAREN)) {
-                if (!parserContext.match(TokenType.RPAREN)) {
+            if (tokens.consumeIf(TokenType.LPAREN)) {
+                if (!tokens.match(TokenType.RPAREN)) {
                     ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
-                    while (parserContext.consumeIf(TokenType.COMMA)) {
+                    while (tokens.consumeIf(TokenType.COMMA)) {
                         ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                     }
                 }
-                parserContext.expect(TokenType.RPAREN);
+                tokens.expect(TokenType.RPAREN);
             }
         }
     }
@@ -343,7 +344,7 @@ final class FunctionClassParser {
      * Parse export default async function declaration with optional name.
      */
     static Statement parseExportDefaultAsyncFunctionDeclaration(ParserContext parserContext) {
-        SourceLocation asyncLocation = parserContext.consumeLocation(); // consume 'async'
+        SourceLocation asyncLocation = parserContext.tokens.consumeLocation(); // consume 'async'
         return parseExportDefaultFunctionDeclaration(parserContext, true);
     }
 
@@ -352,10 +353,11 @@ final class FunctionClassParser {
      * allows anonymous functions.
      */
     static Statement parseExportDefaultFunctionDeclaration(ParserContext parserContext, boolean isAsync) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.FUNCTION);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.FUNCTION);
 
-        boolean isGenerator = parserContext.consumeIf(TokenType.MUL);
+        boolean isGenerator = tokens.consumeIf(TokenType.MUL);
 
         Identifier id;
         if (hasFunctionNameToken(parserContext)) {
@@ -381,8 +383,9 @@ final class FunctionClassParser {
      */
     static BlockStatement parseFunctionBody(ParserContext parserContext, FunctionParams funcParams,
             Identifier funcName) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACE);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.LBRACE);
 
         List<Statement> body = new ArrayList<>();
 
@@ -395,8 +398,7 @@ final class FunctionClassParser {
         // If "use strict" directive found, retroactively validate parameters
         // Following QuickJS js_parse_function_check_names
         if (hasUseStrict) {
-            parserContext.strictMode = true;
-            parserContext.lexer.setStrictMode(true);
+            parserContext.setStrictMode(true);
         }
 
         // Validate parameters when in strict mode (either from outer context or "use strict" directive)
@@ -424,10 +426,9 @@ final class FunctionClassParser {
         ParameterEarlyErrors.validateFormalsBodyDuplicate(funcParams, body);
 
         // Restore outer strict mode
-        parserContext.strictMode = savedStrictMode;
-        parserContext.lexer.setStrictMode(savedStrictMode);
+        parserContext.setStrictMode(savedStrictMode);
 
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
         BlockStatement block = new BlockStatement(body, location);
         block.setHasUseStrictDirective(hasUseStrict);
         return block;
@@ -440,13 +441,14 @@ final class FunctionClassParser {
 
     static FunctionDeclaration parseFunctionDeclaration(ParserContext parserContext, boolean isAsync,
             boolean isGenerator, SourceLocation startLocation) {
+        TokenCursor tokens = parserContext.tokens;
         // Use provided start location (for async functions) or get current location
-        SourceLocation location = startLocation != null ? startLocation : parserContext.getLocation();
-        parserContext.expect(TokenType.FUNCTION);
+        SourceLocation location = startLocation != null ? startLocation : tokens.getLocation();
+        tokens.expect(TokenType.FUNCTION);
 
         // Check for generator function: function* or async function*
         // Following QuickJS implementation: check for '*' after 'function' keyword
-        if (parserContext.consumeIf(TokenType.MUL)) {
+        if (tokens.consumeIf(TokenType.MUL)) {
             isGenerator = true;
         }
 
@@ -477,7 +479,7 @@ final class FunctionClassParser {
                 parserContext.inFunctionBody = false;
             }
 
-            parserContext.expect(TokenType.LPAREN);
+            parserContext.tokens.expect(TokenType.LPAREN);
             FunctionParams funcParams = parseFunctionParameters(parserContext);
 
             parserContext.inFunctionBody = true;
@@ -488,7 +490,7 @@ final class FunctionClassParser {
 
             // Use previousTokenEndOffset (position after closing '}') instead of
             // currentToken.offset() (position of NEXT token, which may include trailing comments)
-            SourceLocation fullLocation = location.withEndOffset(parserContext.previousTokenEndOffset);
+            SourceLocation fullLocation = location.withEndOffset(parserContext.tokens.previousEnd());
 
             return factory.create(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
@@ -504,12 +506,13 @@ final class FunctionClassParser {
 
     static Expression parseFunctionExpression(ParserContext parserContext, boolean isAsync,
             SourceLocation startLocation) {
-        SourceLocation location = startLocation != null ? startLocation : parserContext.getLocation();
-        parserContext.expect(TokenType.FUNCTION);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = startLocation != null ? startLocation : tokens.getLocation();
+        tokens.expect(TokenType.FUNCTION);
 
         // Check for generator function expression: function* () {}
         // Following QuickJS implementation: check for '*' after 'function' keyword
-        boolean isGenerator = parserContext.consumeIf(TokenType.MUL);
+        boolean isGenerator = tokens.consumeIf(TokenType.MUL);
 
         return parseFunctionDefinition(parserContext, null, location, isAsync, isGenerator, FunctionExpression::new);
     }
@@ -521,17 +524,18 @@ final class FunctionClassParser {
      * @return FunctionParams containing regular params and optional rest parameter
      */
     static FunctionParams parseFunctionParameters(ParserContext parserContext) {
+        TokenCursor tokens = parserContext.tokens;
         List<Pattern> params = new ArrayList<>();
         List<Expression> defaults = new ArrayList<>();
         RestParameter restParameter = null;
 
-        if (!parserContext.match(TokenType.RPAREN)) {
+        if (!tokens.match(TokenType.RPAREN)) {
             while (true) {
                 // Check for rest parameter (...args)
-                if (parserContext.match(TokenType.ELLIPSIS)) {
-                    SourceLocation location = parserContext.consumeLocation(); // consume '...'
+                if (tokens.match(TokenType.ELLIPSIS)) {
+                    SourceLocation location = tokens.consumeLocation(); // consume '...'
                     Pattern restArg;
-                    if (parserContext.match(TokenType.LBRACE) || parserContext.match(TokenType.LBRACKET)) {
+                    if (tokens.match(TokenType.LBRACE) || tokens.match(TokenType.LBRACKET)) {
                         restArg = PatternParser.parsePattern(parserContext);
                     } else {
                         restArg = parserContext.parseIdentifier();
@@ -539,7 +543,7 @@ final class FunctionClassParser {
                     restParameter = new RestParameter(restArg, location);
 
                     // Rest parameter must be last
-                    if (parserContext.match(TokenType.COMMA)) {
+                    if (tokens.match(TokenType.COMMA)) {
                         throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                     }
                     break;
@@ -548,7 +552,7 @@ final class FunctionClassParser {
                 // Regular parameter or destructuring pattern
                 // Following QuickJS js_parse_function_decl2: accept identifiers,
                 // object patterns ({a, b}), and array patterns ([a, b])
-                if (parserContext.match(TokenType.LBRACE) || parserContext.match(TokenType.LBRACKET)) {
+                if (tokens.match(TokenType.LBRACE) || tokens.match(TokenType.LBRACKET)) {
                     params.add(PatternParser.parsePattern(parserContext));
                 } else {
                     params.add(parserContext.parseIdentifier());
@@ -556,30 +560,30 @@ final class FunctionClassParser {
 
                 // Check for default value: param = defaultExpr
                 // Following QuickJS js_parse_function_decl2 pattern
-                if (parserContext.consumeIf(TokenType.ASSIGN)) {
+                if (tokens.consumeIf(TokenType.ASSIGN)) {
                     defaults.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
                 } else {
                     defaults.add(null);
                 }
 
                 // Check for comma (more parameters)
-                if (!parserContext.match(TokenType.COMMA)) {
+                if (!tokens.match(TokenType.COMMA)) {
                     break;
                 }
-                parserContext.advance(); // consume comma
+                tokens.advance(); // consume comma
 
                 // Handle trailing comma before closing paren
-                if (parserContext.match(TokenType.RPAREN)) {
+                if (tokens.match(TokenType.RPAREN)) {
                     break;
                 }
                 // Handle trailing comma before rest parameter
-                if (parserContext.match(TokenType.ELLIPSIS)) {
+                if (tokens.match(TokenType.ELLIPSIS)) {
                     continue;
                 }
             }
         }
 
-        parserContext.expect(TokenType.RPAREN);
+        tokens.expect(TokenType.RPAREN);
         return new FunctionParams(params, defaults, restParameter);
     }
 
@@ -588,7 +592,7 @@ final class FunctionClassParser {
      * source extraction.
      */
     static FunctionExpression parseMethod(ParserContext parserContext, String kind) {
-        return parseMethod(parserContext, kind, parserContext.getLocation(), false, false);
+        return parseMethod(parserContext, kind, parserContext.tokens.getLocation(), false, false);
     }
 
     /**
@@ -612,7 +616,7 @@ final class FunctionClassParser {
                 parserContext.inFunctionBody = false;
             }
 
-            parserContext.expect(TokenType.LPAREN);
+            parserContext.tokens.expect(TokenType.LPAREN);
             funcParams = parseFunctionParameters(parserContext);
             int formalParameterCount = funcParams.params().size() + (funcParams.restParameter() != null ? 1 : 0);
             if (JSKeyword.GET.equals(kind)) {
@@ -645,7 +649,7 @@ final class FunctionClassParser {
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }
 
-        SourceLocation fullLocation = methodStartLocation.withEndOffset(parserContext.previousTokenEndOffset);
+        SourceLocation fullLocation = methodStartLocation.withEndOffset(parserContext.tokens.previousEnd());
 
         return new FunctionExpression(null, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
     }
@@ -656,7 +660,7 @@ final class FunctionClassParser {
     static ClassElement parseMethodOrField(ParserContext parserContext, Expression key, boolean isStatic,
             boolean isPrivate, boolean computed, SourceLocation location) {
         // If next token is LPAREN, it's a method; otherwise it's a field
-        if (!parserContext.match(TokenType.LPAREN)) {
+        if (!parserContext.tokens.match(TokenType.LPAREN)) {
             validateClassFieldName(key, computed, isPrivate);
             Expression value = parseClassFieldInitializer(parserContext);
             parserContext.consumeSemicolon();
@@ -671,8 +675,8 @@ final class FunctionClassParser {
 
     private static MethodDefinition parseNamedClassMethod(ParserContext parserContext, String kind,
             SourceLocation location, boolean async, boolean generator, boolean isStatic) {
-        boolean computed = parserContext.match(TokenType.LBRACKET);
-        boolean isPrivate = parserContext.match(TokenType.PRIVATE_NAME);
+        boolean computed = parserContext.tokens.match(TokenType.LBRACKET);
+        boolean isPrivate = parserContext.tokens.match(TokenType.PRIVATE_NAME);
         Expression key = parseClassElementName(parserContext);
         FunctionExpression method = parseClassMethod(parserContext, kind, location, async, generator, isStatic,
                 computed, key);

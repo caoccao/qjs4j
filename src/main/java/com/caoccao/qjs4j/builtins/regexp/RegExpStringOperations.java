@@ -377,7 +377,7 @@ final class RegExpStringOperations {
                 if (captureValue instanceof JSUndefined) {
                     captures[i] = null;
                 } else {
-                    captures[i] = JSTypeConversions.toString(context, captureValue).value();
+                    captures[i] = JSTypeConversions.toJavaString(context, captureValue);
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }

@@ -65,9 +65,9 @@ final class VariableDeclarationCompiler {
                 }
 
                 compileInitializer(compilerContext, declarator);
-                int usingStackLocalIndex = EmitHelpers.ensureUsingStackLocal(compilerContext, isAwaitUsingDeclaration,
-                        declarator);
-                EmitHelpers.emitMethodCallWithSingleArgOnLocalObject(compilerContext, usingStackLocalIndex, "use");
+                int usingStackLocalIndex = UsingScopeCompiler.ensureUsingStackLocal(compilerContext,
+                        isAwaitUsingDeclaration, declarator);
+                UsingScopeCompiler.emitRegisterResource(compilerContext, usingStackLocalIndex);
                 compilerContext.compilePattern(declarator.getId());
                 continue;
             }

@@ -174,7 +174,7 @@ public final class TemporalDurationConstructor {
         if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
-        double numericValueAsDouble = JSTypeConversions.toNumber(context, value).value();
+        double numericValueAsDouble = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return null;
         }
@@ -222,7 +222,7 @@ public final class TemporalDurationConstructor {
     }
 
     private static long parseDurationConstructorArgument(JSContext context, JSValue value) {
-        double numericValueAsDouble = JSTypeConversions.toNumber(context, value).value();
+        double numericValueAsDouble = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return Long.MIN_VALUE;
         }

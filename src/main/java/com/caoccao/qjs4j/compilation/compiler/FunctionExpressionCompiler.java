@@ -161,7 +161,7 @@ final class FunctionExpressionCompiler {
 
         JSBytecodeFunction wrapperFunction = new JSBytecodeFunction(compilerContext.context, bytecode, "", 0,
                 JSValue.NO_ARGS, null, false, false, false, false, true, null);
-        EmitHelpers.emitCapturedValues(wrapperCompiler, wrapperFunction);
+        wrapperCompiler.context().captureResolver.initializeTemplate(wrapperFunction);
 
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, wrapperFunction);
         emitter.emitOpcode(Opcode.UNDEFINED);
@@ -233,7 +233,7 @@ final class FunctionExpressionCompiler {
             BytecodeCompiler functionCompiler, T node, List<Integer> parameterSlots, List<int[]> destructuringParams,
             boolean generator) {
         CompilerContext functionContext = functionCompiler.context();
-        EmitHelpers.emitDefaultParameterInit(functionCompiler, node.getFunctionParams(), parameterSlots, node);
+        FunctionBodyCompiler.emitDefaultParameterInit(functionCompiler, node.getFunctionParams(), parameterSlots, node);
         if (node.getRestParameter() != null) {
             functionContext.emitter.emitIntOperand(Opcode.REST, node.getParams().size());
             emitRestParameterBinding(node.getRestParameter(), functionContext);

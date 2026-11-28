@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core.console;
 
+import com.caoccao.qjs4j.core.JSTypeChecking;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSTypeConversions;
 import com.caoccao.qjs4j.core.JSUndefined;
@@ -43,7 +44,7 @@ public final class JSConsole {
      * console.assert(condition, ...args) If condition is falsy, print "Assertion failed:" followed by remaining args.
      */
     public JSValue assert_(JSContext context, JSValue thisArg, JSValue[] args) {
-        boolean condition = args.length > 0 && JSTypeConversions.toBoolean(args[0]).value();
+        boolean condition = args.length > 0 && JSTypeChecking.isTruthy(args[0]);
         if (!condition) {
             err.print(getGroupIndent());
             err.print("Assertion failed:");
@@ -272,7 +273,7 @@ public final class JSConsole {
 
     private static String label(JSContext context, JSValue[] args) {
         return args.length > 0 && !(args[0] instanceof JSUndefined)
-                ? JSTypeConversions.toString(context, args[0]).value()
+                ? JSTypeConversions.toJavaString(context, args[0])
                 : "default";
     }
 

@@ -36,10 +36,10 @@ final class ArrayPatternCompiler {
             restIndex++;
         }
         boolean hasRest = restIndex < elements.size();
-        int doneLocal = EmitHelpers.startArrayDestructuring(compilerContext, "#arrayPatternIteratorDone", hasRest);
+        int doneLocal = IteratorCompiler.startArrayDestructuring(compilerContext, "#arrayPatternIteratorDone", hasRest);
         for (int i = 0; i < restIndex; i++) {
             Pattern element = elements.get(i);
-            EmitHelpers.emitNextDestructuringValue(compilerContext, 0, doneLocal);
+            IteratorCompiler.emitNextDestructuringValue(compilerContext, 0, doneLocal);
             if (element == null) {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
@@ -47,12 +47,12 @@ final class ArrayPatternCompiler {
             }
         }
         if (!hasRest) {
-            EmitHelpers.emitIteratorCloseUnlessDone(compilerContext, doneLocal);
+            IteratorCompiler.emitIteratorCloseUnlessDone(compilerContext, doneLocal);
             return;
         }
-        EmitHelpers.emitIteratorRestArray(compilerContext, 0);
+        IteratorCompiler.emitIteratorRestArray(compilerContext, 0);
         RestElement rest = (RestElement) elements.get(restIndex);
         compilerContext.compilePattern(rest.getArgument());
-        EmitHelpers.emitDropIteratorState(compilerContext);
+        compilerContext.emitter.emitDrops(3);
     }
 }

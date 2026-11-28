@@ -51,54 +51,56 @@ final class LiteralParser {
     }
 
     static Expression parseArrayExpression(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACKET);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.LBRACKET);
 
         List<Expression> elements = new ArrayList<>();
 
-        if (!parserContext.match(TokenType.RBRACKET)) {
+        if (!tokens.match(TokenType.RBRACKET)) {
             do {
-                if (parserContext.consumeIf(TokenType.COMMA)) {
+                if (tokens.consumeIf(TokenType.COMMA)) {
                     elements.add(null); // hole in array
-                } else if (parserContext.match(TokenType.ELLIPSIS)) {
+                } else if (tokens.match(TokenType.ELLIPSIS)) {
                     // Spread element: ...expr
-                    SourceLocation spreadLocation = parserContext.consumeLocation(); // consume ELLIPSIS
+                    SourceLocation spreadLocation = tokens.consumeLocation(); // consume ELLIPSIS
                     Expression argument = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                     elements.add(new SpreadElement(argument, spreadLocation));
-                    if (parserContext.consumeIf(TokenType.COMMA)) {
-                    } else if (!parserContext.match(TokenType.RBRACKET)) {
+                    if (tokens.consumeIf(TokenType.COMMA)) {
+                    } else if (!tokens.match(TokenType.RBRACKET)) {
                         // After a spread element, expect comma or closing bracket
-                        parserContext.expect(TokenType.RBRACKET);
+                        tokens.expect(TokenType.RBRACKET);
                     }
                 } else {
                     elements.add(ExpressionAssignmentParser.parseAssignmentExpression(parserContext));
-                    if (parserContext.consumeIf(TokenType.COMMA)) {
-                    } else if (!parserContext.match(TokenType.RBRACKET)) {
+                    if (tokens.consumeIf(TokenType.COMMA)) {
+                    } else if (!tokens.match(TokenType.RBRACKET)) {
                         // After an element, expect comma or closing bracket
                         // This catches cases like [a b] which should be a SyntaxError
-                        parserContext.expect(TokenType.RBRACKET);
+                        tokens.expect(TokenType.RBRACKET);
                     }
                 }
-            } while (!parserContext.match(TokenType.RBRACKET) && !parserContext.match(TokenType.EOF));
+            } while (!tokens.match(TokenType.RBRACKET) && !tokens.match(TokenType.EOF));
         }
 
-        parserContext.expect(TokenType.RBRACKET);
+        tokens.expect(TokenType.RBRACKET);
         return new ArrayExpression(elements, location);
     }
 
     static Expression parseObjectExpression(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACE);
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
+        tokens.expect(TokenType.LBRACE);
 
         List<ObjectExpressionProperty> properties = new ArrayList<>();
 
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+        while (!tokens.match(TokenType.RBRACE) && !tokens.match(TokenType.EOF)) {
             // Spread property: {...expr}
-            if (parserContext.match(TokenType.ELLIPSIS)) {
-                SourceLocation spreadLocation = parserContext.consumeLocation(); // consume ELLIPSIS
+            if (tokens.match(TokenType.ELLIPSIS)) {
+                SourceLocation spreadLocation = tokens.consumeLocation(); // consume ELLIPSIS
                 Expression argument = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                 properties.add(new ObjectExpressionProperty(null, argument, "spread", false, false, false));
-                if (parserContext.consumeIf(TokenType.COMMA)) {
+                if (tokens.consumeIf(TokenType.COMMA)) {
                 } else {
                     break;
                 }
@@ -109,47 +111,45 @@ final class LiteralParser {
             boolean isGenerator = false;
 
             // Capture the method start location before any modifiers (async, *)
-            SourceLocation methodStartLocation = parserContext.getLocation();
+            SourceLocation methodStartLocation = tokens.getLocation();
 
             // Check for 'async' modifier (only if NOT followed by colon, comma, etc.)
-            if (parserContext.match(TokenType.ASYNC)) {
+            if (tokens.match(TokenType.ASYNC)) {
                 // Peek ahead to determine if this is a modifier or property name
-                TokenType nextType = parserContext.nextToken.type();
+                TokenType nextType = tokens.next().type();
                 if (nextType == TokenType.COLON || nextType == TokenType.COMMA || nextType == TokenType.RBRACE
                         || nextType == TokenType.LPAREN || nextType == TokenType.ASSIGN) {
                     // { async: value }, { async, ... }, { async }, { async() {} }, { async = x }
                     // async is a property name, not a modifier
-                } else if (parserContext.nextToken.line() == parserContext.currentToken.line()) {
-                    parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
+                } else if (tokens.nextOnSameLine()) {
+                    tokens.requireUnescapedToken("Unexpected token IDENTIFIER");
                     // async is likely a modifier for method
                     isAsync = true;
-                    parserContext.advance();
+                    tokens.advance();
                 }
             }
 
             // Check for generator *
-            if (parserContext.match(TokenType.MUL)) {
+            if (tokens.match(TokenType.MUL)) {
                 isGenerator = true;
-                parserContext.advance();
+                tokens.advance();
             }
 
             // Check for getter/setter: get name() {} or set name(v) {}
             // Similar to parseClassElement logic
-            if (!isAsync && !isGenerator && parserContext.match(TokenType.IDENTIFIER)) {
-                String name = parserContext.currentToken.value();
-                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name))
-                        && parserContext.nextToken.type() != TokenType.COLON
-                        && parserContext.nextToken.type() != TokenType.COMMA
-                        && parserContext.nextToken.type() != TokenType.LPAREN
-                        && parserContext.nextToken.type() != TokenType.RBRACE) {
-                    if (parserContext.currentToken.escaped()) {
+            if (!isAsync && !isGenerator && tokens.match(TokenType.IDENTIFIER)) {
+                String name = tokens.current().value();
+                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) && !tokens.nextIs(TokenType.COLON)
+                        && !tokens.nextIs(TokenType.COMMA) && !tokens.nextIs(TokenType.LPAREN)
+                        && !tokens.nextIs(TokenType.RBRACE)) {
+                    if (tokens.current().escaped()) {
                         throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                     }
                     String kind = name;
-                    parserContext.advance(); // consume 'get' or 'set'
+                    tokens.advance(); // consume 'get' or 'set'
 
                     // Parse property name after get/set (may be computed)
-                    boolean computed = parserContext.match(TokenType.LBRACKET);
+                    boolean computed = tokens.match(TokenType.LBRACKET);
                     Expression key = ExpressionPrimaryParser.parsePropertyName(parserContext);
 
                     boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
@@ -162,7 +162,7 @@ final class LiteralParser {
                     }
                     properties.add(new ObjectExpressionProperty(key, value, kind, computed, false, false));
 
-                    if (parserContext.consumeIf(TokenType.COMMA)) {
+                    if (tokens.consumeIf(TokenType.COMMA)) {
                     } else {
                         break;
                     }
@@ -172,18 +172,18 @@ final class LiteralParser {
 
             // If no async/generator prefix, update methodStartLocation to the property name position
             if (!isAsync && !isGenerator) {
-                methodStartLocation = parserContext.getLocation();
+                methodStartLocation = tokens.getLocation();
             }
 
             // Parse property name (can be identifier, string, number, or computed [expr])
-            boolean computed = parserContext.match(TokenType.LBRACKET);
+            boolean computed = tokens.match(TokenType.LBRACKET);
             Expression key = ExpressionPrimaryParser.parsePropertyName(parserContext);
 
             // Determine if this is a method or regular property
-            if ((isAsync || isGenerator) && !parserContext.match(TokenType.LPAREN)) {
-                throw new JSSyntaxErrorException("Unexpected token " + parserContext.currentToken.type());
+            if ((isAsync || isGenerator) && !tokens.match(TokenType.LPAREN)) {
+                throw new JSSyntaxErrorException("Unexpected token " + tokens.current().type());
             }
-            if (parserContext.match(TokenType.LPAREN)) {
+            if (tokens.match(TokenType.LPAREN)) {
                 // Method shorthand: name() {} or async name() {} or *name() {} or async *name() {}
                 boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
                 parserContext.superPropertyAllowed = true;
@@ -195,13 +195,13 @@ final class LiteralParser {
                     parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
                 }
                 properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, true));
-            } else if (parserContext.match(TokenType.COLON)) {
+            } else if (tokens.match(TokenType.COLON)) {
                 // Regular property: key: value
-                parserContext.advance();
+                tokens.advance();
                 Expression value = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                 properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
-            } else if (!computed && key instanceof Identifier keyId && (parserContext.match(TokenType.COMMA)
-                    || parserContext.match(TokenType.RBRACE) || parserContext.match(TokenType.ASSIGN))) {
+            } else if (!computed && key instanceof Identifier keyId && (tokens.match(TokenType.COMMA)
+                    || tokens.match(TokenType.RBRACE) || tokens.match(TokenType.ASSIGN))) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
                 // Following QuickJS: the shorthand value is an IdentifierReference,
                 // so yield/await must be valid identifiers in the current context.
@@ -226,7 +226,7 @@ final class LiteralParser {
                     parserContext.needsArguments = true;
                 }
                 Expression value;
-                if (parserContext.consumeIf(TokenType.ASSIGN)) {
+                if (tokens.consumeIf(TokenType.ASSIGN)) {
                     Expression defaultValue = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                     value = new AssignmentExpression(keyId, AssignmentOperator.ASSIGN, defaultValue,
                             keyId.getLocation());
@@ -236,18 +236,18 @@ final class LiteralParser {
                 properties.add(new ObjectExpressionProperty(key, value, "init", false, true, false));
             } else {
                 // Fallback: expect colon
-                parserContext.expect(TokenType.COLON);
+                tokens.expect(TokenType.COLON);
                 Expression value = ExpressionAssignmentParser.parseAssignmentExpression(parserContext);
                 properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
             }
 
-            if (parserContext.consumeIf(TokenType.COMMA)) {
+            if (tokens.consumeIf(TokenType.COMMA)) {
             } else {
                 break;
             }
         }
 
-        parserContext.expect(TokenType.RBRACE);
+        tokens.expect(TokenType.RBRACE);
         return new ObjectExpression(properties, location);
     }
 
@@ -271,8 +271,8 @@ final class LiteralParser {
     }
 
     static TemplateLiteral parseTemplateLiteral(ParserContext parserContext, boolean tagged) {
-        SourceLocation location = parserContext.getLocation();
-        String templateStr = parserContext.consumeValue();
+        SourceLocation location = parserContext.tokens.getLocation();
+        String templateStr = parserContext.tokens.consumeValue();
 
         List<String> quasis = new ArrayList<>();
         List<String> rawQuasis = new ArrayList<>();

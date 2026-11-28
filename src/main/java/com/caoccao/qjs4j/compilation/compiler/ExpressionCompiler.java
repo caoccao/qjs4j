@@ -114,7 +114,7 @@ final class ExpressionCompiler {
         if (target instanceof MemberExpression memberExpr && !memberExpr.isOptional()) {
             if (memberExpr.getObject().isSuperIdentifier()) {
                 // Pre-evaluate super reference: this, superObj, key
-                EmitHelpers.emitSuperPropertyReference(compilerContext, memberExpr);
+                MemberExpressionCompiler.emitSuperPropertyReference(compilerContext, memberExpr);
                 return 3; // this, superObj, key on stack
             }
             // Pre-evaluate the object

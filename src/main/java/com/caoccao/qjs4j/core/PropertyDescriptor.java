@@ -439,7 +439,7 @@ public final class PropertyDescriptor {
         if (!(value instanceof JSUndefined) && !JSTypeChecking.isCallable(value)) {
             String message = getter ? "Getter must be a function" : "Setter must be a function";
             if (describeInvalidAccessor) {
-                message += ": " + JSTypeConversions.toString(context, value).value();
+                message += ": " + JSTypeConversions.toJavaString(context, value);
             }
             context.throwTypeError(message);
             return false;

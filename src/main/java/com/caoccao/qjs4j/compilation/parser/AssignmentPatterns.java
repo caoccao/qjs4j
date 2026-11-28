@@ -118,7 +118,7 @@ final class AssignmentPatterns {
 
     private static boolean hasTrailingCommaAfterRestElement(ParserContext parserContext,
             ArrayExpression arrayExpression, int assignmentOperatorOffset) {
-        String source = parserContext.lexer.getSource();
+        String source = parserContext.tokens.source();
         int startOffset = arrayExpression.getLocation().offset();
         if (startOffset < 0 || startOffset >= source.length() || startOffset >= assignmentOperatorOffset) {
             return false;
@@ -176,7 +176,7 @@ final class AssignmentPatterns {
 
     private static JSSyntaxErrorException invalidArrowParameter(ParserContext parserContext) {
         return new JSSyntaxErrorException("Invalid arrow function parameter at line "
-                + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                + parserContext.tokens.current().line() + ", column " + parserContext.tokens.current().column());
     }
 
     private static boolean isArrowDestructuringParameterExpression(Expression expression) {

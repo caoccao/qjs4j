@@ -21,100 +21,52 @@ import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SpreadElement;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.util.List;
+
 final class ArrayExpressionCompiler {
     private ArrayExpressionCompiler() {
     }
 
-    static void compile(CompilerContext compilerContext, ArrayExpression arrayExpr) {
-        compilerContext.emitter.emitIntOperand(Opcode.ARRAY_FROM, 0);
+    static void compile(CompilerContext context, ArrayExpression expression) {
+        emitArray(context, expression.getElements());
+    }
 
-        // Check if we have any spread elements or holes
-        boolean hasSpread = arrayExpr.getElements().stream().anyMatch(e -> e instanceof SpreadElement);
-        boolean hasHoles = arrayExpr.getElements().stream().anyMatch(e -> e == null);
-
-        if (!hasSpread && !hasHoles) {
-            // Simple case: no spread elements, no holes
-            compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, 0);
-            for (Expression element : arrayExpr.getElements()) {
-                compilerContext.compileExpression(element);
-                compilerContext.emitter.emitArrayElement();
+    /** Array literals and spread argument lists use the same index-tracking instructions. */
+    static void emitArray(CompilerContext context, List<Expression> elements) {
+        BytecodeEmitter emitter = context.emitter;
+        emitter.emitIntOperand(Opcode.ARRAY_FROM, 0);
+        int leadingHoles = 0;
+        for (Expression element : elements) {
+            if (element != null) {
+                break;
             }
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            leadingHoles++;
+        }
+        if (leadingHoles > 0 && leadingHoles == elements.size()) {
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitIntOperand(Opcode.PUSH_I32, leadingHoles);
+            emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");
         } else {
-            // Complex case: has spread elements or holes
-            // Following QuickJS: emit position tracking
-            // Stack starts with: array
-            int idx = 0;
-            boolean needsIndex = false;
-            boolean needsLength = false;
-
-            for (Expression element : arrayExpr.getElements()) {
-                if (element instanceof SpreadElement spreadElement) {
-                    // Emit index if not already on stack
-                    if (!needsIndex) {
-                        compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, idx);
-                        needsIndex = true;
-                    }
-                    // Compile the iterable expression
-                    compilerContext.compileExpression(spreadElement.getArgument());
-                    // A value that is not iterable reports the spread operand's position, as V8 does.
-                    compilerContext.emitter.emitSourcePosition(spreadElement.getArgument().getLocation());
-                    // Emit APPEND to spread elements into the array
-                    // Stack: array pos iterable -> array pos
-                    compilerContext.emitter.emitOpcode(Opcode.APPEND);
-                    // After APPEND, index is updated on stack
-                    needsLength = false;
-                } else if (element != null) {
-                    if (needsIndex) {
-                        // We have index on stack, use DEFINE_ARRAY_EL
-                        compilerContext.compileExpression(element);
-                        compilerContext.emitter.emitArrayElement();
-                        needsLength = false;
-                    } else {
-                        // No index on stack yet
-                        // Start using index-based assignment since we have holes or spread
-                        compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, idx);
-                        needsIndex = true;
-                        compilerContext.compileExpression(element);
-                        compilerContext.emitter.emitArrayElement();
-                        needsLength = false;
-                    }
+            emitter.emitIntOperand(Opcode.PUSH_I32, leadingHoles);
+            for (var iterator = elements.listIterator(leadingHoles); iterator.hasNext();) {
+                Expression element = iterator.next();
+                if (element == null) {
+                    emitter.emitOpcode(Opcode.INC);
+                } else if (element instanceof SpreadElement spread) {
+                    context.compileExpression(spread.getArgument());
+                    emitter.emitSourcePosition(spread.getArgument().getLocation());
+                    emitter.emitOpcode(Opcode.APPEND);
                 } else {
-                    // Hole in array
-                    if (needsIndex) {
-                        // We have position on stack, just increment it
-                        compilerContext.emitter.emitOpcode(Opcode.INC);
-                    } else {
-                        idx++;
-                    }
-                    needsLength = true;
+                    context.compileExpression(element);
+                    emitter.emitArrayElement();
                 }
             }
-
-            // If we have a trailing hole, set the array length explicitly
-            // This handles cases like [1, 2, ,] where we need length=3 but only 2 elements
-            if (needsLength) {
-                if (needsIndex) {
-                    // Stack: array idx
-                    // QuickJS pattern: dup1 (duplicate array), put_field "length"
-                    // dup1: array idx -> array array idx
-                    compilerContext.emitter.emitOpcode(Opcode.DUP1); // array array idx
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length"); // array idx (PUT_FIELD leaves
-                                                                                        // value)
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // array
-                } else {
-                    // Stack: array (idx is compile-time constant)
-                    // QuickJS pattern: dup, push idx, swap, put_field "length", drop
-                    compilerContext.emitter.emitOpcode(Opcode.DUP); // array array
-                    compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, idx); // array array idx
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP); // array idx array
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length"); // array idx
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // array
-                }
-            } else if (needsIndex) {
-                // No trailing hole, just drop the index
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            if (!elements.isEmpty() && elements.get(elements.size() - 1) == null) {
+                emitter.emitOpcode(Opcode.DUP1);
+                emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");
             }
         }
+        emitter.emitOpcode(Opcode.DROP);
     }
 }

@@ -74,7 +74,7 @@ final class IntlLocaleList {
         if (JSTypeChecking.isUndefinedOrMissing(lengthValue)) {
             length = 0;
         } else {
-            double lenNum = JSTypeConversions.toNumber(context, lengthValue).value();
+            double lenNum = JSTypeConversions.toDouble(context, lengthValue);
             if (context.hasPendingException()) {
                 return localeTags;
             }
@@ -111,14 +111,14 @@ final class IntlLocaleList {
             }
             if (!(element instanceof JSString) && !(element instanceof JSObject)) {
                 context.throwTypeError(
-                        JSTypeConversions.toString(context, element).value() + " is not a well-formed currency value");
+                        JSTypeConversions.toJavaString(context, element) + " is not a well-formed currency value");
                 return localeTags;
             }
             // Per ECMA-402, if element has [[InitializedLocale]], use its [[Locale]] tag
             if (element instanceof JSIntlLocale intlLocale) {
                 localeTags.add(intlLocale.getTag());
             } else {
-                localeTags.add(JSTypeConversions.toString(context, element).value());
+                localeTags.add(JSTypeConversions.toJavaString(context, element));
             }
             if (context.hasPendingException()) {
                 return localeTags;

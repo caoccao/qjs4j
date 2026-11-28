@@ -214,7 +214,7 @@ public final class JSTypeChecking {
             return -1;
         }
         if (!(matcher instanceof JSUndefined)) {
-            return JSTypeConversions.toBoolean(matcher).value() ? 1 : 0;
+            return JSTypeChecking.isTruthy(matcher) ? 1 : 0;
         }
         return value instanceof JSRegExp ? 1 : 0;
     }
@@ -262,7 +262,21 @@ public final class JSTypeChecking {
      * Check if value is truthy (converts to true in boolean context).
      */
     public static boolean isTruthy(JSValue value) {
-        return JSTypeConversions.toBoolean(value).value();
+        if (value instanceof JSBoolean bool) {
+            return bool.value();
+        }
+        if (value instanceof JSNumber number) {
+            double d = number.value();
+            return d != 0 && !Double.isNaN(d);
+        }
+        if (value instanceof JSString string) {
+            return string.length() != 0;
+        }
+        if (value instanceof JSBigInt bigInt) {
+            return bigInt.value().signum() != 0;
+        }
+        return !(value instanceof JSUndefined || value instanceof JSNull
+                || value instanceof JSObject object && object.isHTMLDDA());
     }
 
     // Validation helpers

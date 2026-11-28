@@ -30,7 +30,7 @@ import java.util.Map;
  * <p>
  * This is the public facade that delegates to specialized compiler classes: {@link ExpressionCompiler},
  * {@link StatementCompiler}, {@link FunctionDeclarationCompiler}, {@link ClassDeclarationCompiler},
- * {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}. Shared compilation state is held in
+ * {@link PatternCompiler}, {@link BytecodeEmitter}, and {@link CompilerAnalysis}. Shared compilation state is held in
  * {@link CompilerContext}.
  */
 public final class BytecodeCompiler {

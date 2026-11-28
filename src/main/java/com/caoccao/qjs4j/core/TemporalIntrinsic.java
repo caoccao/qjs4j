@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationProperty;
 import com.caoccao.qjs4j.core.BuiltinFunctionList.Method;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationConstructor;
@@ -34,16 +35,9 @@ enum TemporalIntrinsic {
         constructor.method(Method.FROM, TemporalDurationConstructor::from);
         constructor.method(Method.COMPARE, TemporalDurationConstructor::compare);
     }, prototype -> {
-        prototype.getter("years", TemporalDurationPrototype::years);
-        prototype.getter("months", TemporalDurationPrototype::months);
-        prototype.getter("weeks", TemporalDurationPrototype::weeks);
-        prototype.getter("days", TemporalDurationPrototype::days);
-        prototype.getter("hours", TemporalDurationPrototype::hours);
-        prototype.getter("minutes", TemporalDurationPrototype::minutes);
-        prototype.getter("seconds", TemporalDurationPrototype::seconds);
-        prototype.getter("milliseconds", TemporalDurationPrototype::milliseconds);
-        prototype.getter("microseconds", TemporalDurationPrototype::microseconds);
-        prototype.getter("nanoseconds", TemporalDurationPrototype::nanoseconds);
+        for (TemporalDurationProperty property : TemporalDurationProperty.COMPONENTS) {
+            prototype.getter(property.propertyName(), property);
+        }
         prototype.getter("sign", TemporalDurationPrototype::sign);
         prototype.getter("blank", TemporalDurationPrototype::blank);
         prototype.method(Method.WITH, TemporalDurationPrototype::with);

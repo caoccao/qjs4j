@@ -49,9 +49,7 @@ public record ArrayIndexRange(long start, long end) {
     static long toIntegerIndex(JSContext context, JSValue value) {
         // Java's narrowing conversion truncates towards zero, maps NaN to zero and saturates
         // infinities at the long bounds, which the caller then clamps to the array length.
-        double number = value instanceof JSNumber index
-                ? index.value()
-                : JSTypeConversions.toNumber(context, value).value();
+        double number = JSTypeConversions.toDouble(context, value);
         return (long) number;
     }
 

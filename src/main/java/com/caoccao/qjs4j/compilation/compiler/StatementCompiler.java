@@ -82,7 +82,7 @@ final class StatementCompiler {
             FunctionDeclaration hoistedFunction = stmt.unwrapLabeledFunctionDeclaration();
             if (hoistedFunction != null) {
                 // Per Annex B.3.3: emit the var store at the source position
-                EmitHelpers.emitDeferredAnnexBVarStore(compilerContext, hoistedFunction);
+                IdentifierCompiler.emitDeferredAnnexBVarStore(compilerContext, hoistedFunction);
                 continue;
             }
             compilerContext.compileStatement(stmt);

@@ -48,7 +48,7 @@ public final class DateConstructor {
         double[] fields = {0, 0, 1, 0, 0, 0, 0};
         int n = Math.min(args.length, 7);
         for (int i = 0; i < n; i++) {
-            fields[i] = JSTypeConversions.toNumber(context, args[i]).value();
+            fields[i] = JSTypeConversions.toDouble(context, args[i]);
         }
         return JSNumber.of(JSDate.setDateFieldsChecked(fields, false));
     }

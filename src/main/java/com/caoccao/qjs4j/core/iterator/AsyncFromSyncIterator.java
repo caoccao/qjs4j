@@ -102,7 +102,7 @@ final class AsyncFromSyncIterator {
         if (context.hasPendingException()) {
             return JSAsyncIterator.rejectPendingException(context);
         }
-        return continueWith(context, value, JSTypeConversions.toBoolean(done).value(), iteratorToClose);
+        return continueWith(context, value, JSTypeChecking.isTruthy(done), iteratorToClose);
     }
 
     static JSPromise continueWith(JSContext context, JSValue value, boolean done, JSObject syncIterator) {

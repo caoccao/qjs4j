@@ -60,7 +60,7 @@ final class WithStatementCompiler {
             compilerContext.withObjectManager.popLocal();
         }
 
-        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
     }
 }

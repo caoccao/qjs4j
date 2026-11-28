@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.Identifier;
+import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSArguments;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSString;
@@ -73,6 +73,23 @@ final class IdentifierCompiler {
         emitIdentifierLookupWithoutWith(compilerContext, name);
     }
 
+    /**
+     * Emit the Annex B.3.3 var-scope store for a function declaration. In global scope, uses PUT_VAR (global object
+     * property). In function scope, uses PUT_LOCAL to the function-scope local (bypassing the block-scoped lexical
+     * binding).
+     */
+    static void emitAnnexBVarStore(CompilerContext compilerContext, String functionName) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        Integer local = compilerContext.inGlobalScope
+                ? null
+                : compilerContext.annexBFunctionScopeLocals.get(functionName);
+        if (local == null) {
+            emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+        } else {
+            emitter.emitPutLocal(local);
+        }
+    }
+
     static void emitCapturedOrGlobalIdentifierLookup(CompilerContext compilerContext, String name,
             Opcode globalOpcode) {
         BytecodeEmitter emitter = compilerContext.emitter;
@@ -82,6 +99,44 @@ final class IdentifierCompiler {
         } else {
             // Not found in local scopes, use global variable
             emitter.emitOpcodeAtom(globalOpcode, name);
+        }
+    }
+
+    static void emitConstAssignmentErrorForCaptured(CompilerContext compilerContext, String name, int capturedIndex) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        emitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+        emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitConstAssignmentError(name);
+    }
+
+    static void emitConstAssignmentErrorForLocal(CompilerContext compilerContext, String name, int localIndex) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        emitter.emitIntOperand(Opcode.GET_LOC_CHECK, localIndex);
+        emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitConstAssignmentError(name);
+    }
+
+    /**
+     * Emit the Annex B.3.3 var store at the function declaration's source position. This copies the block-scoped
+     * function value to the enclosing var-scope binding. Per spec, this happens when the FunctionDeclaration is
+     * evaluated, not when hoisted.
+     */
+    static void emitDeferredAnnexBVarStore(CompilerContext compilerContext, FunctionDeclaration functionDeclaration) {
+        if (functionDeclaration.getId() == null) {
+            return;
+        }
+        String functionName = functionDeclaration.getId().getName();
+        boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName) && !functionDeclaration.isAsync()
+                && !functionDeclaration.isGenerator()
+                && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
+        if (!isAnnexB) {
+            return;
+        }
+        // Load the function from its block-scope local, then store in var scope
+        Integer blockLocalIndex = compilerContext.scopeManager.findLocalInScopes(functionName);
+        if (blockLocalIndex != null) {
+            compilerContext.emitter.emitGetLocal(blockLocalIndex);
+            emitAnnexBVarStore(compilerContext, functionName);
         }
     }
 
@@ -295,8 +350,7 @@ final class IdentifierCompiler {
         } else {
             emitter.emitOpcode(Opcode.DROP);
             if (compilerContext.strictMode) {
-                emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name + " is not defined");
-                emitter.emitU8(5);
+                emitter.emitThrowError(name + " is not defined", 5);
             } else {
                 emitter.emitOpcode(Opcode.UNDEFINED);
             }

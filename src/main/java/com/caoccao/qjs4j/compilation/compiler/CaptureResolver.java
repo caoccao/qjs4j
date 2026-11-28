@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
+import com.caoccao.qjs4j.core.*;
+
 import java.util.Collection;
 import java.util.LinkedHashMap;
 
@@ -61,6 +63,33 @@ final class CaptureResolver {
 
     Collection<CaptureBinding> getCapturedBindings() {
         return capturedBindings.values();
+    }
+
+    /**
+     * Build capture source info and set it on the template function. Instead of emitting GET_LOCAL/GET_VAR_REF opcodes
+     * to push values onto the stack, we store the capture source information in the template function so FCLOSURE can
+     * create VarRef objects directly from the parent frame at runtime. This enables reference-based closure capture
+     * (mutations visible across closures).
+     */
+    void initializeTemplate(JSBytecodeFunction templateFunction) {
+        int captureCount = getCapturedBindingCount();
+        if (captureCount == 0) {
+            return;
+        }
+        int[] captureSourceInfos = new int[captureCount];
+        int i = 0;
+        for (CaptureResolver.CaptureBinding binding : getCapturedBindings()) {
+            if (binding.source().type() == CaptureResolver.CaptureSourceType.LOCAL) {
+                // Positive value = LOCAL capture at this index
+                captureSourceInfos[i] = binding.source().index();
+            } else {
+                // Negative value = VAR_REF capture, encoded as -(index + 1)
+                captureSourceInfos[i] = -(binding.source().index() + 1);
+            }
+            i++;
+        }
+        templateFunction.setCaptureSourceInfos(captureSourceInfos);
+        templateFunction.setCapturedVarNames(getCapturedBindingNamesBySlot());
     }
 
     boolean isCapturedBindingFunctionName(String name) {

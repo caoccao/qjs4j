@@ -36,7 +36,7 @@ final class ExpressionAssignmentParser {
             ParameterEarlyErrors.validateFormalsBodyDuplicate(params, block.getBody());
         }
         return new ArrowFunctionExpression(params, body, async,
-                location.withEndOffset(parserContext.previousTokenEndOffset));
+                location.withEndOffset(parserContext.tokens.previousEnd()));
     }
 
     private static ArrowFunctionExpression parseArrowBody(ParserContext parserContext, FunctionParams params,
@@ -55,9 +55,10 @@ final class ExpressionAssignmentParser {
     }
 
     static Expression parseAssignmentExpression(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
+        TokenCursor tokens = parserContext.tokens;
+        SourceLocation location = tokens.getLocation();
         // Save whether the current token is a direct identifier for fn-name inference (spec 13.15.2 step 1.c)
-        TokenType startTokenType = parserContext.currentToken.type();
+        TokenType startTokenType = tokens.current().type();
         boolean lhsStartsWithIdentifier = startTokenType == TokenType.IDENTIFIER || startTokenType == TokenType.ASYNC
                 || startTokenType == TokenType.AWAIT || startTokenType == TokenType.YIELD
                 || startTokenType == TokenType.FROM || startTokenType == TokenType.OF;
@@ -65,47 +66,44 @@ final class ExpressionAssignmentParser {
         // ES2024 12.7.1: Escaped contextual keywords (e.g. \u0061sync) are IDENTIFIER tokens.
         // When escaped `async` precedes `function` on the same line, V8 gives
         // "Keyword must not contain escaped characters" rather than a generic parse error.
-        if (parserContext.match(TokenType.IDENTIFIER) && parserContext.currentToken.escaped()
-                && JSKeyword.ASYNC.equals(parserContext.currentToken.value())
-                && parserContext.nextToken.type() == TokenType.FUNCTION
-                && parserContext.nextToken.line() == parserContext.currentToken.line()) {
+        if (tokens.match(TokenType.IDENTIFIER) && tokens.current().escaped()
+                && JSKeyword.ASYNC.equals(tokens.current().value()) && tokens.nextOnSameLine(TokenType.FUNCTION)) {
             throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
         }
-        if (parserContext.match(TokenType.ASYNC)) {
+        if (tokens.match(TokenType.ASYNC)) {
             SourceLocation asyncLocation = location;
-            ParserContext.TokenPosition start = parserContext.saveTokenPosition();
+            TokenCursor.TokenPosition start = tokens.saveTokenPosition();
 
-            parserContext.advance();
+            tokens.advance();
 
-            if (!parserContext.hasNewlineBefore()) {
-                if (parserContext.match(TokenType.FUNCTION)) {
+            if (!tokens.hasNewlineBefore()) {
+                if (tokens.match(TokenType.FUNCTION)) {
                     Expression asyncFunc = FunctionClassParser.parseFunctionExpression(parserContext, true,
                             asyncLocation);
                     return ExpressionPrimaryParser.parsePostPrimaryExpression(parserContext, asyncFunc, location);
                 }
 
-                if (parserContext.currentToken.type().isIdentifierCandidate()
-                        && parserContext.nextToken.type() == TokenType.ARROW) {
+                if (tokens.current().type().isIdentifierCandidate() && tokens.nextIs(TokenType.ARROW)) {
                     Identifier param = parserContext.parseIdentifier();
                     parserContext.validateBindingIdentifier(param.getName(), true);
-                    if (parserContext.hasNewlineBefore()) {
+                    if (tokens.hasNewlineBefore()) {
                         // ArrowParameters [no LineTerminator here] =>
                         throw new JSSyntaxErrorException("Unexpected token '=>'");
                     }
-                    parserContext.expect(TokenType.ARROW);
+                    tokens.expect(TokenType.ARROW);
 
                     return parseArrowBody(parserContext, new FunctionParams(List.of(param), null, null), true,
                             asyncLocation);
                 }
 
-                if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow(parserContext)) {
+                if (tokens.match(TokenType.LPAREN) && peekPastParensIsArrow(parserContext)) {
                     parserContext.enterLexicalFunction(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
-                        parserContext.advance();
+                        tokens.advance();
                         FunctionParams funcParams = FunctionClassParser.parseFunctionParameters(parserContext);
-                        parserContext.advance();
+                        tokens.advance();
 
                         return finishArrow(parserContext, funcParams, readArrowBody(parserContext), true, location);
                     } finally {
@@ -115,35 +113,35 @@ final class ExpressionAssignmentParser {
                 }
             }
 
-            parserContext.restoreTokenPosition(start);
+            tokens.restoreTokenPosition(start);
         }
 
         // YieldExpression is at AssignmentExpression level per ES2024 spec (14.4)
         // It must NOT be parsed at UnaryExpression level (e.g. "void yield" must be SyntaxError in generators)
-        if (parserContext.match(TokenType.YIELD) && !parserContext.isYieldIdentifierAllowed()) {
+        if (tokens.match(TokenType.YIELD) && !parserContext.isYieldIdentifierAllowed()) {
             if (parserContext.generatorFunctionNesting > 0) {
                 if (!parserContext.inFunctionBody) {
                     throw new JSSyntaxErrorException(
                             "'yield' expression not allowed in formal parameters of a generator function");
                 }
-                SourceLocation yieldLocation = parserContext.consumeLocation();
+                SourceLocation yieldLocation = tokens.consumeLocation();
 
                 boolean delegate = false;
                 // Per ES2024 14.4: yield [no LineTerminator here] * AssignmentExpression
-                if (!parserContext.hasNewlineBefore() && parserContext.match(TokenType.MUL)) {
+                if (!tokens.hasNewlineBefore() && tokens.match(TokenType.MUL)) {
                     delegate = true;
-                    parserContext.advance();
+                    tokens.advance();
                 }
 
                 Expression argument = null;
                 if (delegate) {
                     // yield* requires an AssignmentExpression (no line terminator restriction)
                     argument = parseAssignmentExpression(parserContext);
-                } else if (!parserContext.hasNewlineBefore() && !parserContext.match(TokenType.SEMICOLON)
-                        && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.RBRACKET)
-                        && !parserContext.match(TokenType.RPAREN) && !parserContext.match(TokenType.TEMPLATE)
-                        && !parserContext.match(TokenType.COLON) && !parserContext.match(TokenType.COMMA)
-                        && !parserContext.match(TokenType.EOF)) {
+                } else if (!tokens.hasNewlineBefore() && !tokens.match(TokenType.SEMICOLON)
+                        && !tokens.match(TokenType.RBRACE) && !tokens.match(TokenType.RBRACKET)
+                        && !tokens.match(TokenType.RPAREN) && !tokens.match(TokenType.TEMPLATE)
+                        && !tokens.match(TokenType.COLON) && !tokens.match(TokenType.COMMA)
+                        && !tokens.match(TokenType.EOF)) {
                     argument = parseAssignmentExpression(parserContext);
                 }
 
@@ -155,7 +153,7 @@ final class ExpressionAssignmentParser {
 
         Expression left = ExpressionBinaryParser.parseConditionalExpression(parserContext);
 
-        if (parserContext.match(TokenType.ARROW) && !parserContext.hasNewlineBefore()) {
+        if (tokens.match(TokenType.ARROW) && !tokens.hasNewlineBefore()) {
             List<Pattern> params = new ArrayList<>();
             List<Expression> defaults = new ArrayList<>();
             RestParameter restParameter = null;
@@ -207,12 +205,12 @@ final class ExpressionAssignmentParser {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
 
-            parserContext.advance();
+            tokens.advance();
 
             return parseArrowBody(parserContext, new FunctionParams(params, defaults, restParameter), false, location);
         }
 
-        AssignmentOperator operator = AssignmentOperator.fromToken(parserContext.currentToken.type());
+        AssignmentOperator operator = AssignmentOperator.fromToken(tokens.current().type());
         if (operator != null) {
             if (!(left instanceof Identifier) && !(left instanceof MemberExpression)
                     && !(left instanceof ArrayExpression) && !(left instanceof ObjectExpression)
@@ -250,9 +248,9 @@ final class ExpressionAssignmentParser {
                 }
             }
 
-            location = parserContext.getLocation();
+            location = tokens.getLocation();
             int assignmentOperatorOffset = location.offset();
-            parserContext.advance();
+            tokens.advance();
             Expression right = parseAssignmentExpression(parserContext);
 
             if (operator == AssignmentOperator.ASSIGN
@@ -268,12 +266,12 @@ final class ExpressionAssignmentParser {
     }
 
     static Expression parseExpression(ParserContext parserContext) {
-        SourceLocation location = parserContext.getLocation();
+        SourceLocation location = parserContext.tokens.getLocation();
         List<Expression> expressionsList = new ArrayList<>();
 
         expressionsList.add(parseAssignmentExpression(parserContext));
 
-        while (parserContext.consumeIf(TokenType.COMMA)) {
+        while (parserContext.tokens.consumeIf(TokenType.COMMA)) {
             expressionsList.add(parseAssignmentExpression(parserContext));
         }
 
@@ -285,33 +283,34 @@ final class ExpressionAssignmentParser {
     }
 
     private static boolean peekPastParensIsArrow(ParserContext parserContext) {
-        ParserContext.TokenPosition start = parserContext.saveTokenPosition();
+        TokenCursor tokens = parserContext.tokens;
+        TokenCursor.TokenPosition start = tokens.saveTokenPosition();
         try {
-            parserContext.advance();
+            tokens.advance();
             int depth = 1;
-            while (depth > 0 && !parserContext.match(TokenType.EOF)) {
-                if (parserContext.match(TokenType.LPAREN)) {
+            while (depth > 0 && !tokens.match(TokenType.EOF)) {
+                if (tokens.match(TokenType.LPAREN)) {
                     depth++;
-                } else if (parserContext.match(TokenType.RPAREN)) {
+                } else if (tokens.match(TokenType.RPAREN)) {
                     depth--;
                 }
                 if (depth > 0) {
-                    parserContext.advance();
+                    tokens.advance();
                 }
             }
             if (depth == 0) {
-                parserContext.advance();
+                tokens.advance();
                 // ArrowParameters [no LineTerminator here] =>
-                return parserContext.match(TokenType.ARROW) && !parserContext.hasNewlineBefore();
+                return tokens.match(TokenType.ARROW) && !tokens.hasNewlineBefore();
             }
             return false;
         } finally {
-            parserContext.restoreTokenPosition(start);
+            tokens.restoreTokenPosition(start);
         }
     }
 
     private static ASTNode readArrowBody(ParserContext parserContext) {
-        return parserContext.match(TokenType.LBRACE)
+        return parserContext.tokens.match(TokenType.LBRACE)
                 ? StatementParser.parseBlockStatementAsBody(parserContext)
                 : parseAssignmentExpression(parserContext);
     }

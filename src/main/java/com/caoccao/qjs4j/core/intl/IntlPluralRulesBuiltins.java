@@ -86,7 +86,7 @@ final class IntlPluralRulesBuiltins {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
             return context.throwTypeError("Intl.PluralRules.prototype.select called on incompatible receiver");
         }
-        double value = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
+        double value = args.length > 0 ? JSTypeConversions.toDouble(context, args[0]) : Double.NaN;
         return new JSString(pluralRules.select(value));
     }
 
@@ -99,11 +99,11 @@ final class IntlPluralRulesBuiltins {
         if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
             return context.throwTypeError("Intl.PluralRules.prototype.selectRange requires start and end");
         }
-        double start = JSTypeConversions.toNumber(context, startValue).value();
+        double start = JSTypeConversions.toDouble(context, startValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        double end = JSTypeConversions.toNumber(context, endValue).value();
+        double end = JSTypeConversions.toDouble(context, endValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

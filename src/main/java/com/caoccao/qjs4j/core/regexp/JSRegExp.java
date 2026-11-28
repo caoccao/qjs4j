@@ -200,13 +200,13 @@ public final class JSRegExp extends JSObject {
         String pattern = "";
         String flags = "";
         if (!(patternValue instanceof JSUndefined)) {
-            pattern = JSTypeConversions.toString(context, patternValue).value();
+            pattern = JSTypeConversions.toJavaString(context, patternValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
         }
         if (!(flagsValue instanceof JSUndefined)) {
-            flags = JSTypeConversions.toString(context, flagsValue).value();
+            flags = JSTypeConversions.toJavaString(context, flagsValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

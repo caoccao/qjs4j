@@ -64,7 +64,7 @@ final class IntlLocaleBuiltins {
         // Step 1: Tag type check — must be String or Object, not boolean/number/symbol
         JSValue tagArg = args[0];
         if (!(tagArg instanceof JSString) && !(tagArg instanceof JSObject)) {
-            String tagStr = JSTypeConversions.toString(context, tagArg).value();
+            String tagStr = JSTypeConversions.toJavaString(context, tagArg);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -76,7 +76,7 @@ final class IntlLocaleBuiltins {
             if (tagArg instanceof JSIntlLocale inputLocale) {
                 localeTag = inputLocale.getTag();
             } else {
-                localeTag = JSTypeConversions.toString(context, tagArg).value();
+                localeTag = JSTypeConversions.toJavaString(context, tagArg);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }

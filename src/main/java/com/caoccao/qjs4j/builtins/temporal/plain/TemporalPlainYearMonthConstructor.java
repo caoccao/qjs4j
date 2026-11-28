@@ -42,29 +42,11 @@ public final class TemporalPlainYearMonthConstructor {
      * Temporal.PlainYearMonth(isoYear, isoMonth, calendar?, referenceISODay?)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!TemporalUtils.requireNewTarget(context, "PlainYearMonth")) {
-            return JSUndefined.INSTANCE;
-        }
+        return TemporalCalendarFields.constructPartialDate(context, args, 1, TemporalPlainYearMonthConstructor::create);
+    }
 
-        int isoYear = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 0));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 1));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalCalendarId calendarId = TemporalUtils.calendarArgument(context, args, 2);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        int referenceDay = TemporalUtils.optionalIntegerArgument(context, args, 3, 1);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
+    private static JSValue create(JSContext context, int isoYear, int isoMonth, TemporalCalendarId calendarId,
+            int referenceDay) {
         if (!isValidIsoYearMonth(isoYear, isoMonth)) {
             return TemporalError.INVALID_ISO_DATE.undefined(context);
         }

@@ -126,8 +126,8 @@ public final class MathObject {
      * Math.atan2(y, x) ES2020 20.2.2.8
      */
     public static JSValue atan2(JSContext context, JSValue thisArg, JSValue[] args) {
-        double y = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
-        double x = args.length > 1 ? JSTypeConversions.toNumber(context, args[1]).value() : Double.NaN;
+        double y = args.length > 0 ? JSTypeConversions.toDouble(context, args[0]) : Double.NaN;
+        double x = args.length > 1 ? JSTypeConversions.toDouble(context, args[1]) : Double.NaN;
         return JSNumber.of(Math.atan2(y, x));
     }
 
@@ -241,7 +241,7 @@ public final class MathObject {
         double result = maximum ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
         // Even after a NaN, later arguments can have observable conversions.
         for (JSValue arg : args) {
-            double value = JSTypeConversions.toNumber(context, arg).value();
+            double value = JSTypeConversions.toDouble(context, arg);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -280,12 +280,12 @@ public final class MathObject {
     public static JSValue hypot(JSContext context, JSValue thisArg, JSValue[] args) {
         double result = 0.0;
         if (args.length > 0) {
-            result = JSTypeConversions.toNumber(context, args[0]).value();
+            result = JSTypeConversions.toDouble(context, args[0]);
             if (args.length == 1) {
                 result = Math.abs(result);
             } else {
                 for (int i = 1; i < args.length; i++) {
-                    double x = JSTypeConversions.toNumber(context, args[i]).value();
+                    double x = JSTypeConversions.toDouble(context, args[i]);
                     result = Math.hypot(result, x);
                 }
             }
@@ -346,15 +346,15 @@ public final class MathObject {
     }
 
     private static double numberArgument(JSContext context, JSValue[] args) {
-        return args.length == 0 ? Double.NaN : JSTypeConversions.toNumber(context, args[0]).value();
+        return args.length == 0 ? Double.NaN : JSTypeConversions.toDouble(context, args[0]);
     }
 
     /**
      * Math.pow(base, exponent) ES2020 20.2.2.26
      */
     public static JSValue pow(JSContext context, JSValue thisArg, JSValue[] args) {
-        double base = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
-        double exp = args.length > 1 ? JSTypeConversions.toNumber(context, args[1]).value() : Double.NaN;
+        double base = args.length > 0 ? JSTypeConversions.toDouble(context, args[0]) : Double.NaN;
+        double exp = args.length > 1 ? JSTypeConversions.toDouble(context, args[1]) : Double.NaN;
         return JSNumber.of(Math.pow(base, exp));
     }
 

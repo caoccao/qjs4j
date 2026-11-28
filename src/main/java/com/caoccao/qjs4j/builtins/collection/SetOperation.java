@@ -211,7 +211,7 @@ enum SetOperation {
             if (context.hasPendingException()) {
                 return null;
             }
-            double sizeDouble = JSTypeConversions.toNumber(context, sizeValue).value();
+            double sizeDouble = JSTypeConversions.toDouble(context, sizeValue);
             if (context.hasPendingException()) {
                 return null;
             }

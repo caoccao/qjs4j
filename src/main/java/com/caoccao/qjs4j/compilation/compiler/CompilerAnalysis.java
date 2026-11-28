@@ -237,7 +237,7 @@ final class CompilerAnalysis {
             if (!declaredFuncVarNames.contains(name)) {
                 // Create initial var binding only if the property doesn't already exist
                 // on the global object (ES2024 CreateGlobalVarBinding semantics).
-                EmitHelpers.emitConditionalVarInit(compilerContext, name);
+                compilerContext.emitter.emitConditionalVarInit(name);
             }
         }
     }

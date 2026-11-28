@@ -132,6 +132,16 @@ public final class BytecodeEmitter {
         callDescriptions.put(codeSize, description);
     }
 
+    void emitConditionalVarInit(String name) {
+        emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
+        emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
+        emitOpcode(Opcode.IN);
+        int skipJump = emitJump(Opcode.IF_TRUE);
+        emitOpcode(Opcode.UNDEFINED);
+        emitOpcodeAtom(Opcode.PUT_VAR, name);
+        patchJumpToHere(skipJump);
+    }
+
     /**
      * Add a constant to the constant pool and emit its index. Returns the constant index.
      */
@@ -147,6 +157,11 @@ public final class BytecodeEmitter {
         constantIndexCache.put(value, index);
         emitU32(index);
         return index;
+    }
+
+    void emitConstAssignmentError(String name) {
+        emitOpcode(Opcode.DROP);
+        emitThrowError(name, 0);
     }
 
     void emitDrops(int count) {
@@ -189,6 +204,17 @@ public final class BytecodeEmitter {
         int jumpPos = currentOffset();
         emitU32(0xFFFFFFFF); // Placeholder
         return jumpPos;
+    }
+
+    /** Stack on entry is empty or already contains the evaluated call argument in a local. */
+    void emitLocalMethodCall(int receiverLocal, String method, int argumentLocal) {
+        emitGetLocal(receiverLocal);
+        emitOpcodeAtom(Opcode.GET_FIELD2, method);
+        emitOpcode(Opcode.SWAP);
+        if (argumentLocal >= 0) {
+            emitGetLocal(argumentLocal);
+        }
+        emitIntOperand(Opcode.CALL, argumentLocal >= 0 ? 1 : 0);
     }
 
     /**
@@ -306,6 +332,11 @@ public final class BytecodeEmitter {
     void emitSuperBase() {
         emitIntOperand(Opcode.SPECIAL_OBJECT, 4); // SPECIAL_OBJECT_HOME_OBJECT
         emitOpcode(Opcode.GET_SUPER);
+    }
+
+    void emitThrowError(String message, int errorKind) {
+        emitOpcodeAtom(Opcode.THROW_ERROR, message);
+        emitU8(errorKind);
     }
 
     /**

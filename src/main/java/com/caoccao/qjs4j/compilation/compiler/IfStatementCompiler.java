@@ -87,7 +87,7 @@ final class IfStatementCompiler {
             compilerContext.scopeManager.enterScope();
             compilerContext.scopeManager.currentScope().declareLocal(funcDecl.getId().getName());
             FunctionDeclarationCompiler.compile(compilerContext, funcDecl);
-            EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+            UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
             compilerContext.scopeManager.exitScope();
         } else {
             StatementCompiler.compileNestedStatement(compilerContext, stmt);

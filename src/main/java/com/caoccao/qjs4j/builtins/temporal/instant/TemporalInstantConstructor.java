@@ -75,7 +75,7 @@ public final class TemporalInstantConstructor {
      */
     public static JSValue fromEpochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue epochMillisecondsArgument = JSValue.argumentOrUndefined(args, 0);
-        double epochMilliseconds = JSTypeConversions.toNumber(context, epochMillisecondsArgument).value();
+        double epochMilliseconds = JSTypeConversions.toDouble(context, epochMillisecondsArgument);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

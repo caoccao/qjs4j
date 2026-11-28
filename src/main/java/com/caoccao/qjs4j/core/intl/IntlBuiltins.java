@@ -149,7 +149,7 @@ public abstract class IntlBuiltins {
         }
         if (!(optionsArg instanceof JSObject options)) {
             return context.throwTypeError(
-                    "Cannot convert " + JSTypeConversions.toString(context, optionsArg).value() + " to object");
+                    "Cannot convert " + JSTypeConversions.toJavaString(context, optionsArg) + " to object");
         }
 
         // localeMatcher
@@ -351,7 +351,7 @@ public abstract class IntlBuiltins {
         if (args.length == 0) {
             return context.throwRangeError("invalid code for DisplayNames: undefined");
         }
-        String code = JSTypeConversions.toString(context, args[0]).value();
+        String code = JSTypeConversions.toJavaString(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -412,11 +412,11 @@ public abstract class IntlBuiltins {
             return context.throwTypeError("Intl.RelativeTimeFormat.prototype." + method + " requires value and unit");
         }
 
-        double value = JSTypeConversions.toNumber(context, args[0]).value();
+        double value = JSTypeConversions.toDouble(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String unitValue = JSTypeConversions.toString(context, args[1]).value();
+        String unitValue = JSTypeConversions.toJavaString(context, args[1]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -739,7 +739,7 @@ public abstract class IntlBuiltins {
         if (args.length == 0) {
             return context.throwRangeError("invalid key: undefined");
         }
-        String key = JSTypeConversions.toString(context, args[0]).value();
+        String key = JSTypeConversions.toJavaString(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

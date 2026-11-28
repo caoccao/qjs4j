@@ -93,7 +93,7 @@ final class IntlNumberFormatBuiltins {
                 optionsObject = JSTypeConversions.toObject(context, optionsArgument);
                 if (optionsObject == null) {
                     return context.throwTypeError("Cannot convert "
-                            + JSTypeConversions.toString(context, optionsArgument).value() + " to object");
+                            + JSTypeConversions.toJavaString(context, optionsArgument) + " to object");
                 }
             }
 
@@ -265,7 +265,7 @@ final class IntlNumberFormatBuiltins {
         if (value instanceof JSString jsString) {
             return numberFormat.format(jsString.value());
         }
-        double numeric = JSTypeConversions.toNumber(context, value).value();
+        double numeric = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return "";
         }
@@ -373,7 +373,7 @@ final class IntlNumberFormatBuiltins {
                 }
             }
         }
-        double numericValue = JSTypeConversions.toNumber(context, value).value();
+        double numericValue = JSTypeConversions.toDouble(context, value);
         return !context.hasPendingException() && Double.isNaN(numericValue);
     }
 
@@ -443,7 +443,7 @@ final class IntlNumberFormatBuiltins {
         if (arg instanceof JSString str) {
             return numberFormat.formatToParts(context, str.value());
         }
-        double numValue = JSTypeConversions.toNumber(context, arg).value();
+        double numValue = JSTypeConversions.toDouble(context, arg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -566,12 +566,11 @@ final class IntlNumberFormatBuiltins {
             context.throwRangeError("Invalid option value: " + useGroupingValue);
             return defaultValue;
         }
-        boolean booleanValue = JSTypeConversions.toBoolean(useGroupingValue).value();
+        boolean booleanValue = JSTypeChecking.isTruthy(useGroupingValue);
         if (!booleanValue) {
             return "false";
         }
-        context.throwRangeError(
-                "Invalid option value: " + JSTypeConversions.toString(context, useGroupingValue).value());
+        context.throwRangeError("Invalid option value: " + JSTypeConversions.toJavaString(context, useGroupingValue));
         return defaultValue;
     }
 }

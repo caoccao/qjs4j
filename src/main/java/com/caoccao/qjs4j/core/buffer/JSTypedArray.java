@@ -410,7 +410,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * ToNumber.
      */
     protected void integerIndexedElementSet(long index, JSValue value) {
-        double numValue = JSTypeConversions.toNumber(context, value).value();
+        double numValue = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return;
         }
@@ -571,7 +571,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * Number, BigInt typed arrays override to convert to BigInt.
      */
     protected void setJSElement(long index, JSValue value) {
-        setElement(index, JSTypeConversions.toNumber(context, value).value());
+        setElement(index, JSTypeConversions.toDouble(context, value));
     }
 
     /**

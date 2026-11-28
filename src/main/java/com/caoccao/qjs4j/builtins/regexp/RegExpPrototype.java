@@ -50,10 +50,10 @@ public final class RegExpPrototype {
                 pattern = existingRegExp.getPattern();
                 flags = existingRegExp.getFlags();
             } else if (!(patternArg instanceof JSUndefined)) {
-                pattern = JSTypeConversions.toString(context, patternArg).value();
+                pattern = JSTypeConversions.toJavaString(context, patternArg);
             }
             if (args.length > 1 && !(args[1] instanceof JSUndefined) && !(args[0] instanceof JSRegExp)) {
-                flags = JSTypeConversions.toString(context, args[1]).value();
+                flags = JSTypeConversions.toJavaString(context, args[1]);
             }
         }
 

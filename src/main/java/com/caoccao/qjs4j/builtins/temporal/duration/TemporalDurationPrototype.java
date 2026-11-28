@@ -102,26 +102,9 @@ public final class TemporalDurationPrototype {
 
     private static void applyDurationFieldOverrides(JSTemporalDuration duration,
             TemporalDurationDouble durationFieldOverrides) {
-        duration.defineProperty(PropertyKey.fromString("years"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.years())));
-        duration.defineProperty(PropertyKey.fromString("months"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.months())));
-        duration.defineProperty(PropertyKey.fromString("weeks"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.weeks())));
-        duration.defineProperty(PropertyKey.fromString("days"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.days())));
-        duration.defineProperty(PropertyKey.fromString("hours"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.hours())));
-        duration.defineProperty(PropertyKey.fromString("minutes"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.minutes())));
-        duration.defineProperty(PropertyKey.fromString("seconds"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.seconds())));
-        duration.defineProperty(PropertyKey.fromString("milliseconds"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.milliseconds())));
-        duration.defineProperty(PropertyKey.fromString("microseconds"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.microseconds())));
-        duration.defineProperty(PropertyKey.fromString("nanoseconds"),
-                PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.nanoseconds())));
+        for (TemporalDurationProperty property : TemporalDurationProperty.COMPONENTS) {
+            property.defineOverride(duration, durationFieldOverrides);
+        }
     }
 
     public static JSValue blank(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -139,34 +122,31 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue days(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "days", duration -> JSNumber.of(duration.getDuration().days()));
+        return TemporalDurationProperty.DAYS.call(context, thisArg, args);
     }
 
     public static JSValue hours(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "hours", duration -> JSNumber.of(duration.getDuration().hours()));
+        return TemporalDurationProperty.HOURS.call(context, thisArg, args);
     }
 
     public static JSValue microseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "microseconds",
-                duration -> JSNumber.of(duration.getDuration().microseconds()));
+        return TemporalDurationProperty.MICROSECONDS.call(context, thisArg, args);
     }
 
     public static JSValue milliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "milliseconds",
-                duration -> JSNumber.of(duration.getDuration().milliseconds()));
+        return TemporalDurationProperty.MILLISECONDS.call(context, thisArg, args);
     }
 
     public static JSValue minutes(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "minutes", duration -> JSNumber.of(duration.getDuration().minutes()));
+        return TemporalDurationProperty.MINUTES.call(context, thisArg, args);
     }
 
     public static JSValue months(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "months", duration -> JSNumber.of(duration.getDuration().months()));
+        return TemporalDurationProperty.MONTHS.call(context, thisArg, args);
     }
 
     public static JSValue nanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "nanoseconds",
-                duration -> JSNumber.of(duration.getDuration().nanoseconds()));
+        return TemporalDurationProperty.NANOSECONDS.call(context, thisArg, args);
     }
 
     public static JSValue negated(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -283,7 +263,7 @@ public final class TemporalDurationPrototype {
         if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return new TemporalPartialDurationFieldValue(false, 0L);
         }
-        double numericValue = JSTypeConversions.toNumber(context, value).value();
+        double numericValue = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return null;
         }
@@ -350,7 +330,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue seconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "seconds", duration -> JSNumber.of(duration.getDuration().seconds()));
+        return TemporalDurationProperty.SECONDS.call(context, thisArg, args);
     }
 
     public static JSValue sign(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -455,7 +435,7 @@ public final class TemporalDurationPrototype {
                 context.throwRangeError("Temporal error: Must specify a totalOf parameter");
                 return JSUndefined.INSTANCE;
             }
-            unitText = JSTypeConversions.toString(context, unitValue).value();
+            unitText = JSTypeConversions.toJavaString(context, unitValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -492,7 +472,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue weeks(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "weeks", duration -> JSNumber.of(duration.getDuration().weeks()));
+        return TemporalDurationProperty.WEEKS.call(context, thisArg, args);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -529,7 +509,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue years(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "years", duration -> JSNumber.of(duration.getDuration().years()));
+        return TemporalDurationProperty.YEARS.call(context, thisArg, args);
     }
 
 }

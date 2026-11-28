@@ -48,9 +48,8 @@ final class UnaryExpressionCompiler {
                     // property key evaluation, then THROW_ERROR instead of GET_SUPER_VALUE.
                     emitter.emitOpcode(Opcode.PUSH_THIS);
                     emitter.emitSuperBase();
-                    EmitHelpers.emitSuperPropertyKey(compilerContext, memberExpr);
-                    emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "");
-                    emitter.emitU8(3); // JS_THROW_ERROR_DELETE_SUPER
+                    MemberExpressionCompiler.emitSuperPropertyKey(compilerContext, memberExpr);
+                    emitter.emitThrowError("", 3); // JS_THROW_ERROR_DELETE_SUPER
                 } else {
                     if (memberExpr.isPartOfOptionalChain()) {
                         compileDeleteOptionalMemberExpression(compilerContext, memberExpr);
@@ -123,7 +122,7 @@ final class UnaryExpressionCompiler {
                 if (memberExpr.getObject().isSuperIdentifier()) {
                     // Super property update follows super-reference semantics:
                     // [this, superObj, key] + GET_SUPER_VALUE -> old value -> update -> PUT_SUPER_VALUE
-                    EmitHelpers.emitSuperPropertyReference(compilerContext, memberExpr);
+                    MemberExpressionCompiler.emitSuperPropertyReference(compilerContext, memberExpr);
                     emitter.emitOpcode(Opcode.TO_PROPKEY);
                     emitter.emitOpcode(Opcode.DUP3);
                     emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
@@ -230,8 +229,7 @@ final class UnaryExpressionCompiler {
                 // Annex B: CallExpression as increment/decrement target throws ReferenceError at runtime.
                 compilerContext.compileExpression(operand);
                 emitter.emitOpcode(Opcode.DROP);
-                emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
-                emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+                emitter.emitThrowError("invalid increment/decrement operand", 5); // JS_THROW_ERROR_INVALID_LVALUE
             } else {
                 throw new JSCompilerException("Invalid operand for increment/decrement operator", operand);
             }
@@ -286,10 +284,11 @@ final class UnaryExpressionCompiler {
             MemberExpression memberExpression) {
         BytecodeEmitter emitter = compilerContext.emitter;
         // delete a?.b: a short-circuited chain deletes nothing and evaluates to true (QuickJS: drop, push_true).
-        EmitHelpers.compileOptionalChain(compilerContext, () -> {
-            EmitHelpers.compileOptionalChainLinkTarget(compilerContext, memberExpression, memberExpression.getObject());
+        OptionalChainCompiler.compileOptionalChain(compilerContext, () -> {
+            OptionalChainCompiler.compileOptionalChainLinkTarget(compilerContext, memberExpression,
+                    memberExpression.getObject());
             if (memberExpression.isOptional()) {
-                EmitHelpers.emitOptionalChainTest(compilerContext, 1);
+                OptionalChainCompiler.emitOptionalChainTest(compilerContext, 1);
             }
             if (memberExpression.isComputed()) {
                 compilerContext.compileExpression(memberExpression.getProperty());
@@ -315,7 +314,7 @@ final class UnaryExpressionCompiler {
                 compilerContext.compileExpression(id);
                 emitter.emitOpcode(update);
                 if (compilerContext.scopeManager.isLocalBindingConst(id.getName())) {
-                    EmitHelpers.emitConstAssignmentErrorForLocal(compilerContext, id.getName(), localIndex);
+                    IdentifierCompiler.emitConstAssignmentErrorForLocal(compilerContext, id.getName(), localIndex);
                 } else {
                     emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
                 }
@@ -328,7 +327,8 @@ final class UnaryExpressionCompiler {
                 compilerContext.compileExpression(id);
                 emitter.emitOpcode(update);
                 if (compilerContext.captureResolver.isCapturedBindingImmutable(id.getName())) {
-                    EmitHelpers.emitConstAssignmentErrorForCaptured(compilerContext, id.getName(), capturedIndex);
+                    IdentifierCompiler.emitConstAssignmentErrorForCaptured(compilerContext, id.getName(),
+                            capturedIndex);
                 } else {
                     emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
                 }

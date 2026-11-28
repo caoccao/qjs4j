@@ -31,6 +31,34 @@ final class TemporalCalendarFields {
     private TemporalCalendarFields() {
     }
 
+    static JSValue constructPartialDate(JSContext context, JSValue[] args, int referenceDefault,
+            PartialDateFactory factory) {
+        if (!TemporalUtils.requireNewTarget(context, "PlainYearMonth")) {
+            return JSUndefined.INSTANCE;
+        }
+
+        int first = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 0));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int second = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 1));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalCalendarId calendarId = TemporalUtils.calendarArgument(context, args, 2);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        int reference = TemporalUtils.optionalIntegerArgument(context, args, 3, referenceDefault);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return factory.create(context, first, second, calendarId, reference);
+    }
+
     static JSTemporalPlainMonthDay createPlainMonthDayFromCalendarMonthDay(JSContext context,
             TemporalCalendarId calendarId, String monthCode, int dayOfMonth, String overflow) {
         IsoDate referenceIsoDate = IsoDate.resolveReferenceIsoDateForMonthDay(context, calendarId, monthCode,
@@ -238,5 +266,10 @@ final class TemporalCalendarFields {
         }
 
         return yearMonth(context, calendarId, year, monthFromProperty, parsedMonthCode, overflow);
+    }
+
+    @FunctionalInterface
+    interface PartialDateFactory {
+        JSValue create(JSContext context, int first, int second, TemporalCalendarId calendar, int reference);
     }
 }

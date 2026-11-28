@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -78,7 +79,7 @@ final class TryStatementCompiler {
             emitter.emitGetLocal(savedEvalReturnLocalIndex);
             emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
-        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
         compilerContext.isLastInProgram = savedIsLastInProgram;
     }
@@ -148,8 +149,8 @@ final class TryStatementCompiler {
         }
 
         // Set up CATCH for exception-safe using disposal
-        boolean blockHasUsing = EmitHelpers.hasUsingDeclarations(body);
-        int usingCatchJump = EmitHelpers.beginUsingScope(compilerContext, blockHasUsing);
+        boolean blockHasUsing = UsingScopeCompiler.hasUsingDeclarations(body);
+        int usingCatchJump = UsingScopeCompiler.beginUsingScope(compilerContext, blockHasUsing);
 
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // The shared completion local handles every statement kind with net-zero stack effect.
@@ -208,7 +209,7 @@ final class TryStatementCompiler {
             }
         }
 
-        EmitHelpers.finishUsingScope(compilerContext, usingCatchJump, true);
+        UsingScopeCompiler.finishUsingScope(compilerContext, usingCatchJump, true);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
         compilerContext.isLastInProgram = savedIsLastInProgram;
@@ -301,6 +302,23 @@ final class TryStatementCompiler {
         }
     }
 
+    static void emitActiveFinallyGosubs(CompilerContext compilerContext) {
+        BytecodeEmitter emitter = compilerContext.emitter;
+        Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
+        Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
+        while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
+            List<Integer> gosubPatches = gosubPatchIterator.next();
+            int nipCatchCount = nipCatchCountIterator.next();
+            emitter.emitOpcode(Opcode.UNDEFINED);
+            for (int i = 0; i < nipCatchCount; i++) {
+                emitter.emitOpcode(Opcode.NIP_CATCH);
+            }
+            int gosubPosition = emitter.emitJump(Opcode.GOSUB);
+            gosubPatches.add(gosubPosition);
+            emitter.emitOpcode(Opcode.DROP);
+        }
+    }
+
     /**
      * Start fresh bindings for a destructuring catch parameter: new on every entry, and in their temporal dead zone
      * until the pattern initializes them.
@@ -346,7 +364,7 @@ final class TryStatementCompiler {
     }
 
     private static void exitCatchScope(CompilerContext compilerContext) {
-        EmitHelpers.emitCurrentScopeUsingDisposal(compilerContext);
+        UsingScopeCompiler.emitCurrentScopeUsingDisposal(compilerContext);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }

@@ -19,21 +19,13 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a return statement.
  */
-public final class ReturnStatement extends Statement {
-    private final Expression argument;
-
+public final class ReturnStatement extends SingleExpressionStatement {
     public ReturnStatement(Expression argument, SourceLocation location) {
-        super(location);
-        this.argument = argument;
-    }
-
-    @Override
-    boolean containsSuspension(SyntaxQuery kind) {
-        return kind.in(argument);
+        super(argument, location);
     }
 
     public Expression getArgument() {
-        return argument;
+        return getExpression();
     }
 
 }

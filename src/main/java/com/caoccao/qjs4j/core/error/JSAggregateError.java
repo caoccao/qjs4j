@@ -52,7 +52,7 @@ public final class JSAggregateError extends JSError {
 
         // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            message = JSTypeConversions.toString(context, args[1]).value();
+            message = JSTypeConversions.toJavaString(context, args[1]);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

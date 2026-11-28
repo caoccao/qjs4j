@@ -46,8 +46,7 @@ final class AssignmentExpressionCompiler {
         if (left instanceof CallExpression) {
             compilerContext.compileExpression(left);
             emitter.emitOpcode(Opcode.DROP);
-            emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            emitter.emitU8(5);
+            emitter.emitThrowError("invalid assignment left-hand side", 5);
             return;
         }
 
@@ -165,9 +164,9 @@ final class AssignmentExpressionCompiler {
             }
 
             if (localIndex != null) {
-                EmitHelpers.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
+                IdentifierCompiler.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
             } else {
-                EmitHelpers.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
+                IdentifierCompiler.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
             }
             return;
         }
@@ -254,10 +253,10 @@ final class AssignmentExpressionCompiler {
             if (localIndex != null) {
                 if (compilerContext.scopeManager.isLocalBindingFunctionName(name)) {
                     if (compilerContext.strictMode) {
-                        EmitHelpers.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
+                        IdentifierCompiler.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
                     }
                 } else if (compilerContext.scopeManager.isLocalBindingConst(name)) {
-                    EmitHelpers.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
+                    IdentifierCompiler.emitConstAssignmentErrorForLocal(compilerContext, name, localIndex);
                 } else if (compilerContext.tdzLocals.contains(name)) {
                     emitter.emitIntOperand(Opcode.SET_LOC_CHECK, localIndex);
                 } else {
@@ -268,10 +267,11 @@ final class AssignmentExpressionCompiler {
                 if (capturedIndex != null) {
                     if (compilerContext.captureResolver.isCapturedBindingFunctionName(name)) {
                         if (compilerContext.strictMode) {
-                            EmitHelpers.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
+                            IdentifierCompiler.emitConstAssignmentErrorForCaptured(compilerContext, name,
+                                    capturedIndex);
                         }
                     } else if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
-                        EmitHelpers.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
+                        IdentifierCompiler.emitConstAssignmentErrorForCaptured(compilerContext, name, capturedIndex);
                     } else {
                         emitter.emitOpcode(Opcode.DUP);
                         emitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
@@ -311,7 +311,7 @@ final class AssignmentExpressionCompiler {
         if (compound) {
             emitMemberReadForAssignment(compilerContext, member, false);
         } else if (superProperty) {
-            EmitHelpers.emitSuperPropertyReference(compilerContext, member);
+            MemberExpressionCompiler.emitSuperPropertyReference(compilerContext, member);
         } else if (member.isComputed()) {
             compilerContext.compileExpression(member.getObject());
             compilerContext.compileExpression(member.getProperty());
@@ -383,7 +383,7 @@ final class AssignmentExpressionCompiler {
             boolean logical) {
         BytecodeEmitter emitter = compilerContext.emitter;
         if (member.getObject().isSuperIdentifier()) {
-            EmitHelpers.emitSuperPropertyReference(compilerContext, member);
+            MemberExpressionCompiler.emitSuperPropertyReference(compilerContext, member);
             emitter.emitOpcode(Opcode.TO_PROPKEY);
             emitter.emitOpcode(Opcode.DUP3);
             emitter.emitOpcode(Opcode.GET_SUPER_VALUE);

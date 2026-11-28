@@ -74,8 +74,8 @@ final class RegExpEscapes {
     private static int parseBracedUnicodeEscape(CompileContext context) {
         int firstDigit = ++context.pos;
         int value = 0;
-        while (context.pos < context.codePoints.length && context.codePoints[context.pos] != '}') {
-            int digit = AsciiHex.value(context.codePoints[context.pos]);
+        while (context.hasMore() && context.peek() != '}') {
+            int digit = AsciiHex.value(context.peek());
             if (digit < 0) {
                 throw new RegExpSyntaxException("Invalid unicode escape");
             }
@@ -98,13 +98,13 @@ final class RegExpEscapes {
 
     static int parseLegacyOctalEscape(CompileContext context, int firstDigit) {
         int value = firstDigit;
-        if (context.pos < context.codePoints.length) {
-            int next = context.codePoints[context.pos];
+        if (context.hasMore()) {
+            int next = context.peek();
             if (next >= '0' && next <= '7') {
                 value = (value << 3) | (next - '0');
                 context.pos++;
-                if (value < 32 && context.pos < context.codePoints.length) {
-                    int third = context.codePoints[context.pos];
+                if (value < 32 && context.hasMore()) {
+                    int third = context.peek();
                     if (third >= '0' && third <= '7') {
                         value = (value << 3) | (third - '0');
                         context.pos++;
@@ -116,8 +116,7 @@ final class RegExpEscapes {
     }
 
     static int parseUnicodeEscape(CompileContext context) {
-        if (context.isUnicodeMode() && context.pos < context.codePoints.length
-                && context.codePoints[context.pos] == '{') {
+        if (context.isUnicodeMode() && context.at('{')) {
             return parseBracedUnicodeEscape(context);
         }
         int value = readFixedHexEscape(context, 'u', 4);
@@ -137,8 +136,7 @@ final class RegExpEscapes {
                 if (!context.isUnicodeMode()) {
                     yield parseLegacyOctalEscape(context, 0);
                 }
-                if (context.pos < context.codePoints.length && context.codePoints[context.pos] >= '0'
-                        && context.codePoints[context.pos] <= '9') {
+                if (context.hasMore() && context.peek() >= '0' && context.peek() <= '9') {
                     throw new RegExpSyntaxException("Invalid escape sequence");
                 }
                 yield 0;
@@ -148,8 +146,8 @@ final class RegExpEscapes {
     }
 
     static int readControlLetter(CompileContext context, boolean inClass) {
-        if (context.pos < context.codePoints.length) {
-            int next = context.codePoints[context.pos];
+        if (context.hasMore()) {
+            int next = context.peek();
             boolean annexB = inClass && !context.isUnicodeMode() && ((next >= '0' && next <= '9') || next == '_');
             if ((next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') || annexB) {
                 context.pos++;

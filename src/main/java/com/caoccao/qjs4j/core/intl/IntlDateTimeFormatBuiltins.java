@@ -166,7 +166,7 @@ final class IntlDateTimeFormatBuiltins {
                 return JSUndefined.INSTANCE;
             }
             if (fsdValue != null && !(fsdValue instanceof JSUndefined)) {
-                double fsdDouble = JSTypeConversions.toNumber(context, fsdValue).value();
+                double fsdDouble = JSTypeConversions.toDouble(context, fsdValue);
                 // DefaultNumberOption: check NaN and range BEFORE flooring
                 if (Double.isNaN(fsdDouble) || fsdDouble < 1 || fsdDouble > 3) {
                     return context.throwRangeError("fractionalSecondDigits value is out of range.");
@@ -279,7 +279,7 @@ final class IntlDateTimeFormatBuiltins {
             // 4. Else use locale default
             Boolean hour12 = null;
             if (!(hour12Value instanceof JSUndefined) && hour12Value != null) {
-                hour12 = JSTypeConversions.toBoolean(hour12Value).value();
+                hour12 = JSTypeChecking.isTruthy(hour12Value);
                 // hour12 takes precedence over hourCycle
                 hourCycle = null;
             }
@@ -810,7 +810,7 @@ final class IntlDateTimeFormatBuiltins {
                     temporalZonedDateTime.getCalendarId());
         }
 
-        double epochMillis = JSTypeConversions.toNumber(context, value).value();
+        double epochMillis = JSTypeConversions.toDouble(context, value);
         if (context.hasPendingException()) {
             return null;
         }

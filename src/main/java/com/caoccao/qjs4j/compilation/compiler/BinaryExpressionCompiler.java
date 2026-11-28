@@ -20,8 +20,6 @@ import com.caoccao.qjs4j.compilation.ast.BinaryExpression;
 import com.caoccao.qjs4j.compilation.ast.BinaryOperator;
 import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.PrivateIdentifier;
-import com.caoccao.qjs4j.core.JSSymbol;
-import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.ArrayList;
@@ -76,7 +74,7 @@ final class BinaryExpressionCompiler {
             Expression right) {
         compilerContext.compileExpression(right);
 
-        EmitHelpers.emitPrivateSymbol(compilerContext, privateIdentifier);
+        MemberExpressionCompiler.emitPrivateSymbol(compilerContext, privateIdentifier);
         compilerContext.emitter.emitOpcode(Opcode.PRIVATE_IN);
     }
 
